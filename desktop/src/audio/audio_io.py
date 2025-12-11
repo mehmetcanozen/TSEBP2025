@@ -103,6 +103,10 @@ class PyAudioBackend(AudioBackend):
         )
         array = np.frombuffer(data, dtype=np.float32)
         if self.config.channels > 1:
+            if array.size % self.config.channels != 0:
+                raise ValueError(
+                    f"Buffer size ({array.size}) is not divisible by number of channels ({self.config.channels})."
+                )
             array = array.reshape(-1, self.config.channels)
         return array
 
