@@ -41,7 +41,7 @@ class AudioProcess(mp.Process):
         self.detection_queue = detection_queue
         self.config = config or StreamConfig()
         self.targets = targets
-        self.backend_factory = backend_factory or (lambda cfg: PyAudioBackend(cfg))
+        self.backend_factory = backend_factory or PyAudioBackend
         self.separator_factory = separator_factory or WaveformerSeparator
         self.shutdown_event = shutdown_event or mp.Event()
 
