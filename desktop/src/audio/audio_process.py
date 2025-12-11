@@ -161,5 +161,6 @@ class AudioProcess(mp.Process):
             try:
                 self.detection_queue.put_nowait({"rms": rms, "gains": gains})
             except queue.Full:
+                # UI update queue is full; safe to drop this update as it's non-critical.
                 pass
 
