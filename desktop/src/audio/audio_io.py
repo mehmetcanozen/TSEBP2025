@@ -34,7 +34,6 @@ def set_high_priority() -> None:
             # Use HIGH_PRIORITY_CLASS instead of REALTIME_PRIORITY_CLASS for safety
             proc.nice(psutil.HIGH_PRIORITY_CLASS)
         else:
-            old_nice = proc.nice()
             try:
                 proc.nice(-10)
             except Exception as e:

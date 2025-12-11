@@ -1,11 +1,10 @@
-import os
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
 
-from inference.waveformer_wrapper import WaveformerSeparator, TARGETS, TARGET_SAMPLE_RATE
+from inference.waveformer_wrapper import WaveformerSeparator, TARGETS
 
 
 ASSETS_ROOT = Path(__file__).resolve().parents[2] / "training" / "models" / "Waveformer"

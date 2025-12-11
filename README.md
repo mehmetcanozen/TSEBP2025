@@ -1,11 +1,16 @@
 # 🎧 Semantic Noise Mixer
 
-Context-Aware Adaptive Noise Cancellation with Semantic Control.
+Context-Aware Adaptive Noise Cancellation with Semantic Control. Uses Waveformer for target-aware separation and YAMNet for semantic cues.
 
-**Train Once, Run Everywhere** — a portable AI model that runs on desktop, mobile, and embedded devices.
+**Train Once, Run Everywhere** — desktop first, with paths to mobile and export.
 
-## 🚀 Quick Start (Desktop + Models)
-Prereqs: Python 3.11, Git LFS, Node 18+ (for mobile later), PowerShell.
+## 🧭 Overview
+- Desktop mixer: PyAudio I/O, multiprocessing to bypass the GIL, ring buffers to decouple capture/playback from inference, gain smoothing to avoid zipper noise.
+- Models: Waveformer checkpoints (targeted separation) and YAMNet (classification cues). Checkpoints are downloaded via helper script.
+- Dev plans: see `CursorMD/DevPlans` for staged milestones (Audio Mixer, Semantic Detective, etc.).
+
+## 🚀 Setup (desktop path)
+Prereqs: Python 3.11, Git LFS, Node 18+ (for later mobile), PowerShell on Windows.
 
 1) Clone & LFS
 ```powershell
@@ -13,33 +18,40 @@ git lfs install
 git clone <repo-url> .
 ```
 
-2) Python env
+2) Python env (training + desktop deps)
 ```powershell
 cd training
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+cd ..
+pip install -r desktop/requirements.txt
 ```
 
 3) Download checkpoints (Waveformer, YAMNet)
 ```powershell
-cd ..
 python scripts\download_models.py
 ```
 
-4) Smoke test inference
+4) Smoke test inference (Waveformer + YAMNet)
 ```powershell
 .\training\.venv\Scripts\Activate.ps1
 python scripts\test_inference.py
 ```
-
 Outputs: `scripts/sample_waveformer_out.wav` and YAMNet top-class log.
 
 ## 🔊 Desktop Mixer Smoke Test
 - Activate env: `.\training\.venv\Scripts\Activate.ps1`
 - Run: `python desktop\src\test_mixer.py --duration 10 --frames 512 --sample-rate 44100`
-- Optional: add `--freeze-ui` to pause the main process mid-run and verify audio keeps streaming (GIL bypass).
-- The script reports RMS levels and theoretical buffer latency (`frames / sample_rate`).
+- Optional: `--freeze-ui` simulates UI stall to verify multiprocessing/GIL isolation.
+- Notes: uses default input/output devices; adjust frames/sample-rate for your hardware. Reports RMS and theoretical buffer latency (`frames / sample_rate`).
+
+## 🧩 Architecture (desktop mixer)
+- `desktop/src/audio/audio_io.py`: PyAudio backend, process priority helper.
+- `desktop/src/audio/audio_process.py`: multiprocessing worker; ring buffers; inference loop.
+- `desktop/src/audio/mixer_controller.py`: UI-facing controller and gain updates.
+- `desktop/src/inference/waveformer_wrapper.py`: shim to reuse training WaveformerSeparator.
+- `desktop/tests`: unit tests for ring buffer, gain smoothing, controller, WaveformerSeparator.
 
 ## 📁 Project Structure
 - `training/` — PyTorch models, env

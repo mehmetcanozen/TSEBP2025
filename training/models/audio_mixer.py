@@ -152,7 +152,7 @@ class WaveformerSeparator:
                 if tensor.shape[0] < tensor.shape[1]:
                     tensor = tensor.transpose(0, 1)
         else:
-            raise ValueError("Audio must be 1D (samples) or 2D (samples, channels).")
+            raise ValueError("Audio must be 1D (samples) or 2D (samples, channels) or (channels, samples).")
         return tensor
 
     def _build_query(
@@ -162,7 +162,7 @@ class WaveformerSeparator:
         """
         Build query vector for the model.
         - None: all ones (full mixture)
-        - List[str]: one-hot/ multi-hot over TARGETS
+        - List[str]: one-hot/multi-hot over TARGETS
         - Tensor/ndarray: used directly after validation
         """
         if targets is None:

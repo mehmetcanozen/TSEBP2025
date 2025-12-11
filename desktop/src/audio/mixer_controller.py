@@ -10,6 +10,7 @@ Responsibilities:
 from __future__ import annotations
 
 import multiprocessing as mp
+import queue
 from typing import Dict, Optional
 
 from .audio_io import StreamConfig
