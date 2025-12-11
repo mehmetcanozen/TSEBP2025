@@ -61,7 +61,7 @@ PowerShell:
 'models/checkpoints','models/exports/onnx','models/exports/tflite','models/exports/coreml','models/configs','training/datasets','training/scripts','training/configs','desktop/src/ui','desktop/src/profiles','mobile/src/components','mobile/src/screens','mobile/src/services','mobile/src/hooks','mobile/src/navigation','mobile/assets/models','export','shared/profiles','shared/constants','scripts' | ForEach-Object { New-Item -ItemType Directory -Force -Path $_ | Out-Null; New-Item -ItemType File -Force -Path (Join-Path $_ ".gitkeep") | Out-Null }
 ```
 
-Bash (macOS/Linux/WLS):
+Bash (macOS/Linux/WSL):
 ```bash
 dirs=(
   models/checkpoints models/exports/onnx models/exports/tflite models/exports/coreml models/configs
