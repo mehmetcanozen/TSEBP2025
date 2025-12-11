@@ -147,7 +147,7 @@ class AudioProcess(mp.Process):
             separated = separator.separate(chunk, sr, targets=self.targets)
 
             # Simple residual to approximate noise stem
-            residual = chunk - separated[: len(chunk)]
+            residual = chunk - separated[:chunk.shape[0]]
 
             mixed = (separated * gains.get("speech", 1.0)) + (
                 residual * gains.get("noise", smoother.noise_floor)
