@@ -35,6 +35,12 @@ python scripts\test_inference.py
 
 Outputs: `scripts/sample_waveformer_out.wav` and YAMNet top-class log.
 
+## 🔊 Desktop Mixer Smoke Test
+- Activate env: `.\training\.venv\Scripts\Activate.ps1`
+- Run: `python desktop\src\test_mixer.py --duration 10 --frames 512 --sample-rate 44100`
+- Optional: add `--freeze-ui` to pause the main process mid-run and verify audio keeps streaming (GIL bypass).
+- The script reports RMS levels and theoretical buffer latency (`frames / sample_rate`).
+
 ## 📁 Project Structure
 - `training/` — PyTorch models, env
 - `desktop/` — Python desktop app (ONNX runtime)
@@ -48,11 +54,11 @@ Outputs: `scripts/sample_waveformer_out.wav` and YAMNet top-class log.
 `.github/workflows/python-ci.yml` runs tests on push/PR to `main`/`develop`.
 
 ## ⚡ Keeping Empty Folders (fast)
-Git ignores empty dirs. Create placeholders once after clone:
+Git ignores empty dirs. Create placeholders once after clone. Directories already populated (no .gitkeep needed): `desktop/src/audio`, `desktop/src/inference`, `desktop/tests`.
 
 PowerShell:
 ```powershell
-'models/checkpoints','models/exports/onnx','models/exports/tflite','models/exports/coreml','models/configs','training/datasets','training/scripts','training/configs','desktop/src/audio','desktop/src/inference','desktop/src/ui','desktop/src/profiles','desktop/tests','mobile/src/components','mobile/src/screens','mobile/src/services','mobile/src/hooks','mobile/src/navigation','mobile/assets/models','export','shared/profiles','shared/constants','scripts' | ForEach-Object { New-Item -ItemType Directory -Force -Path $_ | Out-Null; New-Item -ItemType File -Force -Path (Join-Path $_ ".gitkeep") | Out-Null }
+'models/checkpoints','models/exports/onnx','models/exports/tflite','models/exports/coreml','models/configs','training/datasets','training/scripts','training/configs','desktop/src/ui','desktop/src/profiles','mobile/src/components','mobile/src/screens','mobile/src/services','mobile/src/hooks','mobile/src/navigation','mobile/assets/models','export','shared/profiles','shared/constants','scripts' | ForEach-Object { New-Item -ItemType Directory -Force -Path $_ | Out-Null; New-Item -ItemType File -Force -Path (Join-Path $_ ".gitkeep") | Out-Null }
 ```
 
 Bash (macOS/Linux/WLS):
@@ -60,7 +66,7 @@ Bash (macOS/Linux/WLS):
 dirs=(
   models/checkpoints models/exports/onnx models/exports/tflite models/exports/coreml models/configs
   training/datasets training/scripts training/configs
-  desktop/src/audio desktop/src/inference desktop/src/ui desktop/src/profiles desktop/tests
+  desktop/src/ui desktop/src/profiles
   mobile/src/components mobile/src/screens mobile/src/services mobile/src/hooks mobile/src/navigation mobile/assets/models
   export shared/profiles shared/constants scripts
 )
