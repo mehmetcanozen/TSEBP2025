@@ -85,16 +85,21 @@ class PyAudioBackend(AudioBackend):
             input_device_index=self.config.input_device_index,
             stream_callback=None,
         )
-        self._output_stream = self._pa.open(
-            format=fmt,
-            channels=self.config.channels,
-            rate=self.config.sample_rate,
-            output=True,
-            frames_per_buffer=self.config.frames_per_buffer,
-            output_device_index=self.config.output_device_index,
-            stream_callback=None,
-        )
-
+        try:
+            self._output_stream = self._pa.open(
+                format=fmt,
+                channels=self.config.channels,
+                rate=self.config.sample_rate,
+                output=True,
+                frames_per_buffer=self.config.frames_per_buffer,
+                output_device_index=self.config.output_device_index,
+                stream_callback=None,
+            )
+        except Exception:
+            if self._input_stream is not None:
+                self._input_stream.close()
+                self._input_stream = None
+            raise
     def read(self) -> np.ndarray:
         if self._input_stream is None:
             raise RuntimeError("Input stream not started.")
