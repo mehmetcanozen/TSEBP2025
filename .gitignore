@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# Models (large files - use Git LFS)
+*.onnx
+*.tflite
+*.mlmodel
+*.pt
+*.pth
+models/checkpoints/
+models/exports/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+CursorMD/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# React Native / Node
+node_modules/
+.expo/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+*.env
+
+# Build outputs
+desktop/dist/
+mobile/android/app/build/
+mobile/ios/build/
+
