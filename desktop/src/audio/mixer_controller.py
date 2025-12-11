@@ -68,6 +68,16 @@ class MixerController:
 
     # ----------------------------- interactions ------------------------------
     def set_gains(self, speech: float, noise: float, events: float = 0.5) -> None:
+        """
+        Update the gain values for speech, noise, and events.
+
+        Parameters:
+            speech (float): Gain value for speech.
+            noise (float): Gain value for noise.
+            events (float, optional): Gain value for events. Currently, this parameter
+                is a placeholder for future functionality and is not used in the audio
+                processing pipeline.
+        """
         gains = {"speech": float(speech), "noise": float(noise), "events": float(events)}
         # Drop stale values if queue is full
         while not self._gain_queue.empty():
