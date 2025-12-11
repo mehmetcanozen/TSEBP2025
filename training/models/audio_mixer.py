@@ -120,18 +120,37 @@ class WaveformerSeparator:
                 "Run `python scripts/download_models.py` from repo root."
             )
 
-    def _to_channel_first(self, audio: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
+    def _to_channel_first(
+        self,
+        audio: Union[np.ndarray, torch.Tensor],
+        input_format: Optional[str] = None,
+    ) -> torch.Tensor:
         """
         Normalize input to (channels, samples) float32 tensor.
         Accepts mono or stereo, channel-last or channel-first.
+
+        Args:
+            audio: Input audio array (np.ndarray or torch.Tensor).
+            input_format: Specify 'channel_first' or 'channel_last' explicitly.
+                If None, uses heuristic: assumes channel-last if samples > channels.
+                WARNING: The heuristic can be incorrect for edge cases, e.g. 2-channel audio with 1 sample.
+                For robust behavior, specify input_format explicitly.
         """
         tensor = torch.as_tensor(audio, dtype=torch.float32)
         if tensor.ndim == 1:
             tensor = tensor.unsqueeze(0)  # (samples,) -> (1, samples)
         elif tensor.ndim == 2:
-            # Heuristic: assume channel-last if samples > channels
-            if tensor.shape[0] < tensor.shape[1]:
-                tensor = tensor.transpose(0, 1)
+            if input_format is not None:
+                if input_format == "channel_last":
+                    tensor = tensor.transpose(0, 1)
+                elif input_format == "channel_first":
+                    pass  # already channel-first
+                else:
+                    raise ValueError("input_format must be 'channel_first', 'channel_last', or None.")
+            else:
+                # Heuristic: assume channel-last if samples > channels
+                if tensor.shape[0] < tensor.shape[1]:
+                    tensor = tensor.transpose(0, 1)
         else:
             raise ValueError("Audio must be 1D (samples) or 2D (samples, channels).")
         return tensor
