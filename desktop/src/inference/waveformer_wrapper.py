@@ -11,6 +11,8 @@ from pathlib import Path
 
 import torchaudio
 
+# torchaudio 2.9 drops list_audio_backends; speechbrain imports expect it.
+# Provide a minimal shim for compatibility.
 if not hasattr(torchaudio, "list_audio_backends"):
     torchaudio.list_audio_backends = lambda: ["sox_io"]
 

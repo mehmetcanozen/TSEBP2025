@@ -83,17 +83,18 @@ class MixerController:
         while not self._gain_queue.empty():
             try:
                 self._gain_queue.get_nowait()
-            except Exception:
+            except queue.Empty:
                 break
         try:
             self._gain_queue.put_nowait(gains)
-        except Exception:
+        except queue.Full:
+            # Non-critical: drop if UI is spamming updates
             pass
 
     def get_levels(self) -> Optional[Dict]:
         try:
             return self._detection_queue.get_nowait()
-        except Exception:
+        except queue.Empty:
             return None
 
     def is_running(self) -> bool:
