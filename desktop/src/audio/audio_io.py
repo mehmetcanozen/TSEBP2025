@@ -20,17 +20,32 @@ except ImportError:  # pragma: no cover - optional during tests
     _pyaudio = None
 
 
+import warnings
+
 def set_high_priority() -> None:
     """
     Elevate OS scheduling priority for the current process.
-    Windows: REALTIME_PRIORITY_CLASS
-    POSIX: nice(-10)
+    Windows: HIGH_PRIORITY_CLASS (safer than REALTIME_PRIORITY_CLASS).
+    POSIX: nice(-10), with warning if not permitted.
     """
     proc = psutil.Process()
-    if psutil.WINDOWS:
-        proc.nice(psutil.REALTIME_PRIORITY_CLASS)
-    else:
-        proc.nice(-10)
+    try:
+        if psutil.WINDOWS:
+            # Use HIGH_PRIORITY_CLASS instead of REALTIME_PRIORITY_CLASS for safety
+            proc.nice(psutil.HIGH_PRIORITY_CLASS)
+        else:
+            old_nice = proc.nice()
+            try:
+                proc.nice(-10)
+            except Exception as e:
+                warnings.warn(f"Failed to set process nice value: {e}")
+            if proc.nice() != -10:
+                warnings.warn(
+                    "Could not set process nice value to -10. "
+                    "This may require elevated privileges (e.g., running as root)."
+                )
+    except Exception as e:
+        warnings.warn(f"Failed to set process priority: {e}")
 
 
 @dataclass
