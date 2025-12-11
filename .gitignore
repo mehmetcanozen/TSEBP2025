@@ -19,6 +19,16 @@ env/
 models/checkpoints/
 models/exports/
 
+# Waveformer local artifacts
+training/models/Waveformer/data/*/
+training/models/Waveformer/experiments/*/results*
+training/models/Waveformer/*_pb/
+training/models/Waveformer/tensorboard/
+training/models/Waveformer/*/tmp/
+training/models/Waveformer/*.slurm
+training/models/Waveformer/vscode.*
+training/models/Waveformer/.ipynb_checkpoints/
+
 # IDE
 .idea/
 .vscode/
