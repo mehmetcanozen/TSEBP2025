@@ -1,10 +1,17 @@
-"""Unit tests for SemanticDetective and temporal smoothing components."""
+"""Unit tests for SemanticDetective, temporal smoothing, and DetectionThread."""
 
+import sys
+import time
 import numpy as np
 import pytest
 import tensorflow as tf
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+# Ensure desktop module is importable
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT / "desktop" / "src") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "desktop" / "src"))
 
 from training.models.semantic_detective import (
     AdaptiveDutyCycle,
@@ -151,3 +158,169 @@ def test_get_top_detections(mock_load, tmp_path: Path):
     # siren should be top (0.95), speech second (0.8)
     assert top[0][0] == "siren"
     assert top[1][0] == "speech"
+
+
+@patch("tensorflow_hub.load", return_value=FakeYamnet())
+def test_empty_category_indices(mock_load, tmp_path: Path):
+    """Test that empty category indices return 0.0 instead of NaN."""
+    yaml_content = """\
+categories:
+  empty_cat:
+    indices: []
+    priority: low
+    safety_override: false
+  speech:
+    indices: [0]
+    priority: medium
+    safety_override: false
+"""
+    path = tmp_path / "empty_map.yaml"
+    path.write_text(yaml_content)
+
+    detective = SemanticDetective(class_map_path=path, enable_median=False)
+    audio = np.zeros(16000, dtype=np.float32)
+    result = detective.classify(audio, sample_rate=16000)
+
+    assert result["raw"]["empty_cat"] == 0.0
+    assert not np.isnan(result["raw"]["empty_cat"])
+
+
+# ---------------------- DetectionThread Tests ---------------------- #
+
+@patch("tensorflow_hub.load", return_value=FakeYamnet())
+def test_detection_thread_init(mock_load, tmp_path: Path):
+    """Test DetectionThread initialization."""
+    from audio.detection_thread import DetectionThread
+
+    class_map = make_class_map(tmp_path)
+    detective = SemanticDetective(class_map_path=class_map)
+    get_audio = MagicMock(return_value=None)
+    callback = MagicMock()
+
+    thread = DetectionThread(
+        get_audio=get_audio,
+        detective=detective,
+        callback=callback,
+        base_interval=1.0,
+    )
+
+    assert thread.base_interval == 1.0
+    assert thread.detective is detective
+    assert thread.daemon is True
+
+
+@patch("tensorflow_hub.load", return_value=FakeYamnet())
+def test_detection_thread_stop(mock_load, tmp_path: Path):
+    """Test DetectionThread stop mechanism."""
+    from audio.detection_thread import DetectionThread
+
+    class_map = make_class_map(tmp_path)
+    detective = SemanticDetective(class_map_path=class_map)
+    get_audio = MagicMock(return_value=None)
+    callback = MagicMock()
+
+    thread = DetectionThread(
+        get_audio=get_audio,
+        detective=detective,
+        callback=callback,
+        base_interval=0.1,
+    )
+
+    thread.start()
+    time.sleep(0.05)
+    thread.stop()
+    thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+
+
+@patch("tensorflow_hub.load", return_value=FakeYamnet())
+def test_detection_thread_callback_invoked(mock_load, tmp_path: Path):
+    """Test that callback is invoked with detection results."""
+    from audio.detection_thread import DetectionThread
+
+    class_map = make_class_map(tmp_path)
+    detective = SemanticDetective(class_map_path=class_map)
+    audio = np.zeros(16000, dtype=np.float32)
+    get_audio = MagicMock(return_value=(audio, 16000))
+    callback = MagicMock()
+
+    thread = DetectionThread(
+        get_audio=get_audio,
+        detective=detective,
+        callback=callback,
+        base_interval=0.05,
+    )
+
+    thread.start()
+    time.sleep(0.2)
+    thread.stop()
+    thread.join(timeout=1.0)
+
+    # Callback should have been called at least once
+    assert callback.call_count >= 1
+    # Check payload structure
+    payload = callback.call_args[0][0]
+    assert "raw" in payload
+    assert "smoothed" in payload
+    assert "top" in payload
+    assert "safety_override" in payload
+
+
+@patch("tensorflow_hub.load", return_value=FakeYamnet())
+def test_detection_thread_handles_classification_error(mock_load, tmp_path: Path):
+    """Test that classification errors don't crash the thread."""
+    from audio.detection_thread import DetectionThread
+
+    class_map = make_class_map(tmp_path)
+    detective = SemanticDetective(class_map_path=class_map)
+
+    # Return invalid audio that will cause an error
+    call_count = [0]
+
+    def get_audio_with_error():
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return (np.array([], dtype=np.float32), 16000)  # Empty - will error
+        return None
+
+    callback = MagicMock()
+
+    thread = DetectionThread(
+        get_audio=get_audio_with_error,
+        detective=detective,
+        callback=callback,
+        base_interval=0.05,
+    )
+
+    thread.start()
+    time.sleep(0.15)
+    thread.stop()
+    thread.join(timeout=1.0)
+
+    # Thread should still be stoppable (didn't crash)
+    assert not thread.is_alive()
+
+
+def test_detection_thread_adaptive_interval():
+    """Test that adaptive duty cycle affects interval."""
+    from audio.detection_thread import DetectionThread
+
+    detective = MagicMock()
+    get_audio = MagicMock(return_value=None)
+    callback = MagicMock()
+    duty_cycle = AdaptiveDutyCycle(normal=1.0, saving=5.0, critical=10.0)
+
+    thread = DetectionThread(
+        get_audio=get_audio,
+        detective=detective,
+        callback=callback,
+        duty_cycle=duty_cycle,
+        battery_fn=lambda: 75,  # High battery
+    )
+
+    assert thread._compute_interval() == 1.0
+
+    # Low battery
+    thread.battery_fn = lambda: 15
+    assert thread._compute_interval() == 10.0

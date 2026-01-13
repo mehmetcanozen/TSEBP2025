@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Sequence, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -238,6 +238,9 @@ class SemanticDetective:
         """Aggregate YAMNet 521-class scores into our semantic categories."""
         outputs: Dict[str, float] = {}
         for category, cfg in self.categories.items():
+            if not cfg.indices:
+                outputs[category] = 0.0
+                continue
             idx_tensor = tf.constant(list(cfg.indices), dtype=tf.int32)
             selected = tf.gather(yamnet_scores, idx_tensor)
             outputs[category] = float(tf.reduce_mean(selected).numpy())

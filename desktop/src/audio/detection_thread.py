@@ -86,7 +86,12 @@ class DetectionThread(threading.Thread):
             return None
 
         audio, sample_rate = audio_result
-        detection = self.detective.classify(audio, sample_rate)
+        try:
+            detection = self.detective.classify(audio, sample_rate)
+        except Exception as e:
+            logger.error(f"Classification failed: {e}")
+            return None
+
         top = self.detective.get_top_detections(detection["smoothed"])
         safety = self.detective.check_safety_override(detection["states"])
 

@@ -64,7 +64,7 @@ pip install -r desktop/requirements.txt
 python scripts/download_models.py
 
 # Extract YAMNet (if not already)
-tar -xzf models/checkpoints/yamnet_1.tar.gz -C models/checkpoints/yamnet_1
+tar -xzf models/checkpoints/yamnet_1.tar.gz -C models/checkpoints
 ```
 
 ### 3. Test Audio Mixer (Waveformer)
