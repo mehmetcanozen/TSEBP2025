@@ -19,7 +19,7 @@ class FakeYamnet:
     """Deterministic stand-in for tfhub YAMNet to avoid network calls."""
 
     def __call__(self, waveform):
-        # waveform shape: (1, T)
+        # waveform shape: (T,)
         # Return scores shaped (frames, 521). Use a single frame for simplicity.
         scores = np.zeros((1, 521), dtype=np.float32)
         scores[0, 0] = 0.8  # speech bucket
