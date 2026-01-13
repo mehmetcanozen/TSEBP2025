@@ -34,6 +34,7 @@ training/models/Waveformer/.ipynb_checkpoints/
 .vscode/
 *.swp
 CursorMD/
+CursorMD/DevPlans/
 
 # OS
 .DS_Store
