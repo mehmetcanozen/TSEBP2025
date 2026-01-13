@@ -138,9 +138,9 @@ class AdaptiveDutyCycle:
         self.critical = critical
 
     def get_interval(self, battery_percent: int) -> float:
-        if battery_percent > 50:
+        if battery_percent >= 50:
             return self.normal
-        if battery_percent > 20:
+        if battery_percent >= 20:
             return self.saving
         return self.critical
 
