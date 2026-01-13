@@ -1,0 +1,42 @@
+categories:
+  speech:
+    indices: [0, 1, 2, 3, 4]  # Speech, Child speech, Conversation, Narration, Babbling
+    priority: medium
+    color: "#4CAF50"
+
+  wind:
+    indices: [277, 279]  # Wind, Wind noise (microphone)
+    priority: low
+    color: "#2196F3"
+
+  traffic:
+    indices: [294, 301, 321, 337]  # Vehicle, Car, Traffic noise, Engine
+    priority: medium
+    color: "#FF9800"
+
+  siren:
+    indices: [316, 317, 318, 319, 390, 391]  # Emergency vehicle, Police car, Ambulance, Fire engine, Siren, Civil defense siren
+    priority: critical
+    color: "#F44336"
+    safety_override: true
+
+  alarm:
+    indices: [382, 389, 392, 393, 394]  # Alarm, Alarm clock, Buzzer, Smoke detector, Fire alarm
+    priority: critical
+    color: "#F44336"
+    safety_override: true
+
+  typing:
+    indices: [378, 380]  # Typing, Computer keyboard
+    priority: low
+    color: "#9C27B0"
+
+  music:
+    indices: [24, 132, 133]  # Singing, Music, Musical instrument
+    priority: medium
+    color: "#E91E63"
+
+  nature:
+    indices: [69, 106, 107, 281, 283]  # Dog, Bird, Bird vocalization, Thunder, Rain
+    priority: low
+    color: "#8BC34A"
