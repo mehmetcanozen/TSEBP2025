@@ -69,7 +69,7 @@ class DetectionThread(threading.Thread):
     def run(self) -> None:
         """Main detection loop - runs until stop() is called."""
         while not self._stop_event.is_set():
-            interval = self._compute_interval()
+            start_time = time.monotonic()
             payload = self._run_detection()
             if payload is not None:
                 try:
@@ -77,7 +77,12 @@ class DetectionThread(threading.Thread):
                 except Exception:
                     # Detection results are non-critical; log but don't crash.
                     logger.exception("Detection callback failed")
-            time.sleep(interval)
+
+            # Compute interval after detection, subtract elapsed time for consistent cadence
+            elapsed = time.monotonic() - start_time
+            interval = self._compute_interval()
+            sleep_time = max(0.0, interval - elapsed)
+            time.sleep(sleep_time)
 
     def _run_detection(self) -> Optional[Dict]:
         """Execute one detection cycle and return results or None if no audio."""
