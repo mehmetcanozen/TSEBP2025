@@ -49,7 +49,7 @@ class DetectionThread(threading.Thread):
         get_audio: Callable[[], Optional[Tuple[np.ndarray, int]]],
         detective: SemanticDetective,
         callback: Callable[[Dict], None],
-        duty_cycle: Optional["AdaptiveDutyCycle"] = None,
+        duty_cycle: Optional[AdaptiveDutyCycle] = None,
         base_interval: float = 3.0,
         battery_fn: Optional[Callable[[], Optional[int]]] = None,
     ) -> None:
@@ -82,7 +82,9 @@ class DetectionThread(threading.Thread):
             elapsed = time.monotonic() - start_time
             interval = self._compute_interval()
             sleep_time = max(0.0, interval - elapsed)
-            time.sleep(sleep_time)
+            # Use wait() instead of sleep() for responsive shutdown
+            if self._stop_event.wait(sleep_time):
+                break
 
     def _run_detection(self) -> Optional[Dict]:
         """Execute one detection cycle and return results or None if no audio."""

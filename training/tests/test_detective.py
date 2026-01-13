@@ -65,15 +65,23 @@ def test_classify_maps_categories(mock_load, tmp_path: Path):
 
 
 def test_confidence_buffer_majority_vote():
+    """Test that majority voting requires (window_size + 1) // 2 hits."""
     buffer = ConfidenceBuffer(window_size=3, threshold=0.5)
-    # Below threshold twice, then above twice -> should become True
+    # With window_size=3, need at least 2 hits for majority ((3+1)//2 = 2)
+
+    # Frame 1: below threshold -> history=[False], hits=0, stable=False
     outputs = buffer.update({"speech": 0.4})
     assert outputs["speech"] is False
+
+    # Frame 2: below threshold -> history=[False, False], hits=0, stable=False
     outputs = buffer.update({"speech": 0.4})
     assert outputs["speech"] is False
+
+    # Frame 3: above threshold -> history=[False, False, True], hits=1, stable=False
     outputs = buffer.update({"speech": 0.7})
-    # Only one above-threshold hit so far -> still False
     assert outputs["speech"] is False
+
+    # Frame 4: above threshold -> history=[False, True, True], hits=2, stable=True
     outputs = buffer.update({"speech": 0.8})
     assert outputs["speech"] is True
 
@@ -86,11 +94,29 @@ def test_schmitt_trigger_hysteresis():
     assert trigger.update("siren", 0.3) is False  # turns off
 
 
+def test_schmitt_trigger_invalid_thresholds():
+    """Test that degenerate thresholds raise ValueError."""
+    with pytest.raises(ValueError, match="must be greater than"):
+        SchmittTrigger(on_threshold=0.5, off_threshold=0.5)  # Equal
+
+    with pytest.raises(ValueError, match="must be greater than"):
+        SchmittTrigger(on_threshold=0.3, off_threshold=0.7)  # Inverted
+
+
 def test_adaptive_duty_cycle():
     cycle = AdaptiveDutyCycle()
     assert cycle.get_interval(75) == 3.0
     assert cycle.get_interval(35) == 8.0
     assert cycle.get_interval(10) == 15.0
+
+
+def test_adaptive_duty_cycle_clamps_battery():
+    """Test that out-of-range battery values are clamped to 0-100."""
+    cycle = AdaptiveDutyCycle()
+    # Values above 100 should clamp to 100 (normal interval)
+    assert cycle.get_interval(150) == 3.0
+    # Negative values should clamp to 0 (critical interval)
+    assert cycle.get_interval(-10) == 15.0
 
 
 def test_median_smoother():

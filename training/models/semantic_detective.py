@@ -74,9 +74,16 @@ class SchmittTrigger:
     Args:
         on_threshold: Confidence required to activate (default 0.70).
         off_threshold: Confidence must drop below this to deactivate (default 0.40).
+
+    Raises:
+        ValueError: If on_threshold <= off_threshold (degenerate hysteresis).
     """
 
     def __init__(self, on_threshold: float = 0.70, off_threshold: float = 0.40) -> None:
+        if on_threshold <= off_threshold:
+            raise ValueError(
+                f"on_threshold ({on_threshold}) must be greater than off_threshold ({off_threshold})"
+            )
         self.on_threshold = on_threshold
         self.off_threshold = off_threshold
         self.active: Dict[str, bool] = {}
@@ -138,6 +145,8 @@ class AdaptiveDutyCycle:
         self.critical = critical
 
     def get_interval(self, battery_percent: int) -> float:
+        # Clamp to valid range (external APIs can return weird values like -1 or 128)
+        battery_percent = max(0, min(100, battery_percent))
         if battery_percent >= 50:
             return self.normal
         if battery_percent >= 20:
