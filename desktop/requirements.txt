@@ -5,3 +5,7 @@ scipy>=1.10.0
 soundfile>=0.12.0
 PyAudio>=0.2.13
 psutil>=5.9.0
+tensorflow>=2.13.0
+tensorflow-hub>=0.14.0
+pyyaml>=6.0
+sounddevice>=0.4.6
