@@ -3,7 +3,6 @@
 import sys
 import time
 import numpy as np
-import pytest
 import tensorflow as tf
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -51,7 +50,7 @@ categories:
     return path
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_detection_thread_init(mock_load, tmp_path: Path):
     """Test DetectionThread initialization."""
     class_map = make_class_map(tmp_path)
@@ -71,7 +70,7 @@ def test_detection_thread_init(mock_load, tmp_path: Path):
     assert thread.daemon is True
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_detection_thread_stop(mock_load, tmp_path: Path):
     """Test DetectionThread stop mechanism."""
     class_map = make_class_map(tmp_path)
@@ -94,7 +93,7 @@ def test_detection_thread_stop(mock_load, tmp_path: Path):
     assert not thread.is_alive()
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_detection_thread_callback_invoked(mock_load, tmp_path: Path):
     """Test that callback is invoked with detection results."""
     class_map = make_class_map(tmp_path)
@@ -125,7 +124,7 @@ def test_detection_thread_callback_invoked(mock_load, tmp_path: Path):
     assert "safety_override" in payload
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_detection_thread_handles_classification_error(mock_load, tmp_path: Path):
     """Test that classification errors don't crash the thread."""
     class_map = make_class_map(tmp_path)

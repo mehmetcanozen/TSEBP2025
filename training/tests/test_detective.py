@@ -49,7 +49,7 @@ categories:
     return path
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("training.models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_classify_maps_categories(mock_load, tmp_path: Path):
     class_map = make_class_map(tmp_path)
     detective = SemanticDetective(class_map_path=class_map, enable_median=False)
@@ -116,7 +116,7 @@ def test_confidence_buffer_new_category():
     assert result["new_cat"] is True
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("training.models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_classify_empty_audio_raises(mock_load, tmp_path: Path):
     class_map = make_class_map(tmp_path)
     detective = SemanticDetective(class_map_path=class_map, enable_median=False)
@@ -126,7 +126,7 @@ def test_classify_empty_audio_raises(mock_load, tmp_path: Path):
         detective.classify(empty_audio, sample_rate=16000)
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("training.models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_classify_stereo_audio(mock_load, tmp_path: Path):
     class_map = make_class_map(tmp_path)
     detective = SemanticDetective(class_map_path=class_map, enable_median=False)
@@ -138,7 +138,7 @@ def test_classify_stereo_audio(mock_load, tmp_path: Path):
     assert "raw" in result
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("training.models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_get_top_detections(mock_load, tmp_path: Path):
     class_map = make_class_map(tmp_path)
     detective = SemanticDetective(class_map_path=class_map, enable_median=False)
@@ -153,7 +153,7 @@ def test_get_top_detections(mock_load, tmp_path: Path):
     assert top[1][0] == "speech"
 
 
-@patch("tensorflow_hub.load", return_value=FakeYamnet())
+@patch("training.models.semantic_detective.hub.load", return_value=FakeYamnet())
 def test_empty_category_indices(mock_load, tmp_path: Path):
     """Test that empty category indices return 0.0 instead of NaN."""
     yaml_content = """\
@@ -176,3 +176,20 @@ categories:
 
     assert result["raw"]["empty_cat"] == 0.0
     assert not np.isnan(result["raw"]["empty_cat"])
+
+
+@patch("training.models.semantic_detective.hub.load", return_value=FakeYamnet())
+def test_invalid_category_indices_raises(mock_load, tmp_path: Path):
+    """Test that out-of-range YAMNet indices (>520) raise ValueError."""
+    yaml_content = """\
+categories:
+  bad_cat:
+    indices: [521]
+    priority: low
+    safety_override: false
+"""
+    path = tmp_path / "bad_map.yaml"
+    path.write_text(yaml_content)
+
+    with pytest.raises(ValueError, match="invalid YAMNet indices"):
+        SemanticDetective(class_map_path=path)

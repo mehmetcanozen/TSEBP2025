@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Mapping, Sequence, Tuple
+from typing import Dict, List, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 import tensorflow as tf
@@ -188,7 +188,7 @@ class SemanticDetective:
         self.median = MedianSmoother() if enable_median else None
 
     # ------------------------------ public API -------------------------------- #
-    def classify(self, audio: np.ndarray, sample_rate: int) -> Dict[str, Dict[str, float]]:
+    def classify(self, audio: np.ndarray, sample_rate: int) -> Dict[str, Mapping[str, Union[float, bool]]]:
         """
         Run YAMNet classification on a ~3 second mono buffer.
 
@@ -265,8 +265,12 @@ class SemanticDetective:
         categories = data.get("categories", {})
         parsed: Dict[str, CategoryConfig] = {}
         for name, cfg in categories.items():
+            indices = cfg.get("indices", [])
+            # Validate YAMNet index range (0-520)
+            if not all(0 <= i <= 520 for i in indices):
+                raise ValueError(f"Category '{name}' contains invalid YAMNet indices (must be 0-520).")
             parsed[name] = CategoryConfig(
-                indices=cfg.get("indices", []),
+                indices=indices,
                 priority=cfg.get("priority", "medium"),
                 color=cfg.get("color", "#FFFFFF"),
                 safety_override=cfg.get("safety_override", False),
