@@ -33,10 +33,11 @@ DEFAULT_MODEL_HANDLE = "https://tfhub.dev/google/yamnet/1"
 # ------------------------------ smoothing helpers ---------------------------- #
 class ConfidenceBuffer:
     """
-    Rolling 2-of-3 voting buffer to stabilize transient detections.
+    Rolling majority voting buffer to stabilize transient detections.
 
     Prevents false positives from single-frame spikes by requiring
-    detection in at least 2 of the last N frames.
+    detection in at least a majority of the last N frames
+    (2-of-3 behavior when window_size=3).
 
     Args:
         window_size: Number of frames to consider (default 3).
