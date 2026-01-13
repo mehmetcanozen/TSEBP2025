@@ -24,7 +24,9 @@ from scipy import signal as scipy_signal
 logger = logging.getLogger(__name__)
 
 YAMNET_SAMPLE_RATE = 16000
-DEFAULT_CLASS_MAP_PATH = Path("training/configs/yamnet_class_map.yaml")
+DEFAULT_CLASS_MAP_PATH = (
+    Path(__file__).resolve().parents[1] / "configs" / "yamnet_class_map.yaml"
+)
 DEFAULT_MODEL_HANDLE = "https://tfhub.dev/google/yamnet/1"
 
 
@@ -55,7 +57,8 @@ class ConfidenceBuffer:
             if len(self.history[category]) > self.window_size:
                 self.history[category].pop(0)
             hits = sum(self.history[category])
-            stable[category] = hits >= 2
+            # Dynamic majority vote: require at least half the window
+            stable[category] = hits >= (self.window_size + 1) // 2
         return stable
 
 
@@ -157,6 +160,13 @@ class SemanticDetective:
     Typical use:
         detective = SemanticDetective()
         result = detective.classify(audio_chunk, sample_rate=48000)
+
+    Thread Safety:
+        This class is **NOT thread-safe**. It maintains internal state via
+        ConfidenceBuffer, SchmittTrigger, and MedianSmoother. If multiple
+        threads share one instance, buffer data will be corrupted.
+
+        **Each thread must create its own SemanticDetective instance.**
     """
 
     def __init__(

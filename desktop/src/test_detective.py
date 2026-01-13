@@ -3,9 +3,14 @@ Quick CLI harness to exercise SemanticDetective end-to-end.
 
 Usage (from repo root):
     python desktop/src/test_detective.py --seconds 3
+
+Note: This is a demo script, not a pytest test module.
 """
 
 from __future__ import annotations
+
+# Prevent pytest from collecting this file as a test module
+__test__ = False
 
 import argparse
 import sys
