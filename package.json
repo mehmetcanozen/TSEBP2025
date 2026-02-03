@@ -1,0 +1,28 @@
+{
+  "name": "semantic-noise-mixer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Context-Aware Adaptive Noise Cancellation with Semantic Control",
+  "workspaces": [
+    "mobile"
+  ],
+  "scripts": {
+    "mobile:dev": "cd mobile && npm run dev",
+    "mobile:android": "cd mobile && npm run android",
+    "mobile:ios": "cd mobile && npm run ios",
+    "mobile:install": "cd mobile && npm install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "keywords": [
+    "audio",
+    "noise-cancellation",
+    "machine-learning",
+    "react-native",
+    "expo"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}
