@@ -29,6 +29,17 @@ training/models/Waveformer/*.slurm
 training/models/Waveformer/vscode.*
 training/models/Waveformer/.ipynb_checkpoints/
 
+# IDE
+.idea/
+.vscode/
+*.swp
+CursorMD/
+CursorMD/DevPlans/
+
+# OS
+.DS_Store
+Thumbs.db
+
 # React Native / Node
 node_modules/
 !node_modules/.gitkeep
