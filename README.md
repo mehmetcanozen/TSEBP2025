@@ -9,13 +9,21 @@ Context-Aware Adaptive Noise Cancellation with Semantic Control. Uses Waveformer
 - Models: Waveformer checkpoints (targeted separation) and YAMNet (classification cues). Checkpoints are downloaded via helper script.
 - Dev plans: see `CursorMD/DevPlans` for staged milestones (Audio Mixer, Semantic Detective, etc.).
 
-## 🚀 Setup (desktop path)
-Prereqs: Python 3.11, Git LFS, Node 18+ (for later mobile), PowerShell on Windows.
+## 🚀 Setup
+
+### Prerequisites
+- Python 3.11+
+- Git LFS (for model files)
+- Node.js 18+ (for mobile app)
+- PowerShell (Windows) or Bash (macOS/Linux)
+
+### Desktop Setup
 
 1) Clone & LFS
 ```powershell
 git lfs install
 git clone <repo-url> .
+cd TSEBP2025
 ```
 
 2) Python env (training + desktop deps)
@@ -39,6 +47,24 @@ python scripts\download_models.py
 python scripts\test_inference.py
 ```
 Outputs: `scripts/sample_waveformer_out.wav` and YAMNet top-class log.
+
+### Mobile Setup (React Native)
+
+```powershell
+cd TSEBP2025/mobile
+npm install
+# or
+pnpm install
+
+# Start development server
+npm run dev
+# or
+pnpm dev
+
+# Run on device
+npm run android
+npm run ios
+```
 
 ## 🔊 Desktop Mixer Smoke Test
 - Activate env: `.\training\.venv\Scripts\Activate.ps1`
