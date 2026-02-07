@@ -25,6 +25,8 @@ import yaml
 from training.models.semantic_detective import SemanticDetective
 from training.models.audio_mixer import WaveformerSeparator
 
+logger = logging.getLogger(__name__)
+
 # Import performance profiler for optimization analysis
 try:
     from .profiler import get_profiler, OperationTimer
@@ -33,8 +35,6 @@ except ImportError:
     # Fallback if profiler not available
     profiler = None
     logger.warning("Profiler not available, performance tracking disabled")
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_MAPPING_PATH = (
     Path(__file__).resolve().parents[3] / "shared" / "mappings" / "yamnet_to_waveformer.yaml"
