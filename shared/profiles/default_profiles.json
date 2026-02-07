@@ -1,75 +1,68 @@
 [
-    {
-        "id": "default-focus",
-        "name": "Focus Mode",
-        "description": "Block distractions, keep important sounds",
-        "schemaVersion": "1.0.0",
-        "created_at": "2026-02-05T00:00:00Z",
-        "updated_at": "2026-02-05T00:00:00Z",
-        "suppressions": {
-            "typing": true,
-            "traffic": true,
-            "wind": true,
-            "appliances": true,
-            "misc": true
-        },
-        "autoTriggers": [
-            {
-                "category": "typing",
-                "threshold": 0.6
-            }
-        ],
-        "isDefault": true,
-        "isSystemProfile": true
+  {
+    "id": "default-focus",
+    "name": "Focus Mode",
+    "description": "Block distractions, keep important sounds",
+    "gains": {
+      "speech": 0.3,
+      "noise": 0.0,
+      "events": 0.2
     },
-    {
-        "id": "default-commute",
-        "name": "Commute Mode",
-        "description": "Reduce engine noise, keep announcements and speech",
-        "schemaVersion": "1.0.0",
-        "created_at": "2026-02-05T00:00:00Z",
-        "updated_at": "2026-02-05T00:00:00Z",
-        "suppressions": {
-            "traffic": true,
-            "wind": true,
-            "nature": true
-        },
-        "autoTriggers": [
-            {
-                "category": "traffic",
-                "threshold": 0.6
-            }
-        ],
-        "isSystemProfile": true
+    "suppressions": {
+      "typing": true,
+      "traffic": true,
+      "wind": true
     },
-    {
-        "id": "default-passthrough",
-        "name": "Passthrough",
-        "description": "Hear everything (no processing)",
-        "schemaVersion": "1.0.0",
-        "created_at": "2026-02-05T00:00:00Z",
-        "updated_at": "2026-02-05T00:00:00Z",
-        "suppressions": {},
-        "isSystemProfile": true
+    "autoTriggers": [],
+    "learnedPriority": 0,
+    "isDefault": true,
+    "isSystemProfile": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z",
+    "schemaVersion": "1.0.0"
+  },
+  {
+    "id": "default-commute",
+    "name": "Commute Mode",
+    "description": "Reduce engine noise, keep announcements",
+    "gains": {
+      "speech": 1.0,
+      "noise": 0.1,
+      "events": 0.5
     },
-    {
-        "id": "default-office",
-        "name": "Office Mode",
-        "description": "Suppress keyboard and office sounds",
-        "schemaVersion": "1.0.0",
-        "created_at": "2026-02-05T00:00:00Z",
-        "updated_at": "2026-02-05T00:00:00Z",
-        "suppressions": {
-            "typing": true,
-            "appliances": true,
-            "misc": true
-        },
-        "autoTriggers": [
-            {
-                "category": "typing",
-                "threshold": 0.5
-            }
-        ],
-        "isSystemProfile": true
-    }
+    "suppressions": {
+      "traffic": true,
+      "wind": true
+    },
+    "autoTriggers": [
+      {
+        "category": "traffic",
+        "threshold": 0.6
+      }
+    ],
+    "learnedPriority": 0,
+    "isDefault": false,
+    "isSystemProfile": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z",
+    "schemaVersion": "1.0.0"
+  },
+  {
+    "id": "default-passthrough",
+    "name": "Passthrough",
+    "description": "Hear everything (no processing)",
+    "gains": {
+      "speech": 1.0,
+      "noise": 1.0,
+      "events": 1.0
+    },
+    "suppressions": {},
+    "autoTriggers": [],
+    "learnedPriority": 0,
+    "isDefault": false,
+    "isSystemProfile": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z",
+    "schemaVersion": "1.0.0"
+  }
 ]
