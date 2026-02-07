@@ -1,20 +1,16 @@
 import math
 from collections import OrderedDict
-from typing import Optional
 
-from torch import Tensor
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchmetrics.functional import(
     scale_invariant_signal_noise_ratio as si_snr,
-    signal_noise_ratio as snr,
-    signal_distortion_ratio as sdr,
-    scale_invariant_signal_distortion_ratio as si_sdr)
+    signal_noise_ratio as snr)
 from src.helpers.positional_encoding import PositionalEncoding
 
-from src.training.dcc_tf import mod_pad, DepthwiseSeparableConv, LayerNormPermuted
+from src.training.dcc_tf import mod_pad, DepthwiseSeparableConv
 
 class DilatedConvEncoder(nn.Module):
     """
@@ -46,7 +42,7 @@ class DilatedConvEncoder(nn.Module):
 
 class LinearTransformerDecoder(nn.Module):
     """
-    A casual transformer decoder which decodes input vectors using
+    A causal transformer decoder which decodes input vectors using
     precisely `ctx_len` past vectors in the sequence, and using no future
     vectors at all.
     """
@@ -103,8 +99,8 @@ class LinearTransformerDecoder(nn.Module):
 
         for i, tf_dec_layer in enumerate(self.tf_dec_layers):
             _tgt = torch.zeros_like(tgt)
-            for i in range(int(math.ceil(tgt.shape[0] / K))):
-                _tgt[i*K:(i+1)*K] = tf_dec_layer(tgt[i*K:(i+1)*K], mem[i*K:(i+1)*K])
+            for chunk_idx in range(int(math.ceil(tgt.shape[0] / K))):
+                _tgt[chunk_idx*K:(chunk_idx+1)*K] = tf_dec_layer(tgt[chunk_idx*K:(chunk_idx+1)*K], mem[chunk_idx*K:(chunk_idx+1)*K])
             tgt = _tgt
 
         # Permute back to [B, T, C]
