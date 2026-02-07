@@ -9,3 +9,5 @@ tensorflow>=2.13.0
 tensorflow-hub>=0.16.0
 pyyaml>=6.0
 sounddevice>=0.4.6
+tqdm>=4.65.0
+pandas>=2.0.0

@@ -1,0 +1,75 @@
+[
+    {
+        "id": "default-focus",
+        "name": "Focus Mode",
+        "description": "Block distractions, keep important sounds",
+        "schemaVersion": "1.0.0",
+        "created_at": "2026-02-05T00:00:00Z",
+        "updated_at": "2026-02-05T00:00:00Z",
+        "suppressions": {
+            "typing": true,
+            "traffic": true,
+            "wind": true,
+            "appliances": true,
+            "misc": true
+        },
+        "autoTriggers": [
+            {
+                "category": "typing",
+                "threshold": 0.6
+            }
+        ],
+        "isDefault": true,
+        "isSystemProfile": true
+    },
+    {
+        "id": "default-commute",
+        "name": "Commute Mode",
+        "description": "Reduce engine noise, keep announcements and speech",
+        "schemaVersion": "1.0.0",
+        "created_at": "2026-02-05T00:00:00Z",
+        "updated_at": "2026-02-05T00:00:00Z",
+        "suppressions": {
+            "traffic": true,
+            "wind": true,
+            "nature": true
+        },
+        "autoTriggers": [
+            {
+                "category": "traffic",
+                "threshold": 0.6
+            }
+        ],
+        "isSystemProfile": true
+    },
+    {
+        "id": "default-passthrough",
+        "name": "Passthrough",
+        "description": "Hear everything (no processing)",
+        "schemaVersion": "1.0.0",
+        "created_at": "2026-02-05T00:00:00Z",
+        "updated_at": "2026-02-05T00:00:00Z",
+        "suppressions": {},
+        "isSystemProfile": true
+    },
+    {
+        "id": "default-office",
+        "name": "Office Mode",
+        "description": "Suppress keyboard and office sounds",
+        "schemaVersion": "1.0.0",
+        "created_at": "2026-02-05T00:00:00Z",
+        "updated_at": "2026-02-05T00:00:00Z",
+        "suppressions": {
+            "typing": true,
+            "appliances": true,
+            "misc": true
+        },
+        "autoTriggers": [
+            {
+                "category": "typing",
+                "threshold": 0.5
+            }
+        ],
+        "isSystemProfile": true
+    }
+]

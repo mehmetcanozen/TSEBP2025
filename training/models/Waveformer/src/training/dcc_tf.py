@@ -13,7 +13,8 @@ from torchmetrics.functional import(
     signal_distortion_ratio as sdr,
     scale_invariant_signal_distortion_ratio as si_sdr)
 
-from speechbrain.lobes.models.transformer.Transformer import PositionalEncoding
+# Local implementation to avoid speechbrain/torchaudio compatibility issue
+from src.helpers.positional_encoding import PositionalEncoding
 
 def mod_pad(x, chunk_size, pad):
     # Mod pad the input to perform integer number of
@@ -36,10 +37,17 @@ class LayerNormPermuted(nn.LayerNorm):
         Args:
             x: [B, C, T]
         """
-        x = x.permute(0, 2, 1) # [B, T, C]
-        x = super().forward(x)
-        x = x.permute(0, 2, 1) # [B, C, T]
-        return x
+        # Manual LayerNorm over channel dimension (C) to avoid permute/transpose
+        # This is friendlier to ONNX -> TFLite conversion
+        u = x.mean(1, keepdim=True)
+        s = (x - u).pow(2).mean(1, keepdim=True)
+        x_norm = (x - u) / torch.sqrt(s + self.eps)
+        
+        # Reshape weight/bias for broadcasting: (C) -> (1, C, 1)
+        weight = self.weight.view(1, -1, 1)
+        bias = self.bias.view(1, -1, 1)
+        
+        return weight * x_norm + bias
 
 class DepthwiseSeparableConv(nn.Module):
     """

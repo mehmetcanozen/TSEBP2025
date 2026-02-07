@@ -1,0 +1,91 @@
+# YAMNet to Waveformer Target Mapping
+# Maps semantic categories from YAMNet detection to Waveformer separation targets
+# NOTE: yamnet_indices are for reference. The current pipeline sources indices from 
+# training/configs/yamnet_class_map.yaml.
+
+categories:
+  # CRITICAL SOUNDS (Safety Override - Never suppress)
+  siren:
+    waveformer_targets: []  # Empty = never suppress
+    yamnet_indices: [388, 389, 390]  # Siren, Ambulance, Police car
+    priority: "critical"
+    safety_override: true
+  
+  alarm:
+    waveformer_targets: []  # Empty = never suppress
+    yamnet_indices: [387, 388, 403]  # Fire alarm, Smoke detector, Alarm
+    priority: "critical"
+    safety_override: true
+
+  # SPEECH (Medium Priority)
+  speech:
+    waveformer_targets: []  # Speech is the target to KEEP, not suppress
+    yamnet_indices: [0, 1, 2, 3, 4, 5]  # Speech, Male speech, Female speech, Child speech, Conversation, Narration
+    priority: "medium"
+    safety_override: false
+
+  # TRAFFIC NOISE
+  traffic:
+    waveformer_targets: ["Bus"]
+    yamnet_indices: [323, 324, 325, 326]  # Traffic, Car, Vehicle, Motor vehicle
+    priority: "low"
+    safety_override: false
+
+  # MUSIC
+  music:
+    waveformer_targets: ["Acoustic_guitar", "Violin_or_fiddle", "Trumpet", "Saxophone", "Flute", "Clarinet"]
+    yamnet_indices: [137, 138, 139, 140]  # Music, Musical instrument, Piano, Guitar
+    priority: "medium"
+    safety_override: false
+
+  # WIND / MICROPHONE NOISE
+  wind:
+    waveformer_targets: []  # No direct Waveformer target, use spectral gating instead
+    yamnet_indices: [486, 487]  # Wind, Wind noise
+    priority: "low"
+    safety_override: false
+    processing_method: "spectral_gate"  # Use traditional DSP for this
+
+  # TYPING / KEYBOARD
+  typing:
+    waveformer_targets: ["Computer_keyboard", "Writing"]
+    yamnet_indices: [378, 380]  # Typing, Computer keyboard (CORRECT INDICES!)
+    priority: "low"
+    safety_override: false
+    detection_threshold: 0.03  # Keyboard is quiet, lower threshold to 3%
+
+  # NATURE SOUNDS
+  nature:
+    waveformer_targets: ["Bark"]
+    yamnet_indices: [396, 397, 398]  # Rain, Thunderstorm, Dog
+    priority: "low"
+    safety_override: false
+
+  # APPLIANCES
+  appliances:
+    waveformer_targets: ["Microwave_oven"]
+    yamnet_indices: [362, 363, 371, 367]  # Microwave oven, Blender, Vacuum, Dryer
+    priority: "low"
+    safety_override: false
+
+  # MISCELLANEOUS
+  misc:
+    waveformer_targets: [
+      "Applause",
+      "Cough",
+      "Knock",
+      "Laughter",
+      "Sneeze",
+      "Finger_snapping",
+      "Drawer_open_or_close",
+      "Keys_jangling",
+      "Scissors"
+    ]
+    yamnet_indices: [62, 42, 353, 13, 14, 44, 57, 357, 373, 375]  # Applause, Cough, Knock, Laughter, etc.
+    priority: "low"
+    safety_override: false
+
+# Notes:
+# - Empty waveformer_targets means we don't have a direct Waveformer separation target
+# - safety_override: true means this sound ALWAYS passes through, even if user tries to suppress it
+# - Some categories like "wind" need traditional DSP (spectral gating) since Waveformer doesn't have that target

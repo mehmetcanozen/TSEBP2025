@@ -1,0 +1,29 @@
+# Export-specific dependencies
+#
+# Use this file when creating a virtualenv dedicated to
+# ONNX / TFLite export and conversion workflows, e.g.:
+#   python -m venv .venv
+#   .venv\Scripts\activate
+#   pip install -r requirements.txt
+
+# Core ML runtimes used by exporters
+torch
+numpy<2
+tensorflow==2.15.0
+
+# ONNX / TFLite export toolchain
+onnx==1.16.0
+onnxruntime
+onnx-tf
+onnx2tf
+tensorflow-probability==0.23.0
+ai-edge-litert
+
+# Optional ONNX graph tooling / simplification
+onnx-graphsurgeon
+sng4onnx
+onnxsim
+simple_onnx_processing_tools
+onnxscript
+toposort
+
