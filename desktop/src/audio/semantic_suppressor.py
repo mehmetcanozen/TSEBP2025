@@ -186,9 +186,10 @@ class SemanticSuppressor:
             profiler.start('input_normalization')
         max_val = np.max(np.abs(audio))
         if max_val < 1e-8:
-             # Silence
-             return audio
-             
+            # Silence
+            if profiler:
+                profiler.end('input_normalization')
+            return audio
         scale_factor = 1.0 / max_val
         audio_norm = audio * scale_factor
         if profiler:
