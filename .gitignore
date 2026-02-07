@@ -98,6 +98,9 @@ desktop/dist/
 mobile/android/app/build/
 mobile/ios/build/
 
+# Generated profiling output
+desktop/src/audio/profile_results.json
+
 # Build files
 *.tgz
 *.tar.gz

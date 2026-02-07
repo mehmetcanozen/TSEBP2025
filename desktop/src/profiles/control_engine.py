@@ -138,39 +138,45 @@ class ControlEngine:
         Returns:
             Processed audio
         """
+        # Take a snapshot of the current profile and its suppressions under lock,
+        # then release the lock before running the (potentially heavy) suppression
+        # pipeline to avoid blocking other control operations.
         with self._lock:
             profile = self.current_profile
             if not profile:
                 # No profile is passthrough
                 return audio
-            
-            # Check if passthrough mode (optimization)
-            if not profile.suppressions or all(not v for v in profile.suppressions.values()):
-                # No suppressions active, bypass processing
-                return audio
-            
-            # Get active suppression categories
-            active_suppressions = [
-                cat for cat, enabled in profile.suppressions.items()
-                if enabled
-            ]
-            
-            if not active_suppressions:
-                return audio
-            
-            # Process with suppressor
-            try:
-                clean_audio = self.suppressor.suppress(
-                    audio=audio,
-                    sample_rate=sample_rate,
-                    suppress_categories=active_suppressions,
-                    safety_check=True,  # Always enforce safety
-                )
-                return clean_audio
-            except Exception as e:
-                logger.error(f"Suppression failed: {e}", exc_info=True)
-                # On error, return original audio (fail-safe)
-                return audio
+
+            # Copy suppressions to avoid depending on shared mutable state outside the lock
+            suppressions = dict(profile.suppressions) if profile.suppressions else {}
+
+        # Check if passthrough mode (optimization)
+        if not suppressions or all(not enabled for enabled in suppressions.values()):
+            # No suppressions active, bypass processing
+            return audio
+
+        # Get active suppression categories
+        active_suppressions = [
+            category for category, enabled in suppressions.items()
+            if enabled
+        ]
+
+        if not active_suppressions:
+            return audio
+
+        # Process with suppressor outside the lock to avoid blocking control operations
+        try:
+            clean_audio = self.suppressor.suppress(
+                audio=audio,
+                sample_rate=sample_rate,
+                suppress_categories=active_suppressions,
+                safety_check=True,  # Always enforce safety
+            )
+            return clean_audio
+        except Exception as e:
+            logger.error(f"Suppression failed: {e}", exc_info=True)
+            # On error, return original audio (fail-safe)
+            return audio
 
     def on_detection_update(self, detections: Dict[str, float]) -> None:
         """

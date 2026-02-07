@@ -66,23 +66,30 @@ class TFLiteExporter:
         ]
         
         if use_fp16:
-             logger.info("Applying FP16 quantization...")
-             # onnx2tf uses --quantize_to_float16 or similar for FP16
-             # Actually, for TFLite it's often handled via converter options in TF, 
-             # but onnx2tf has --float16_quantization
-             cmd.append("-opt") # Optimization
-             cmd.append("--float16_quantization")
+            logger.info("Applying FP16 quantization...")
+            # onnx2tf uses --quantize_to_float16 or similar for FP16
+            # Actually, for TFLite it's often handled via converter options in TF, 
+            # but onnx2tf has --float16_quantization
+            cmd.append("-opt") # Optimization
+            cmd.append("--float16_quantization")
 
         try:
             subprocess.run(cmd, check=True)
             
+            # Determine expected generated file based on quantization
+            expected_name = "model_float16.tflite" if use_fp16 else "model_float32.tflite"
+            generated_file = output_path.parent / expected_name
+
             # Move the generated file to expected output path
-            generated_file = output_path.parent / "model_float32.tflite"
             if generated_file.exists():
                 generated_file.rename(output_path)
             else:
-                pass
-            
+                raise FileNotFoundError(
+                    f"Expected TFLite file '{expected_name}' not found in "
+                    f"'{output_path.parent}'. onnx2tf may have failed or produced "
+                    f"a differently named file (use_fp16={use_fp16})."
+                )
+
             logger.info("onnx2tf conversion complete")
             
         except subprocess.CalledProcessError as e:

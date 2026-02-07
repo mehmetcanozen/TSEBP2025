@@ -36,41 +36,41 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 # Install audio processing dependencies
 Write-Host ""
 Write-Host "Installing audio processing libraries..." -ForegroundColor Yellow
-pip install numpy>=1.24.0
-pip install scipy>=1.10.0
-pip install soundfile>=0.12.0
-pip install sounddevice>=0.4.6
-pip install PyAudio>=0.2.13
-pip install librosa>=0.10.0
+pip install "numpy>=1.24.0"
+pip install "scipy>=1.10.0"
+pip install "soundfile>=0.12.0"
+pip install "sounddevice>=0.4.6"
+pip install "PyAudio>=0.2.13"
+pip install "librosa>=0.10.0"
 
 # Install TensorFlow (for YAMNet)
 Write-Host ""
 Write-Host "Installing TensorFlow and TensorFlow Hub..." -ForegroundColor Yellow
-pip install tensorflow>=2.13.0
-pip install tensorflow-hub>=0.16.0
+pip install "tensorflow>=2.13.0"
+pip install "tensorflow-hub>=0.16.0"
 
 # Install export dependencies
 Write-Host ""
 Write-Host "Installing model export tools..." -ForegroundColor Yellow
-pip install onnx>=1.14.0
-pip install onnxruntime-gpu>=1.15.0
-pip install onnx-tf>=1.10.0
+pip install "onnx>=1.14.0"
+pip install "onnxruntime-gpu>=1.15.0"
+pip install "onnx-tf>=1.10.0"
 
 # Install audio quality metrics
 Write-Host ""
 Write-Host "Installing audio quality metrics (PESQ, STOI)..." -ForegroundColor Yellow
-pip install pesq>=0.0.4
-pip install pystoi>=0.3.3
+pip install "pesq>=0.0.4"
+pip install "pystoi>=0.3.3"
 
 # Install utility dependencies
 Write-Host ""
 Write-Host "Installing utility libraries..." -ForegroundColor Yellow
-pip install pyyaml>=6.0
-pip install jsonschema>=4.17.0
-pip install platformdirs>=3.5.0
-pip install psutil>=5.9.0
-pip install tqdm>=4.65.0
-pip install pytest>=7.3.0
+pip install "pyyaml>=6.0"
+pip install "jsonschema>=4.17.0"
+pip install "platformdirs>=3.5.0"
+pip install "psutil>=5.9.0"
+pip install "tqdm>=4.65.0"
+pip install "pytest>=7.3.0"
 
 # Verify installations
 Write-Host ""
