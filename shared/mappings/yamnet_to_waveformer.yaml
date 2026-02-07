@@ -64,7 +64,7 @@ categories:
   # APPLIANCES
   appliances:
     waveformer_targets: ["Microwave_oven"]
-    yamnet_indices: [380, 381]  # Appliance, Microwave oven
+    yamnet_indices: [362, 363, 371, 367]  # Microwave oven, Blender, Vacuum, Dryer
     priority: "low"
     safety_override: false
 
@@ -81,7 +81,7 @@ categories:
       "Keys_jangling",
       "Scissors"
     ]
-    yamnet_indices: [430, 431, 432]  # Miscellaneous sounds
+    yamnet_indices: [62, 42, 353, 13, 14, 44, 57, 357, 373, 375]  # Applause, Cough, Knock, Laughter, etc.
     priority: "low"
     safety_override: false
 

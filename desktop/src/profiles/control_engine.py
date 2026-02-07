@@ -75,6 +75,7 @@ class ControlEngine:
         self.mode = ControlMode.MANUAL
         self.current_profile: Optional[Profile] = None
         self.safety_status = SafetyStatus()
+        self._pre_safety_profile: Optional[Profile] = None # For restoration after override
         
         # Thread safety
         self._lock = threading.RLock()
@@ -202,6 +203,9 @@ class ControlEngine:
                 passthrough = self.profile_manager.get_profile("default-passthrough")
                 if passthrough and self.current_profile != passthrough:
                     logger.warning("Switching to Passthrough due to safety override")
+                    # Store previous profile only if we aren't already in override
+                    if not self.safety_status.active or not self._pre_safety_profile:
+                        self._pre_safety_profile = self.current_profile
                     self.current_profile = passthrough
                 
                 return
@@ -210,6 +214,12 @@ class ControlEngine:
                 if self.safety_status.active:
                     logger.info("Safety override cleared")
                     self.safety_status = SafetyStatus()
+                    
+                    # Restore previous profile if possible
+                    if self._pre_safety_profile:
+                        logger.info(f"Restoring profile: {self._pre_safety_profile.name}")
+                        self.current_profile = self._pre_safety_profile
+                        self._pre_safety_profile = None
             
             # Auto-mode profile switching
             if self.mode == ControlMode.AUTO:

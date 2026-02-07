@@ -40,3 +40,13 @@ categories:
     indices: [69, 106, 107, 281, 283]  # Dog, Bird, Bird vocalization, Thunder, Rain
     priority: low
     color: "#8BC34A"
+
+  appliances:
+    indices: [362, 363, 371, 367]  # Microwave oven, Blender, Vacuum cleaner, Hair dryer
+    priority: low
+    color: "#607D8B"
+
+  misc:
+    indices: [62, 42, 353, 13, 14, 44, 57, 357, 373, 375]  # Applause, Cough, Knock, Laughter, Baby laughter, Sneeze, Finger snapping, Drawer, Keys jangling, Scissors
+    priority: low
+    color: "#795548"

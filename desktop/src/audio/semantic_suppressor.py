@@ -226,7 +226,11 @@ class SemanticSuppressor:
         # No, simple scaling is standard over-subtraction.
         if profiler:
             profiler.start('aggressive_subtraction')
-        clean_audio = audio_2d[:min_len] - (unwanted_audio[:min_len] * aggressiveness)
+        
+        # Preserve original audio length even if Waveformer output is slightly different
+        clean_audio = audio_2d.copy()
+        clean_audio[:min_len] = audio_2d[:min_len] - (unwanted_audio[:min_len] * aggressiveness)
+        
         if profiler:
             profiler.end('aggressive_subtraction')
         

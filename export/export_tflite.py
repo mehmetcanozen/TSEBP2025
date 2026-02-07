@@ -133,7 +133,7 @@ def main():
         
     except ImportError as e:
         print(f"\n❌ Missing dependencies: {e}")
-        print("Please run: pip install tensorflow onnx-tf")
+        print("Please run: pip install onnx2tf tensorflow")
     except Exception as e:
         print(f"\n❌ Export failed: {e}")
 
