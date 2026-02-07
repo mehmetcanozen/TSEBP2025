@@ -1,304 +1,392 @@
 """
-Control Engine - Central coordinator for semantic noise suppression.
-
-Integrates detection, profile management, and suppression logic.
-Handles auto-mode, manual-mode, and safety overrides.
+Control Engine - Central coordinator for all control logic
 """
 
-from __future__ import annotations
-
-import logging
-import threading
+from typing import Dict, Optional, Callable, List
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, Optional
-
 import numpy as np
+from dataclasses import dataclass
 
-from desktop.src.profiles.profile_manager import Profile, ProfileManager
-
-# Lazy imports to avoid loading models at import time
-if TYPE_CHECKING:
-    from desktop.src.audio.semantic_suppressor import SemanticSuppressor
-
-logger = logging.getLogger(__name__)
+from profile_manager import ProfileManager, Profile
+from auto_controller import AutoController
+from safety_override import SafetyOverride
 
 
 class ControlMode(Enum):
-    """Control mode for the noise suppression system."""
-    AUTO = "auto"  # Automatically select profile based on detections
-    MANUAL = "manual"  # User manually selects profile
+    """Control mode"""
+    AUTO = "auto"
+    MANUAL = "manual"
 
 
-class SafetyStatus:
-    """Safety override status."""
-    def __init__(self, active: bool = False, category: str = "", confidence: float = 0.0):
-        self.active = active
-        self.category = category
-        self.confidence = confidence
+@dataclass
+class ControlState:
+    """Current control engine state"""
+    mode: ControlMode
+    current_profile: Optional[Profile]
+    current_gains: Dict[str, float]
+    safety_active: bool
+    last_detections: Dict[str, float]
 
 
 class ControlEngine:
-    """
-    Central control logic for semantic noise suppression.
+    """Central coordinator for all control logic"""
     
-    Responsibilities:
-    - Coordinate detection → profile selection → suppression
-    - Handle auto/manual mode switching
-    - Enforce safety overrides (siren/alarm always pass through)
-    - Manage passthrough bypass optimization
-    
-    Usage:
-        engine = ControlEngine()
-        engine.set_mode(ControlMode.AUTO)
-        clean_audio = engine.process_audio(noisy_audio, 44100)
-    
-    Thread Safety:
-        Most methods are thread-safe via internal locking.
-        process_audio() can be called from audio thread.
-    """
-
-    def __init__(
-        self,
-        profile_manager: Optional[ProfileManager] = None,
-        suppressor: Optional["SemanticSuppressor"] = None,
-    ):
+    def __init__(self, profile_manager: ProfileManager, mixer=None, detective=None):
         """
-        Initialize control engine.
+        Initialize ControlEngine
         
         Args:
-            profile_manager: Optional pre-initialized ProfileManager
-            suppressor: Optional pre-initialized SemanticSuppressor
+            profile_manager: ProfileManager instance
+            mixer: Mixer instance (optional for integration)
+            detective: Detective instance (optional for integration)
         """
-        self.profile_manager = profile_manager or ProfileManager()
-        self._suppressor = suppressor  # Store without initializing
+        self.profile_manager = profile_manager
+        self.mixer = mixer
+        self.detective = detective
         
+        # Initialize sub-modules
+        self.auto_controller = AutoController(profile_manager)
+        self.safety_override = SafetyOverride(enable_alerts=True)
+        
+        # State
         self.mode = ControlMode.MANUAL
         self.current_profile: Optional[Profile] = None
-        self.safety_status = SafetyStatus()
-        self._pre_safety_profile: Optional[Profile] = None # For restoration after override
+        self.current_gains: Dict[str, float] = {
+            'speech': 1.0,
+            'noise': 1.0,
+            'events': 1.0
+        }
+        self.last_detections: Dict[str, float] = {}
         
-        # Thread safety
-        self._lock = threading.RLock()
+        # Callbacks for UI updates
+        self.on_profile_changed: Optional[Callable[[Profile, str], None]] = None
+        self.on_gains_changed: Optional[Callable[[Dict], None]] = None
+        self.on_mode_changed: Optional[Callable[[ControlMode], None]] = None
+        self.on_safety_alert: Optional[Callable[[Dict], None]] = None
+        self.on_detections_updated: Optional[Callable[[Dict], None]] = None
         
-        # Set default profile (Passthrough)
-        passthrough = self.profile_manager.get_profile("default-passthrough")
-        if passthrough:
-            self.set_profile(passthrough)
-        
-        logger.info("ControlEngine initialized")
-
-    @property
-    def suppressor(self) -> "SemanticSuppressor":
-        """Lazy load suppressor only when needed."""
-        if self._suppressor is None:
-            # Import only when needed
-            from desktop.src.audio.semantic_suppressor import SemanticSuppressor
-            logger.info("Lazy loading SemanticSuppressor...")
-            self._suppressor = SemanticSuppressor()
-        return self._suppressor
-
-    def set_mode(self, mode: ControlMode) -> None:
-        """Switch between auto and manual mode."""
-        with self._lock:
-            self.mode = mode
-            logger.info(f"Mode set to: {mode.value}")
-
-    def set_profile(self, profile: Profile) -> None:
-        """Manually set active profile."""
-        with self._lock:
-            self.current_profile = profile
-            logger.info(f"Profile set to: {profile.name}")
-
-    def set_profile_by_id(self, profile_id: str) -> bool:
+        # Load last used settings
+        self._load_saved_settings()
+    
+    def set_mode(self, mode: ControlMode):
         """
-        Set profile by ID.
-        
-        Returns:
-            True if profile found and set, False otherwise
-        """
-        profile = self.profile_manager.get_profile(profile_id)
-        if profile:
-            self.set_profile(profile)
-            return True
-        return False
-
-    def process_audio(
-        self,
-        audio: np.ndarray,
-        sample_rate: int,
-    ) -> np.ndarray:
-        """
-        Process audio with semantic suppression based on current profile.
-        
-        Main entry point for audio processing pipeline.
+        Switch between auto and manual modes
         
         Args:
-            audio: Input audio buffer
-            sample_rate: Sample rate
-        
-        Returns:
-            Processed audio
+            mode: ControlMode.AUTO or ControlMode.MANUAL
         """
-        # Take a snapshot of the current profile and its suppressions under lock,
-        # then release the lock before running the (potentially heavy) suppression
-        # pipeline to avoid blocking other control operations.
-        with self._lock:
-            profile = self.current_profile
-            if not profile:
-                # No profile is passthrough
-                return audio
-
-            # Copy suppressions to avoid depending on shared mutable state outside the lock
-            suppressions = dict(profile.suppressions) if profile.suppressions else {}
-
-        # Check if passthrough mode (optimization)
-        if not suppressions or all(not enabled for enabled in suppressions.values()):
-            # No suppressions active, bypass processing
-            return audio
-
-        # Get active suppression categories
-        active_suppressions = [
-            category for category, enabled in suppressions.items()
-            if enabled
-        ]
-
-        if not active_suppressions:
-            return audio
-
-        # Process with suppressor outside the lock to avoid blocking control operations
-        try:
-            clean_audio = self.suppressor.suppress(
-                audio=audio,
-                sample_rate=sample_rate,
-                suppress_categories=active_suppressions,
-                safety_check=True,  # Always enforce safety
+        if mode == self.mode:
+            return  # Already in this mode
+        
+        self.mode = mode
+        
+        if self.mode == ControlMode.AUTO:
+            # When switching to auto, start with a default profile
+            if self.current_profile is None:
+                default = self._get_default_profile()
+                if default:
+                    self.apply_profile(default)
+        
+        # Notify UI
+        if self.on_mode_changed:
+            self.on_mode_changed(self.mode)
+        
+        print(f"[CONTROL] Mode switched to: {mode.value}")
+    
+    def on_detection_update(self, detections: Dict[str, float]):
+        """
+        Called when Detective has new detection results
+        
+        This is the main control flow:
+        1. Check safety override first
+        2. If auto mode and no safety: Evaluate profiles
+        3. Apply to mixer if available
+        
+        Args:
+            detections: Detection results from Detective
+                       e.g. {"speech": 0.8, "traffic": 0.6, "wind": 0.1}
+        """
+        self.last_detections = detections.copy()
+        
+        # Step 1: Check safety override first
+        alert = self.safety_override.check(detections)
+        
+        if alert.active:
+            # Apply safety override gains
+            override_gains = self.safety_override.apply_override(
+                self.current_gains, 
+                detections
             )
-            return clean_audio
-        except Exception as e:
-            logger.error(f"Suppression failed: {e}", exc_info=True)
-            # On error, return original audio (fail-safe)
-            return audio
-
-    def on_detection_update(self, detections: Dict[str, float]) -> None:
-        """
-        Called periodically by detection thread with latest sound detections.
+            self._apply_gains(override_gains, apply_to_mixer=True)
+            
+            # Alert UI
+            alert_info = self.safety_override.get_alert_info()
+            if alert_info and self.on_safety_alert:
+                self.on_safety_alert(alert_info)
+            
+            # Notify UI of detections
+            if self.on_detections_updated:
+                self.on_detections_updated(detections)
+            
+            print(f"[CONTROL] Safety override active: {alert.category}")
+            return
         
-        In AUTO mode, this triggers profile switching logic.
-        In MANUAL mode, this is used for UI updates only.
+        # Step 2: If auto mode, evaluate profiles
+        if self.mode == ControlMode.AUTO:
+            recommendation = self.auto_controller.get_recommendation(detections)
+            
+            if recommendation.profile is not None:
+                # Check if we should switch
+                should_switch = self.auto_controller.should_switch_profile(
+                    recommendation.profile,
+                    self.current_profile
+                )
+                
+                if should_switch:
+                    self.apply_profile(recommendation.profile)
+                    
+                    # Notify UI
+                    if self.on_profile_changed:
+                        self.on_profile_changed(
+                            recommendation.profile,
+                            recommendation.reason
+                        )
+                    
+                    print(f"[CONTROL] Auto-switched to '{recommendation.profile.name}': "
+                          f"{recommendation.reason}")
+        
+        # Step 3: Notify UI of detections
+        if self.on_detections_updated:
+            self.on_detections_updated(detections)
+    
+    def apply_profile(self, profile: Profile):
+        """
+        Apply a profile (set gains and suppressions)
         
         Args:
-            detections: Dictionary of {category: confidence}
+            profile: Profile to apply
         """
-        with self._lock:
-            # Check safety override first
-            safety = self._check_safety_override(detections)
-            if safety.active:
-                self.safety_status = safety
-                logger.warning(
-                    f"SAFETY OVERRIDE: {safety.category} detected "
-                    f"(confidence: {safety.confidence:.2f})"
-                )
-                
-                # Force passthrough profile
-                passthrough = self.profile_manager.get_profile("default-passthrough")
-                if passthrough and self.current_profile != passthrough:
-                    logger.warning("Switching to Passthrough due to safety override")
-                    # Store previous profile only if we aren't already in override
-                    if not self.safety_status.active or not self._pre_safety_profile:
-                        self._pre_safety_profile = self.current_profile
-                    self.current_profile = passthrough
-                
-                return
-            else:
-                # Clear safety status if no longer active
-                if self.safety_status.active:
-                    logger.info("Safety override cleared")
-                    self.safety_status = SafetyStatus()
-                    
-                    # Restore previous profile if possible
-                    if self._pre_safety_profile:
-                        logger.info(f"Restoring profile: {self._pre_safety_profile.name}")
-                        self.current_profile = self._pre_safety_profile
-                        self._pre_safety_profile = None
-            
-            # Auto-mode profile switching
-            if self.mode == ControlMode.AUTO:
-                new_profile = self._evaluate_auto_mode(detections)
-                if new_profile and new_profile != self.current_profile:
-                    logger.info(
-                        f"Auto-mode switching: {self.current_profile.name if self.current_profile else 'None'} "
-                        f"→ {new_profile.name}"
-                    )
-                    self.current_profile = new_profile
-
-    def _check_safety_override(self, detections: Dict[str, float]) -> SafetyStatus:
+        if profile is None:
+            return
+        
+        self.current_profile = profile
+        
+        # Extract gains from profile
+        gains = self.profile_manager.apply_profile(profile)
+        self._apply_gains(gains, apply_to_mixer=True)
+        
+        print(f"[CONTROL] Profile applied: {profile.name}")
+    
+    def set_gains(self, speech: float, noise: float, events: float):
         """
-        Check if safety override should be triggered.
+        Manually set gains (switches to manual mode if not already)
+        
+        Args:
+            speech: Speech gain (0-1)
+            noise: Noise gain (0-1)
+            events: Events gain (0-1)
+        """
+        gains = {
+            'speech': np.clip(speech, 0.0, 1.0),
+            'noise': np.clip(noise, 0.0, 1.0),
+            'events': np.clip(events, 0.0, 1.0)
+        }
+        
+        # Switch to manual mode if not already
+        if self.mode != ControlMode.MANUAL:
+            self.set_mode(ControlMode.MANUAL)
+        
+        self._apply_gains(gains, apply_to_mixer=True)
+        
+        print(f"[CONTROL] Gains updated: speech={speech:.2f}, "
+              f"noise={noise:.2f}, events={events:.2f}")
+    
+    def _apply_gains(self, gains: Dict[str, float], apply_to_mixer: bool = False):
+        """
+        Internal method to apply gains
+        
+        Args:
+            gains: Gains dictionary
+            apply_to_mixer: Whether to send to mixer
+        """
+        self.current_gains = gains
+        
+        # Apply to mixer if available
+        if apply_to_mixer and self.mixer:
+            self.mixer.set_gains(
+                gains.get('speech', 1.0),
+                gains.get('noise', 1.0),
+                gains.get('events', 1.0)
+            )
+        
+        # Notify UI
+        if self.on_gains_changed:
+            self.on_gains_changed(gains)
+    
+    def save_current_as_profile(self, name: str, description: str = '') -> Profile:
+        """
+        Save current gains as a new custom profile
+        
+        Args:
+            name: Name for the new profile
+            description: Optional description
         
         Returns:
-            SafetyStatus indicating if override is active
+            Created Profile
         """
-        CRITICAL_CATEGORIES = ["siren", "alarm"]
-        OVERRIDE_THRESHOLD = 0.7
+        profile = self.profile_manager.create_profile(
+            name=name,
+            gains=self.current_gains,
+            description=description
+        )
         
-        for category in CRITICAL_CATEGORIES:
-            confidence = detections.get(category, 0.0)
-            if confidence >= OVERRIDE_THRESHOLD:
-                return SafetyStatus(
-                    active=True,
-                    category=category,
-                    confidence=confidence,
-                )
-        
-        return SafetyStatus(active=False)
-
-    def _evaluate_auto_mode(self, detections: Dict[str, float]) -> Optional[Profile]:
-        """
-        Evaluate which profile should be active based on detections.
-        
-        Uses profile auto_triggers to determine best match.
-        
-        Returns:
-            Best matching Profile or None
-        """
+        print(f"[CONTROL] Saved profile: {name}")
+        return profile
+    
+    def get_state(self) -> ControlState:
+        """Get current control state"""
+        return ControlState(
+            mode=self.mode,
+            current_profile=self.current_profile,
+            current_gains=self.current_gains,
+            safety_active=self.safety_override.is_active(),
+            last_detections=self.last_detections
+        )
+    
+    def _get_default_profile(self) -> Optional[Profile]:
+        """Get default profile"""
         profiles = self.profile_manager.get_all_profiles()
         
-        # Score each profile based on its triggers
-        best_profile = None
-        best_score = 0.0
-        
+        # Look for a default profile
         for profile in profiles:
-            if not profile.auto_triggers:
-                continue
-            
-            score = 0.0
-            for trigger in profile.auto_triggers:
-                confidence = detections.get(trigger.category, 0.0)
-                if confidence >= trigger.threshold:
-                    score += confidence
-            
-            if score > best_score:
-                best_score = score
-                best_profile = profile
+            if profile.isDefault:
+                return profile
         
-        return best_profile
-
-    def get_status(self) -> dict:
+        # Otherwise return first profile
+        return profiles[0] if profiles else None
+    
+    def _load_saved_settings(self):
+        """Load last-used settings from storage"""
+        # This would be implemented with settings_store
+        # For now, just set defaults
+        default_profile = self._get_default_profile()
+        if default_profile:
+            self.apply_profile(default_profile)
+    
+    def get_all_profiles(self) -> List[Profile]:
+        """Get all available profiles"""
+        return self.profile_manager.get_all_profiles()
+    
+    def get_profile(self, profile_id: str) -> Optional[Profile]:
+        """Get specific profile by ID"""
+        return self.profile_manager.get_profile(profile_id)
+    
+    def create_profile(self, name: str, gains: Dict, suppressions: Dict = None,
+                      description: str = '') -> Profile:
+        """Create a new profile"""
+        return self.profile_manager.create_profile(
+            name=name,
+            gains=gains,
+            suppressions=suppressions or {},
+            description=description
+        )
+    
+    def delete_profile(self, profile_id: str) -> bool:
+        """Delete a profile"""
+        return self.profile_manager.delete_profile(profile_id)
+    
+    def update_profile(self, profile_id: str, **kwargs) -> Optional[Profile]:
+        """Update a profile"""
+        return self.profile_manager.update_profile(profile_id, **kwargs)
+    
+    def should_bypass_model(self, gains: Dict[str, float]) -> bool:
         """
-        Get current engine status for UI display.
+        Check if we should bypass expensive inference (battery saver)
+        
+        If all gains are at 100%, we're in passthrough mode.
+        Just copy input buffer to output - skip expensive inference!
+        
+        Args:
+            gains: Current gains
         
         Returns:
-            Status dictionary
+            True if should bypass model
         """
-        with self._lock:
-            return {
-                "mode": self.mode.value,
-                "profile": self.current_profile.name if self.current_profile else None,
-                "profile_id": self.current_profile.id if self.current_profile else None,
-                "safety_active": self.safety_status.active,
-                "safety_category": self.safety_status.category,
-                "safety_confidence": self.safety_status.confidence,
-            }
+        PASSTHROUGH_THRESHOLD = 0.99
+        
+        is_passthrough = (
+            gains.get('speech', 0) > PASSTHROUGH_THRESHOLD and
+            gains.get('noise', 0) > PASSTHROUGH_THRESHOLD and
+            gains.get('events', 0) > PASSTHROUGH_THRESHOLD
+        )
+        
+        return is_passthrough
+    
+    def is_silent(self, audio_buffer: np.ndarray, threshold: float = 0.01) -> bool:
+        """
+        Use simple energy detection to check if room is silent
+        
+        Args:
+            audio_buffer: Audio samples
+            threshold: Energy threshold
+        
+        Returns:
+            True if audio is silent
+        """
+        energy = np.mean(np.abs(audio_buffer))
+        return energy < threshold
+    
+    def process_audio_optimization(self, input_buffer: np.ndarray) -> Optional[np.ndarray]:
+        """
+        Determine if we should skip expensive processing
+        
+        Returns None if normal processing should happen,
+        or the output buffer if we're bypassing/silencing
+        
+        Args:
+            input_buffer: Input audio
+        
+        Returns:
+            None (process normally), copy of input (passthrough), or zeros (silence)
+        """
+        # Check for silence first
+        if self.is_silent(input_buffer):
+            print("[AUDIO] Silence detected - skipping inference")
+            return np.zeros_like(input_buffer)
+        
+        # Check for passthrough
+        if self.should_bypass_model(self.current_gains):
+            print("[AUDIO] Passthrough mode - skipping inference")
+            return input_buffer.copy()
+        
+        # Normal processing
+        return None
 
 
-__all__ = ["ControlEngine", "ControlMode", "SafetyStatus"]
+# Integration Flow Diagram:
+#
+# ┌─────────────────────────────────────────────────┐
+# │                  ControlEngine                  │
+# ├─────────────────────────────────────────────────┤
+# │                                                 │
+# │  Detective ──► on_detection_update()            │
+# │                      │                          │
+# │                      ▼                          │
+# │            ┌─────────────────┐                  │
+# │            │ Safety Override │                  │
+# │            └────────┬────────┘                  │
+# │                     │ (if not triggered)        │
+# │                     ▼                           │
+# │            ┌─────────────────┐                  │
+# │            │   Auto Mode?    │                  │
+# │            └────────┬────────┘                  │
+# │           Yes       │        No                 │
+# │            ▼        │         ▼                 │
+# │    AutoController   │    Manual Gains           │
+# │            │        │         │                 │
+# │            └────────┴─────────┘                 │
+# │                     │                           │
+# │                     ▼                           │
+# │               Apply to Mixer                    │
+# │                                                 │
+# └─────────────────────────────────────────────────┘
