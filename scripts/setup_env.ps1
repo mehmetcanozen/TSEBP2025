@@ -88,7 +88,7 @@ python -c "import tensorflow as tf; print(f'TensorFlow version: {tf.__version__}
 
 # Save installed packages
 Write-Host ""
-Write-Host "Saving requirements to desktop/requirements.txt..." -ForegroundColor Yellow
+Write-Host "Saving requirements to desktop/requirements_generated.txt..." -ForegroundColor Yellow
 pip freeze > desktop\requirements_generated.txt
 
 Write-Host ""

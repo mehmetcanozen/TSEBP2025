@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import threading
 from enum import Enum
-from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
 import numpy as np

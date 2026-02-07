@@ -11,14 +11,12 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import sounddevice as sd
 
-# Add project root to path
-project_root = Path(__file__).resolve().parents[1]
+project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
-from desktop.src.profiles import ProfileManager, Profile, ControlEngine, ControlMode
+from desktop.src.profiles import ProfileManager, ControlEngine, ControlMode
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -99,20 +97,17 @@ def main():
                 audio_mono = indata[:, 0]
             
             # Get detections BEFORE processing (for debugging)
-            if hasattr(engine.suppressor, 'detective'):
-                try:
-                    detections = engine.suppressor.detective.detect(audio_mono, 44100)
-                    
-                    # Filter by threshold and show ALL detections
-                    significant = {k: v for k, v in detections.items() if v >= args.threshold}
-                    
-                    if significant and significant != last_detections:
-                        print(f"\n🎯 DETECTED: {significant}")
-                        last_detections = significant.copy()
-                        detection_count += 1
-                    
-                except Exception as e:
-                    pass  # Suppress detection errors for cleaner output
+            try:
+                # Use the public API of the suppressor
+                detections = engine.suppressor.detect_categories(audio_mono, 44100, threshold=args.threshold)
+                
+                if detections and detections != last_detections:
+                    print(f"\n🎯 DETECTED: {detections}")
+                    last_detections = detections.copy()
+                    detection_count += 1
+                
+            except Exception:
+                pass  # Suppress detection errors for cleaner output
             
             # Process audio
             clean_audio = engine.process_audio(audio_mono, 44100)

@@ -3,13 +3,12 @@ Profile performance of real-time noise suppression system.
 Run this script to identify bottlenecks and measure optimization impact.
 """
 
-import numpy as np
 import soundfile as sf
 from pathlib import Path
 import sys
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from desktop.src.audio.semantic_suppressor import SemanticSuppressor
 from desktop.src.audio.profiler import get_profiler
@@ -45,7 +44,7 @@ def profile_suppression(audio_file: str, iterations: int = 10):
     for i in range(iterations):
         print(f"  Iteration {i+1}/{iterations}...", end='\r')
         
-        clean_audio = suppressor.suppress(
+        suppressor.suppress(
             audio=audio,
             sample_rate=sample_rate,
             suppress_categories=["typing", "wind"],
@@ -80,8 +79,8 @@ def profile_suppression(audio_file: str, iterations: int = 10):
 if __name__ == "__main__":
     # Use keyboard sample if available, otherwise use any WAV in samples/
     test_files = [
-        Path(__file__).parents[4] / "samples" / "audio" / "keyboard.wav",
-        Path(__file__).parents[4] / "samples" / "processed" / "recording_original.wav",
+        Path(__file__).parents[3] / "samples" / "audio" / "keyboard.wav",
+        Path(__file__).parents[3] / "samples" / "processed" / "recording_original.wav",
     ]
     
     test_file = None

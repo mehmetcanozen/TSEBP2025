@@ -90,8 +90,11 @@ class BatchProcessor:
                         suppress_categories=suppress_categories,
                         detection_threshold=detection_threshold,
                     )
-                    # Apply same ratio to stereo channels
-                    ratio = clean_mono / (mono_chunk + 1e-8)
+                    # Apply same ratio to stereo channels using a numerically stable, clipped gain
+                    eps = 1e-4
+                    ratio = np.ones_like(mono_chunk, dtype=mono_chunk.dtype)
+                    np.divide(clean_mono, mono_chunk, out=ratio, where=np.abs(mono_chunk) > eps)
+                    ratio = np.clip(ratio, 0.1, 10.0)
                     clean_chunk = chunk * ratio[:, np.newaxis]
                 else:
                     clean_chunk = self.suppressor.suppress(

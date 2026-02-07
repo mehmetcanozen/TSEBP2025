@@ -16,10 +16,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence, Union
+from typing import Dict, Optional, Sequence
 
 import numpy as np
-import torch
 import yaml
 
 from training.models.semantic_detective import SemanticDetective
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Import performance profiler for optimization analysis
 try:
-    from .profiler import get_profiler, OperationTimer
+    from .profiler import get_profiler
     profiler = get_profiler()
 except ImportError:
     # Fallback if profiler not available
@@ -159,19 +158,25 @@ class SemanticSuppressor:
                 # TODO: Implement spectral gating for categories without Waveformer targets
                 continue
             
-            # Only add targets if detection confidence is above threshold
-            # OR if detection_threshold is negative (Force Mode)
+            # Get detection confidence for this category
             confidence = smoothed_scores.get(category, 0.0)
             
-            if detection_threshold < 0 or confidence >= detection_threshold:
-                if detection_threshold < 0:
+            # Allow per-category override of detection_threshold from configuration
+            effective_threshold = cat_config.get("detection_threshold", detection_threshold)
+            
+            if effective_threshold < 0 or confidence >= effective_threshold:
+                if effective_threshold < 0:
                     logger.debug(f"Forcing suppression for '{category}' (Force Mode)")
                 else:
-                    logger.info(f"Suppressing '{category}' (confidence: {confidence:.2f})")
+                    logger.info(
+                        f"Suppressing '{category}' (confidence: {confidence:.2f} >= threshold: {effective_threshold})"
+                    )
                 
                 targets_to_suppress.extend(wf_targets)
             else:
-                logger.debug(f"Skipping '{category}' (confidence: {confidence:.2f} < {detection_threshold})")
+                logger.debug(
+                    f"Skipping '{category}' (confidence: {confidence:.2f} < threshold: {effective_threshold})"
+                )
 
         if not targets_to_suppress:
             logger.debug("No targets detected above threshold, returning original audio")

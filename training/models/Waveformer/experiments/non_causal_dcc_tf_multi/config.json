@@ -1,7 +1,6 @@
 {
-    "model": "src.training.non_causal_dcc_tf",
-    "model_params":
-    {
+    "model": "src.training.non_causal_dcc_tf_pe_local",
+    "model_params": {
         "label_len": 41,
         "L": 32,
         "enc_dim": 512,
@@ -10,37 +9,32 @@
         "num_dec_layers": 1,
         "dec_chunk_size": 13
     },
-    "train_data":
-    {
+    "train_data": {
         "input_dir": "data/FSDSoundScapes",
         "dset": "train",
         "sr": 44100,
         "resample_rate": null,
-        "max_num_targets":3
+        "max_num_targets": 3
     },
-    "val_data":
-    {
+    "val_data": {
         "input_dir": "data/FSDSoundScapes",
         "dset": "val",
         "sr": 44100,
         "resample_rate": null,
-        "max_num_targets":3
+        "max_num_targets": 3
     },
-    "test_data":
-    {
+    "test_data": {
         "input_dir": "data/FSDSoundScapes",
         "dset": "test",
         "sr": 44100,
         "resample_rate": null,
-        "max_num_targets":2
+        "max_num_targets": 2
     },
-    "optim":
-    {
+    "optim": {
         "lr": 5e-4,
         "weight_decay": 0.0
     },
-    "lr_sched":
-    {
+    "lr_sched": {
         "mode": "max",
         "factor": 0.1,
         "patience": 5,

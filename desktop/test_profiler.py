@@ -2,19 +2,18 @@
 Simple profiling script for semantic suppression - run from desktop/ directory
 """
 
-import numpy as np
 import soundfile as sf
 from pathlib import Path
 
-from src.audio.semantic_suppressor import SemanticSuppressor
-from src.audio.profiler import get_profiler
+from desktop.src.audio.semantic_suppressor import SemanticSuppressor
+from desktop.src.audio.profiler import get_profiler
 
 
 def main():
     # Find test audio
     test_files = [
-        Path("../samples/audio/keyboard.wav"),
-        Path("../samples/processed/recording_original.wav"),
+        Path("samples/audio/keyboard.wav"),
+        Path("samples/processed/recording_original.wav"),
     ]
     
     test_file = None
@@ -43,7 +42,7 @@ def main():
     iterations = 10
     print(f"\nRunning {iterations} iterations...")
     for i in range(iterations):
-        clean = suppressor.suppress(
+        suppressor.suppress(
             audio=audio,
             sample_rate=sr,
             suppress_categories=["typing", "wind"],
@@ -56,7 +55,7 @@ def main():
     print(profiler.report())
     
     # Save results
-    output = Path("src/audio/profile_results.json")
+    output = Path(__file__).parent / "src" / "audio" / "profile_results.json"
     profiler.export_json(str(output))
     print(f"\nResults saved to: {output}")
 

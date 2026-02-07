@@ -12,11 +12,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import sounddevice as sd
-import tensorflow as tf
 import tensorflow_hub as hub
 
 # Add project root
-project_root = Path(__file__).resolve().parent
+project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
 print("Loading YAMNet model...")

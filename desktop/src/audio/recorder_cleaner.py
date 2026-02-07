@@ -14,7 +14,6 @@ import time
 import sys
 from pathlib import Path
 import queue
-import threading
 
 import numpy as np
 import sounddevice as sd
@@ -35,6 +34,7 @@ def main():
     parser.add_argument("--suppress", "-s", type=str, default="typing", help="Categories to suppress")
     parser.add_argument("--output", "-o", type=str, default=None, help="Output filename (optional)")
     parser.add_argument("--threshold", "-t", type=float, default=0.03, help="Detection threshold")
+    parser.add_argument("--aggressiveness", "-a", type=float, default=1.0, help="Suppression aggressiveness (1.0-2.0)")
     
     args = parser.parse_args()
     
@@ -62,20 +62,16 @@ def main():
     engine.set_profile(profile)
     engine.set_mode(ControlMode.MANUAL)
     
-    # ⚠️ OVERRIDE THRESHOLD
-    # Force the threshold for the suppressed categories directly in the suppressor's mapping
-    # -1.0 means FORCE SUPPRESSION (bypass detection)
     if hasattr(engine, 'suppressor'): # Trigger lazy load
         _ = engine.suppressor 
         for cat in suppressions.keys():
             if cat in engine.suppressor.category_map:
-                logger.info(f"Forcing suppression for '{cat}' (Threshold: -1.0)")
-                engine.suppressor.category_map[cat]['detection_threshold'] = -1.0
+                logger.info(f"Setting threshold for '{cat}' to {args.threshold}")
+                engine.suppressor.category_map[cat]['detection_threshold'] = args.threshold
     
     # Audio buffers
     q = queue.Queue()
     sample_rate = 44100
-    channels = 1 
     
     # Rolling buffer for context (Waveformer needs context to work!)
     # We keep 1.0s of history but only output the new 0.1s chunk
@@ -103,7 +99,7 @@ def main():
         try:
             dev = sd.query_devices(kind='input')
             input_channels = dev['max_input_channels']
-        except:
+        except Exception:
             input_channels = 1
 
         with sd.InputStream(samplerate=sample_rate, channels=input_channels, callback=audio_callback):
@@ -135,8 +131,8 @@ def main():
                             audio=rolling_buffer,
                             sample_rate=sample_rate,
                             suppress_categories=targets,
-                            detection_threshold=-1.0,  # Force mode
-                            aggressiveness=1.5  # AGGRESSIVE SUPPRESSION
+                            detection_threshold=args.threshold,
+                            aggressiveness=args.aggressiveness
                         )
                     else:
                         clean_full_buffer = rolling_buffer
@@ -163,6 +159,7 @@ def main():
                          pass
                         
                 except queue.Empty:
+                    # No new audio data was available within the timeout; continue loop and try again.
                     pass
                 except KeyboardInterrupt:
                     break

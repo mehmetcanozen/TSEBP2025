@@ -72,11 +72,10 @@ python -m desktop.src.audio.recorder_cleaner `
   --suppress typing `
   --output samples\processed\session_clean.wav
 
-# More aggressive suppression and multiple categories
+# Suppress multiple categories
 python -m desktop.src.audio.recorder_cleaner `
   --duration 10 `
-  --suppress typing,wind `
-  --aggressiveness 1.5 `
+  --suppress typing,wind
   --output samples\processed\session_clean.wav
 ```
 

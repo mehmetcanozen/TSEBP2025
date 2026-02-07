@@ -8,12 +8,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-import shutil
 import subprocess
 from pathlib import Path
-
-import onnx
-import tensorflow as tf
 # from onnx_tf.backend import prepare  <-- Removed
 
 from export.export_onnx import ONNXExporter
@@ -70,7 +66,12 @@ class TFLiteExporter:
         ]
         
         if use_fp16:
-             pass
+             logger.info("Applying FP16 quantization...")
+             # onnx2tf uses --quantize_to_float16 or similar for FP16
+             # Actually, for TFLite it's often handled via converter options in TF, 
+             # but onnx2tf has --float16_quantization
+             cmd.append("-opt") # Optimization
+             cmd.append("--float16_quantization")
 
         try:
             subprocess.run(cmd, check=True)

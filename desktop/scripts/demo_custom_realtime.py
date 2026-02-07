@@ -15,10 +15,10 @@ import numpy as np
 import sounddevice as sd
 
 # Add project root to path
-project_root = Path(__file__).resolve().parents[1]
+project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
-from desktop.src.profiles import ProfileManager, Profile, ControlEngine, ControlMode
+from desktop.src.profiles import ProfileManager, ControlEngine, ControlMode
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)

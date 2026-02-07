@@ -7,16 +7,13 @@ Live demonstration of semantic noise suppression from mic input.
 import argparse
 import logging
 import sys
-import threading
 import time
 from pathlib import Path
 
-import numpy as np
 import sounddevice as sd
-import soundfile as sf
 
 # Add project root to path
-project_root = Path(__file__).resolve().parents[1]
+project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
 
 from desktop.src.profiles import ControlEngine, ControlMode
