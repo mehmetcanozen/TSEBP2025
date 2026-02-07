@@ -136,7 +136,6 @@ def main():
                             sample_rate=sample_rate,
                             suppress_categories=targets,
                             detection_threshold=-1.0,  # Force mode
-                            safety_check=False,  # Already verified
                             aggressiveness=1.5  # AGGRESSIVE SUPPRESSION
                         )
                     else:
