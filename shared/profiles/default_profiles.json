@@ -13,7 +13,12 @@
             "appliances": true,
             "misc": true
         },
-        "autoTriggers": [],
+        "autoTriggers": [
+            {
+                "category": "typing",
+                "threshold": 0.6
+            }
+        ],
         "isDefault": true,
         "isSystemProfile": true
     },

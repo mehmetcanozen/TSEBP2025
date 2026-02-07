@@ -8,13 +8,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.append(str(SRC))
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from profiles.control_engine import ControlEngine, ControlMode, SafetyStatus
-from profiles.profile_manager import Profile, AutoTrigger
+from desktop.src.profiles.control_engine import ControlEngine, ControlMode
+from desktop.src.profiles.profile_manager import Profile, AutoTrigger
 
 
 class FakeSuppressor:

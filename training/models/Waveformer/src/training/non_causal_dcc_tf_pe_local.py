@@ -26,12 +26,12 @@ class DilatedConvEncoder(nn.Module):
         assert kernel_size % 2 == 1, "Kernel size must be odd."
 
         # Dilated causal conv layers aggregate previous context to obtain
-        # contexful encoded input.
+        # contextful encoded input.
         _dcc_layers = OrderedDict()
         for i in range(num_layers):
             dcc_layer = DepthwiseSeparableConv(
-                channels, channels, kernel_size=3, stride=1,
-                padding=(kernel_size // 2) * 2**i, dilation=2**i)
+                channels, channels, kernel_size=self.kernel_size, stride=1,
+                padding=(self.kernel_size // 2) * 2**i, dilation=2**i)
             _dcc_layers.update({'dcc_%d' % i: dcc_layer})
         self.dcc_layers = nn.Sequential(_dcc_layers)
 
@@ -154,7 +154,7 @@ class MaskNet(nn.Module):
             l: [B, C]
                 Label embedding
         """
-        # Enocder the label integrated input
+        # Encode the label integrated input
         e = self.encoder(x)
 
         # Label integration

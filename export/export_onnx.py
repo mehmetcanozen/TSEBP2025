@@ -30,7 +30,7 @@ class ONNXExporter:
     def export(
         self,
         output_path: Path,
-        opset_version: int = 11, # Downgrade to 11 for max compatibility
+        opset_version: int = 17, # Use 17 for max compatibility with onnxrt/TFLite
         use_fp16: bool = True,
     ) -> Path:
         """
@@ -38,7 +38,7 @@ class ONNXExporter:
         
         Args:
             output_path: Path to save .onnx file
-            opset_version: ONNX opset version (17 is latest stable)
+            opset_version: ONNX opset version
             use_fp16: Apply FP16 quantization
         
         Returns:

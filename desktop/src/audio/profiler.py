@@ -199,7 +199,7 @@ class OperationTimer:
 
 
 # Global profiler instance (can be disabled in production)
-_global_profiler = PerformanceProfiler(enabled=True)
+_global_profiler = PerformanceProfiler(enabled=False)
 
 
 def get_profiler() -> PerformanceProfiler:

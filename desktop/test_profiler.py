@@ -10,6 +10,9 @@ from desktop.src.audio.profiler import get_profiler
 
 
 def main():
+    profiler = get_profiler()
+    profiler.enabled = True
+    
     # Find test audio
     test_files = [
         Path("samples/audio/keyboard.wav"),

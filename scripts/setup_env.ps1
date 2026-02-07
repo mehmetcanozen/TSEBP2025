@@ -13,11 +13,18 @@ $venvPath = ".\desktop\.venv"
 Write-Host "Creating virtual environment at $venvPath..." -ForegroundColor Yellow
 
 if (Test-Path $venvPath) {
-    Write-Host "Virtual environment already exists. Removing..." -ForegroundColor Yellow
-    Remove-Item -Recurse -Force $venvPath
+    Write-Host "Virtual environment already exists at $venvPath." -ForegroundColor Yellow
+    $choice = Read-Host "Do you want to RECREATE it? (Existing packages will be lost) [y/N]"
+    if ($choice -eq 'y' -or $choice -eq 'Y') {
+        Write-Host "Removing existing environment..." -ForegroundColor Yellow
+        Remove-Item -Recurse -Force $venvPath
+        python -m venv $venvPath
+    } else {
+        Write-Host "Reusing existing environment..." -ForegroundColor Green
+    }
+} else {
+    python -m venv $venvPath
 }
-
-python -m venv $venvPath
 
 # Activate virtual environment
 Write-Host "Activating virtual environment..." -ForegroundColor Yellow

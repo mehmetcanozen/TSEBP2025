@@ -44,6 +44,7 @@ class TFLiteExporter:
             Path to exported TFLite file
         """
         logger.info(f"Exporting Waveformer to TFLite: {output_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         temp_dir.mkdir(parents=True, exist_ok=True)
 
         # Step 1: Export to ONNX

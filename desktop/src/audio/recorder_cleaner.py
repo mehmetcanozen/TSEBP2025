@@ -70,7 +70,7 @@ def main():
                 engine.suppressor.category_map[cat]['detection_threshold'] = args.threshold
     
     # Audio buffers
-    q = queue.Queue()
+    q = queue.Queue(maxsize=10) # Bounded queue to prevent memory growth
     sample_rate = 44100
     
     # Rolling buffer for context (Waveformer needs context to work!)
@@ -84,7 +84,10 @@ def main():
         # ... (callback remains same)
         if status:
             logger.warning(f"Callback status: {status}")
-        q.put(indata.copy())
+        try:
+            q.put_nowait(indata.copy())
+        except queue.Full:
+            logger.warning("Audio queue full, dropping frame")
 
     recorded_frames = []
     recorded_noise = []

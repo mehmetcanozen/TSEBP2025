@@ -1,5 +1,7 @@
 # YAMNet to Waveformer Target Mapping
 # Maps semantic categories from YAMNet detection to Waveformer separation targets
+# NOTE: yamnet_indices are for reference. The current pipeline sources indices from 
+# training/configs/yamnet_class_map.yaml.
 
 categories:
   # CRITICAL SOUNDS (Safety Override - Never suppress)

@@ -37,6 +37,7 @@ def profile_suppression(audio_file: str, iterations: int = 10):
     
     # Get profiler
     profiler = get_profiler()
+    profiler.enabled = True
     profiler.reset()  # Clear any previous data
     
     # Run suppression multiple times
