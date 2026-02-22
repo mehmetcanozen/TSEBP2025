@@ -58,6 +58,17 @@ def main():
         help="Detection threshold (default: 0.3)"
     )
     parser.add_argument(
+        "--suppress-all",
+        action="store_true",
+        help="Use DeepFilterNet to universally suppress all background noise"
+    )
+    parser.add_argument(
+        "--universal", "-u",
+        type=str,
+        default=None,
+        help="Phase 3: Open-vocabulary text prompts for exact sound extraction (e.g., 'typing, dog barking, fan')"
+    )
+    parser.add_argument(
         "--list-categories",
         action="store_true",
         help="List available suppression categories"
@@ -66,6 +77,12 @@ def main():
         "--list-devices",
         action="store_true",
         help="List audio devices"
+    )
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=None,
+        help="Input device ID (use --list-devices to find the ID of 'CABLE Output')"
     )
     
     args = parser.parse_args()
@@ -89,10 +106,14 @@ def main():
         return
     
     # Parse categories
-    categories = [c.strip() for c in args.suppress.split(",")]
+    categories = [c.strip() for c in args.suppress.split(",")] if args.suppress else []
+    universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
     
     logger.info("=== Custom Real-time Suppression ===")
-    logger.info(f"Will suppress: {', '.join(categories)}")
+    if universal_prompts:
+        logger.info(f"Universal Prompts: {', '.join(universal_prompts)}")
+    else:
+        logger.info(f"Will suppress: {', '.join(categories)}")
     logger.info(f"Duration: {args.duration}s")
     logger.info("\nInitializing...")
     
@@ -148,7 +169,16 @@ def main():
             rolling_buffer[-chunk_len:] = audio_mono
             
             # Process full buffer for context
-            clean_full = engine.process_audio(rolling_buffer, 44100)
+            if args.suppress_all or universal_prompts:
+                clean_full = engine.suppressor.suppress(
+                    rolling_buffer, 
+                    44100, 
+                    [], 
+                    suppress_all=args.suppress_all,
+                    universal_prompts=universal_prompts
+                )
+            else:
+                clean_full = engine.process_audio(rolling_buffer, 44100)
             
             # Extract latest chunk
             clean_audio = clean_full[-chunk_len:]
@@ -169,9 +199,13 @@ def main():
     logger.info("🎤 Recording from mic with noise suppression...")
     logger.info("(Speak/type to hear the difference)")
     
-    # Auto-detect device channels
     try:
-        default_device = sd.query_devices(kind='input')
+        if args.device is not None:
+            default_device = sd.query_devices(args.device, kind='input')
+            logger.info(f"🎤 Overriding to specified input device ID: {args.device}")
+        else:
+            default_device = sd.query_devices(kind='input')
+            
         max_input_channels = default_device['max_input_channels']
         logger.info(f"Using {max_input_channels} input channel(s)")
     except Exception as e:
@@ -180,6 +214,7 @@ def main():
     
     try:
         with sd.Stream(
+            device=(args.device, None), # Input is args.device, output is default
             samplerate=44100,
             blocksize=int(44100 * 0.1),  # 100ms
             channels=max_input_channels,  # Auto-detect

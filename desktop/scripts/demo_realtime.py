@@ -27,10 +27,15 @@ class RealtimeSuppressor:
     
     def __init__(self, profile_id: str = "default-focus", sample_rate: int = 44100):
         self.sample_rate = sample_rate
-        self.chunk_size = int(sample_rate * 0.1)  # 100ms chunks
+        # CRITICAL: Chunk size MUST be a multiple of the STFT hop length (512)
+        # to prevent severe phase misalignments in ISTFT sliding windows!
+        # 4096 samples at 44100Hz = ~92.8ms
+        self.chunk_size = 4096 
         self.engine = ControlEngine()
         self.engine.set_profile_by_id(profile_id)
         self.engine.set_mode(ControlMode.MANUAL)
+        self.suppress_all = False
+        self.universal_prompts = []
         
         self.running = False
         self.input_buffer = []
@@ -52,7 +57,16 @@ class RealtimeSuppressor:
                 audio_mono = indata[:, 0]
             
             # Process audio with control engine
-            clean_audio = self.engine.process_audio(audio_mono, self.sample_rate)
+            if self.suppress_all or self.universal_prompts:
+                clean_audio = self.engine.suppressor.suppress(
+                    audio_mono, 
+                    self.sample_rate, 
+                    [], 
+                    suppress_all=self.suppress_all,
+                    universal_prompts=self.universal_prompts
+                )
+            else:
+                clean_audio = self.engine.process_audio(audio_mono, self.sample_rate)
             
             # Output stereo (duplicate mono to both channels)
             outdata[:, 0] = clean_audio
@@ -69,7 +83,11 @@ class RealtimeSuppressor:
         logger.info(f"Profile: {self.engine.current_profile.name}")
         
         suppressions = [cat for cat, enabled in self.engine.current_profile.suppressions.items() if enabled]
-        if suppressions:
+        if self.universal_prompts:
+            logger.info(f"Universal Extraction mode active. Extracting: {', '.join(self.universal_prompts)}")
+        elif self.suppress_all:
+            logger.info("Suppress All mode active (DeepFilterNet)")
+        elif suppressions:
             logger.info(f"Suppressing: {', '.join(suppressions)}")
         else:
             logger.info("Passthrough mode (no suppression)")
@@ -129,6 +147,17 @@ def main():
         default=None,
         help="Audio device ID to use"
     )
+    parser.add_argument(
+        "--suppress-all",
+        action="store_true",
+        help="Use DeepFilterNet to universally suppress all background noise"
+    )
+    parser.add_argument(
+        "--universal", "-u",
+        type=str,
+        default=None,
+        help="Phase 3: Open-vocabulary text prompts for exact sound extraction (e.g., 'typing, dog barking')"
+    )
     
     args = parser.parse_args()
     
@@ -141,6 +170,8 @@ def main():
         profile_id=args.profile,
         sample_rate=44100
     )
+    suppressor.suppress_all = args.suppress_all
+    suppressor.universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
     
     suppressor.start(device=args.device, duration_seconds=args.duration)
     

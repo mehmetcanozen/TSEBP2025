@@ -55,6 +55,11 @@ def main():
         default=0.3,
         help="Detection threshold (default: 0.3, lower = more sensitive)"
     )
+    parser.add_argument(
+        "--suppress-all",
+        action="store_true",
+        help="Use DeepFilterNet to universally suppress all background noise"
+    )
     
     args = parser.parse_args()
     
@@ -110,7 +115,10 @@ def main():
                 pass  # Suppress detection errors for cleaner output
             
             # Process audio
-            clean_audio = engine.process_audio(audio_mono, 44100)
+            if args.suppress_all:
+                clean_audio = engine.suppressor.suppress(audio_mono, 44100, [], suppress_all=True)
+            else:
+                clean_audio = engine.process_audio(audio_mono, 44100)
             
             # Output - match number of channels
             if outdata.shape[1] == 1:
