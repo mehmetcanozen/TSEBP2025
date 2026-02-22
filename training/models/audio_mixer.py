@@ -102,6 +102,22 @@ class WaveformerSeparator:
             self.checkpoint_path, map_location=self.device, weights_only=False
         )
         self.model.load_state_dict(state["model_state_dict"])
+        
+        # CPU Optimization: Dynamic INT8 Quantization for Linear/LSTM layers
+        # This drastically reduces memory and CPU inference latency
+        if self.device.type == "cpu":
+            self.model = torch.quantization.quantize_dynamic(
+                self.model,
+                {torch.nn.Linear},
+                dtype=torch.qint8
+            )
+        
+        # Audio resampling cache
+        self._resample_in = {}
+        self._resample_out = {}
+        
+        # Target Query cache
+        self._query_cache = {}
 
     def _auto_device(self) -> torch.device:
         if torch.cuda.is_available():
@@ -137,22 +153,26 @@ class WaveformerSeparator:
                 For robust behavior, specify input_format explicitly.
         """
         tensor = torch.as_tensor(audio, dtype=torch.float32)
+        
+        # 1. Ensure channel-first format (C, T)
         if tensor.ndim == 1:
             tensor = tensor.unsqueeze(0)  # (samples,) -> (1, samples)
         elif tensor.ndim == 2:
-            if input_format is not None:
-                if input_format == "channel_last":
-                    tensor = tensor.transpose(0, 1)
-                elif input_format == "channel_first":
-                    pass  # already channel-first
-                else:
-                    raise ValueError("input_format must be 'channel_first', 'channel_last', or None.")
+            if input_format == "channel_last":
+                tensor = tensor.transpose(0, 1)
+            elif input_format == "channel_first":
+                pass
             else:
                 # Heuristic: assume channel-last if samples > channels
-                if tensor.shape[0] < tensor.shape[1]:
+                if tensor.shape[0] > tensor.shape[1]:
                     tensor = tensor.transpose(0, 1)
         else:
-            raise ValueError("Audio must be 1D (samples) or 2D (samples, channels) or (channels, samples).")
+            raise ValueError(f"Expected 1D or 2D audio, got {tensor.ndim}D")
+            
+        # 2. FORCE MONO - Waveformer is ONLY trained on mono (1, T)
+        if tensor.shape[0] > 1:
+            tensor = tensor.mean(dim=0, keepdim=True)
+            
         return tensor
 
     def _build_query(
@@ -178,11 +198,22 @@ class WaveformerSeparator:
                 )
             return query
 
+        # Check cache first for string lists (most common case)
+        if isinstance(targets, (list, tuple)) and all(isinstance(t, str) for t in targets):
+            cache_key = tuple(sorted(targets))
+            if cache_key in self._query_cache:
+                return self._query_cache[cache_key].clone()
+
         query = torch.zeros(1, len(TARGETS), dtype=torch.float32, device=self.device)
         for target in targets:
             if target not in TARGETS:
                 raise ValueError(f"Unknown target '{target}'. Valid: {', '.join(TARGETS)}")
             query[0, TARGETS.index(target)] = 1.0
+            
+        # Add to cache for string lists
+        if isinstance(targets, (list, tuple)) and all(isinstance(t, str) for t in targets):
+            self._query_cache[cache_key] = query.clone()
+            
         return query
 
     def separate(
@@ -204,9 +235,11 @@ class WaveformerSeparator:
         mixture = self._to_channel_first(audio)
         needs_resample = sample_rate != TARGET_SAMPLE_RATE
         if needs_resample:
-            mixture = torchaudio.functional.resample(
-                mixture, orig_freq=sample_rate, new_freq=TARGET_SAMPLE_RATE
-            )
+            if sample_rate not in self._resample_in:
+                self._resample_in[sample_rate] = torchaudio.transforms.Resample(
+                    orig_freq=sample_rate, new_freq=TARGET_SAMPLE_RATE
+                ).to(mixture.device)
+            mixture = self._resample_in[sample_rate](mixture)
 
         mixture = mixture.unsqueeze(0).to(self.device)  # (1, C, T)
         query = self._build_query(targets)
@@ -215,9 +248,11 @@ class WaveformerSeparator:
             output = self.model(mixture, query).squeeze(0).cpu()  # (C, T)
 
         if needs_resample:
-            output = torchaudio.functional.resample(
-                output, orig_freq=TARGET_SAMPLE_RATE, new_freq=sample_rate
-            )
+            if sample_rate not in self._resample_out:
+                self._resample_out[sample_rate] = torchaudio.transforms.Resample(
+                    orig_freq=TARGET_SAMPLE_RATE, new_freq=sample_rate
+                ).to(output.device)
+            output = self._resample_out[sample_rate](output)
 
         # Return channel-last for convenience
         return output.transpose(0, 1).numpy()

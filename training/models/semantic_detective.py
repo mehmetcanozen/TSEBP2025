@@ -19,7 +19,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_hub as hub
 import yaml
-from scipy import signal as scipy_signal
+import torch
+import torchaudio
 
 logger = logging.getLogger(__name__)
 
@@ -189,12 +190,22 @@ class SemanticDetective:
         self.model_handle = model_handle
         self.enable_median = enable_median
 
-        self.model = hub.load(self.model_handle)
+        # Try to load local model first (extracted directory)
+        local_yamnet = Path(__file__).resolve().parents[2] / "models" / "checkpoints" / "yamnet_1"
+        if local_yamnet.exists() and (local_yamnet / "saved_model.pb").exists():
+            logger.info(f"Loading YAMNet from local directory: {local_yamnet}")
+            self.model = hub.load(str(local_yamnet))
+        else:
+            logger.info(f"Loading YAMNet from {self.model_handle}...")
+            self.model = hub.load(self.model_handle)
         self.categories = self._load_class_map(class_map_path)
 
         self.conf_buffer = ConfidenceBuffer()
         self.schmitt = SchmittTrigger()
         self.median = MedianSmoother() if enable_median else None
+        
+        # Audio resampling cache
+        self._resampler_cache = {}
 
     # ------------------------------ public API -------------------------------- #
     def classify(self, audio: np.ndarray, sample_rate: int) -> Dict[str, Mapping[str, Union[float, bool]]]:
@@ -206,8 +217,10 @@ class SemanticDetective:
         """
         waveform = self._prepare_audio(audio, sample_rate)
         scores, _, _ = self.model(waveform)
-        mean_scores = tf.reduce_mean(scores, axis=0)  # (521,)
-        mapped = self._map_to_categories(mean_scores)
+        # Use max over time so brief transient sounds (snaps, keyboard) aren't diluted
+        # when processing large chunks (like 10 seconds in batch mode or 3s in realtime)
+        max_scores = tf.reduce_max(scores, axis=0)  # (521,)
+        mapped = self._map_to_categories(max_scores)
 
         smoothed = self.median.smooth(mapped) if self.median else mapped
         stable = self.conf_buffer.update(smoothed)
@@ -238,20 +251,30 @@ class SemanticDetective:
         if audio.size == 0:
             raise ValueError("Audio buffer is empty.")
 
-        tensor = tf.convert_to_tensor(audio, dtype=tf.float32)
-        if tensor.ndim == 2:
-            tensor = tf.reduce_mean(tensor, axis=1)  # average channels
-        elif tensor.ndim != 1:
+        # Ensure 1D mono for processing
+        if audio.ndim == 2:
+            audio_mono = np.mean(audio, axis=1) # average channels
+        elif audio.ndim == 1:
+            audio_mono = audio
+        else:
             raise ValueError("Audio must be 1D or 2D (samples[, channels]).")
 
+        # Fast Resampling using torchaudio (significantly faster than scipy.signal)
         if sample_rate != YAMNET_SAMPLE_RATE:
-            num_samples = int(tensor.shape[0])
-            target_samples = int(round(num_samples * YAMNET_SAMPLE_RATE / sample_rate))
-            if target_samples == 0:
-                raise ValueError(f"Audio too short to resample from {sample_rate} to {YAMNET_SAMPLE_RATE} Hz.")
-            resampled = scipy_signal.resample(tensor.numpy(), target_samples)
-            tensor = tf.convert_to_tensor(resampled, dtype=tf.float32)
+            # We initialize a cached resampler for this specific input rate so we don't
+            # rebuild the deep filter banks every single frame
+            if sample_rate not in self._resampler_cache:
+                self._resampler_cache[sample_rate] = torchaudio.transforms.Resample(
+                    orig_freq=sample_rate, 
+                    new_freq=YAMNET_SAMPLE_RATE
+                )
+            
+            # Convert to torch quickly, resample, convert back
+            torch_audio = torch.from_numpy(audio_mono).to(torch.float32)
+            torch_resampled = self._resampler_cache[sample_rate](torch_audio)
+            audio_mono = torch_resampled.numpy()
 
+        tensor = tf.convert_to_tensor(audio_mono, dtype=tf.float32)
         return tensor  # (T,) - YAMNet expects 1D waveform
 
     def _map_to_categories(self, yamnet_scores: tf.Tensor) -> Dict[str, float]:
@@ -263,7 +286,8 @@ class SemanticDetective:
                 continue
             idx_tensor = tf.constant(list(cfg.indices), dtype=tf.int32)
             selected = tf.gather(yamnet_scores, idx_tensor)
-            outputs[category] = float(tf.reduce_mean(selected).numpy())
+            # Use max across mapped classes so any strong hit triggers the category
+            outputs[category] = float(tf.reduce_max(selected).numpy())
         return outputs
 
     def _load_class_map(self, path: Path) -> Dict[str, CategoryConfig]:
