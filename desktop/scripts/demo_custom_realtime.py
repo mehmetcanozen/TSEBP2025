@@ -216,7 +216,7 @@ def main():
         with sd.Stream(
             device=(args.device, None), # Input is args.device, output is default
             samplerate=44100,
-            blocksize=int(44100 * 0.1),  # 100ms
+            blocksize=4096,  # ~93ms, 8 * 512 samples for STFT alignment
             channels=max_input_channels,  # Auto-detect
             dtype='float32',
             callback=audio_callback

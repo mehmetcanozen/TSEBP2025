@@ -110,7 +110,9 @@ class SpeechEnhancer:
         out = enhanced_tensor.cpu().numpy()
         
         # Enforce exact original length to prevent broadcast errors
-        target_len = audio.shape[0] if audio.ndim > 1 else audio.shape[0]
+        # For 2D inputs, derive time length from the larger dimension
+        # to correctly handle both channel-last (T, C) and channel-first (C, T) inputs
+        target_len = audio.shape[0] if audio.ndim == 1 else max(audio.shape[0], audio.shape[1])
         
         if audio.ndim == 1:
             result = out[0]

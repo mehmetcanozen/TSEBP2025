@@ -26,7 +26,7 @@ sys.path.insert(0, str(project_root))
 
 from desktop.src.audio.semantic_suppressor import SemanticSuppressor
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +51,7 @@ class BatchProcessor:
         detection_threshold: float = 0.5,
         suppress_all: bool = False,
         universal_prompts: List[str] = None,
+        output_noise: bool = False,
     ) -> dict:
         """
         Process an audio file with semantic suppression.
@@ -63,6 +64,7 @@ class BatchProcessor:
             detection_threshold: Confidence threshold for detection
             suppress_all: If True, bypass categories and use DeepFilterNet
             universal_prompts: If provided, bypasses YAMNet/Waveformer and uses open-vocabulary text prompts
+            output_noise: If True, also collect noise stem for optional saving
         
         Returns:
             dict with processing statistics
@@ -114,12 +116,13 @@ class BatchProcessor:
                     )
                 
                 cleaned_chunks.append(clean_chunk)
-                noise_chunks.append(chunk - clean_chunk)
+                if output_noise:
+                    noise_chunks.append(chunk - clean_chunk)
                 pbar.update(1)
 
         # Concatenate chunks
         cleaned_audio = np.concatenate(cleaned_chunks, axis=0)
-        noise_audio = np.concatenate(noise_chunks, axis=0)
+        noise_audio = np.concatenate(noise_chunks, axis=0) if output_noise else None
 
         # Save output
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -139,7 +142,7 @@ class BatchProcessor:
             "cleaned_rms": float(cleaned_rms),
             "rms_reduction_db": float(20 * np.log10(cleaned_rms / (original_rms + 1e-8))),
             "suppressed_categories": suppress_categories,
-            "noise_audio": noise_audio,  # Pass back for optional saving
+            "noise_audio": noise_audio,  # None unless output_noise=True
         }
 
         return stats
@@ -193,8 +196,16 @@ def main():
         action="store_true",
         help="Save the extracted noise to a separate file for debugging"
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable DEBUG-level logging"
+    )
 
     args = parser.parse_args()
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     # Parse suppression categories
     suppress_categories = [cat.strip() for cat in args.suppress.split(",")] if args.suppress else []
@@ -212,6 +223,7 @@ def main():
         detection_threshold=args.threshold,
         suppress_all=args.suppress_all,
         universal_prompts=universal_prompts,
+        output_noise=args.output_noise,
     )
 
     print("\n=== Processing Complete ===")

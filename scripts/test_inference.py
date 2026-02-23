@@ -46,7 +46,7 @@ def run_waveformer_test() -> None:
 
 def run_yamnet_test() -> None:
     """Load YAMNet from local TFHub archive and run inference."""
-    yamnet_path = CHECKPOINTS_DIR / "yamnet-tflite-classification-tflite-v1.tar.gz"
+    yamnet_path = CHECKPOINTS_DIR / "yamnet_1.tar.gz"
     # Create a dummy class map if it doesn't exist for the smoke test
     class_map_path = CHECKPOINTS_DIR / "yamnet_class_map.csv"
     if not class_map_path.exists():

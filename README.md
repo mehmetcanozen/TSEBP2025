@@ -12,7 +12,7 @@ The current focus is a **desktop-first** implementation with a validated **React
 ---
 
 > [!IMPORTANT]
-> **New to the project?** Start with the [Master User Manual](docs/USER_MANUAL.md) for a comprehensive guide to all tools and features.
+> **New to the project?** Start with the [Master User Manual](docs/project/usage/USER_MANUAL.md) for a comprehensive guide to all tools and features.
 
 ---
 
