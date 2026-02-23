@@ -162,6 +162,11 @@ class WaveformerSeparator:
                 tensor = tensor.transpose(0, 1)
             elif input_format == "channel_first":
                 pass
+            elif input_format is not None:
+                raise ValueError(
+                    f"Unsupported input_format '{input_format}'. "
+                    "Expected 'channel_first', 'channel_last', or None."
+                )
             else:
                 # Heuristic: assume channel-last if samples > channels
                 if tensor.shape[0] > tensor.shape[1]:

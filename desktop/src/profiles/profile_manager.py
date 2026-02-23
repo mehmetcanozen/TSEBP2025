@@ -45,6 +45,12 @@ class Profile:
     updated_at: Optional[str] = None
     auto_triggers: List[AutoTrigger] = field(default_factory=list)
     is_system_profile: bool = False
+    gains: Optional[Dict[str, float]] = None
+
+    @property
+    def isSystemProfile(self) -> bool:
+        """Backward-compatible alias for is_system_profile."""
+        return self.is_system_profile
 
     @staticmethod
     def from_dict(data: dict) -> Profile:
@@ -63,11 +69,12 @@ class Profile:
             updated_at=data.get("updated_at"),
             auto_triggers=triggers,
             is_system_profile=data.get("isSystemProfile", False),
+            gains=data.get("gains"),
         )
 
     def to_dict(self) -> dict:
         """Convert Profile to dictionary."""
-        return {
+        d = {
             "id": self.id,
             "name": self.name,
             "description": self.description,
@@ -81,6 +88,9 @@ class Profile:
             ],
             "isSystemProfile": self.is_system_profile,
         }
+        if self.gains is not None:
+            d["gains"] = self.gains
+        return d
 
 
 class ProfileManager:
@@ -143,6 +153,26 @@ class ProfileManager:
         """Get all available profiles."""
         return list(self.profiles.values())
 
+    def get_system_profiles(self) -> List[Profile]:
+        """Get only system (built-in) profiles."""
+        return [p for p in self.profiles.values() if p.is_system_profile]
+
+    def get_user_profiles(self) -> List[Profile]:
+        """Get only user-created profiles."""
+        return [p for p in self.profiles.values() if not p.is_system_profile]
+
+    def apply_profile(self, profile: "Profile") -> Dict[str, float]:
+        """
+        Apply a profile and return its gain values.
+
+        Args:
+            profile: Profile instance to apply
+
+        Returns:
+            Dictionary of gain values (or empty dict if profile has no gains)
+        """
+        return dict(profile.gains) if profile.gains else {}
+
     def get_profile(self, profile_id: str) -> Optional[Profile]:
         """Get profile by ID."""
         return self.profiles.get(profile_id)
@@ -150,9 +180,10 @@ class ProfileManager:
     def create_profile(
         self,
         name: str,
-        suppressions: Dict[str, bool],
+        suppressions: Optional[Dict[str, bool]] = None,
         description: str = "",
         auto_triggers: Optional[List[AutoTrigger]] = None,
+        gains: Optional[Dict[str, float]] = None,
     ) -> Profile:
         """
         Create a new user profile.
@@ -162,6 +193,7 @@ class ProfileManager:
             suppressions: Dictionary of {category: enabled}
             description: Optional description
             auto_triggers: Optional list of auto-switching triggers
+            gains: Optional dictionary of gain values (backward compatibility)
         
         Returns:
             Created Profile
@@ -171,11 +203,12 @@ class ProfileManager:
             id=str(uuid.uuid4()),
             name=name,
             description=description,
-            suppressions=suppressions,
+            suppressions=suppressions or {},
             created_at=now,
             updated_at=now,
             auto_triggers=auto_triggers or [],
             is_system_profile=False,
+            gains=gains,
         )
         
         self.profiles[profile.id] = profile
@@ -191,23 +224,27 @@ class ProfileManager:
         suppressions: Optional[Dict[str, bool]] = None,
         description: Optional[str] = None,
         auto_triggers: Optional[List[AutoTrigger]] = None,
-    ) -> Optional[Profile]:
+        gains: Optional[Dict[str, float]] = None,
+    ) -> Profile:
         """
         Update an existing profile.
         
-        Cannot update system profiles.
+        Cannot update system profiles - raises PermissionError.
         
         Returns:
-            Updated Profile or None if profile not found or is system profile
+            Updated Profile
+        
+        Raises:
+            PermissionError: If attempting to update a system profile
+            KeyError: If profile_id is not found
         """
         profile = self.profiles.get(profile_id)
         if profile is None:
             logger.warning(f"Profile not found: {profile_id}")
-            return None
+            raise KeyError(f"Profile not found: {profile_id}")
         
         if profile.is_system_profile:
-            logger.warning(f"Cannot update system profile: {profile.name}")
-            return None
+            raise PermissionError(f"Cannot update system profile: {profile.name}")
         
         # Update fields
         if name is not None:
@@ -218,6 +255,8 @@ class ProfileManager:
             profile.description = description
         if auto_triggers is not None:
             profile.auto_triggers = auto_triggers
+        if gains is not None:
+            profile.gains = gains
         
         profile.updated_at = datetime.utcnow().isoformat() + "Z"
         
@@ -230,10 +269,13 @@ class ProfileManager:
         """
         Delete a user profile.
         
-        Cannot delete system profiles.
+        Cannot delete system profiles - raises PermissionError.
         
         Returns:
-            True if deleted, False if not found or is system profile
+            True if deleted
+        
+        Raises:
+            PermissionError: If attempting to delete a system profile
         """
         profile = self.profiles.get(profile_id)
         if profile is None:
@@ -241,8 +283,7 @@ class ProfileManager:
             return False
         
         if profile.is_system_profile:
-            logger.warning(f"Cannot delete system profile: {profile.name}")
-            return False
+            raise PermissionError(f"Cannot delete system profile: {profile.name}")
         
         # Remove from memory
         del self.profiles[profile_id]

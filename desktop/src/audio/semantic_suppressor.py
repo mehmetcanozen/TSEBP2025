@@ -147,6 +147,12 @@ class SemanticSuppressor:
         """
         
         if suppress_all:
+            # Safety override check still applies in suppress_all mode
+            if safety_check:
+                safe_detections = self.detector.classify(audio, sample_rate)
+                if self.detector.check_safety_override(safe_detections["states"]):
+                    logger.warning("SAFETY OVERRIDE: Critical sound detected (siren/alarm), bypassing suppression")
+                    return audio
             if profiler:
                 profiler.start('speech_enhancement')
             logger.info("Suppress All mode active - routing to DeepFilterNet")
@@ -184,10 +190,10 @@ class SemanticSuppressor:
 
         # Step 3: Build list of Waveformer targets to suppress
         targets_to_suppress = []
-        print(f"[DEBUG] Processing {len(suppress_categories)} categories: {suppress_categories}")
+        logger.debug(f"[DEBUG] Processing {len(suppress_categories)} categories: {suppress_categories}")
         for category in suppress_categories:
             if category not in self.category_map:
-                print(f"[DEBUG] Category '{category}' NOT in mapping!")
+                logger.debug(f"[DEBUG] Category '{category}' NOT in mapping!")
                 logger.warning(f"Unknown category '{category}', skipping")
                 continue
             
@@ -229,7 +235,7 @@ class SemanticSuppressor:
                     f"Skipping '{category}' (confidence: {confidence:.2f} < threshold: {effective_threshold})"
                 )
 
-        if not targets_to_suppress:
+        if not targets_to_suppress and not universal_prompts:
             logger.debug("No targets detected above threshold, returning original audio")
             return audio
 
@@ -248,7 +254,7 @@ class SemanticSuppressor:
             if profiler:
                 profiler.end('universal_separation')
         else:
-            print(f"[DEBUG] SEPARATING TARGETS: {targets_to_suppress}")
+            logger.debug(f"[DEBUG] SEPARATING TARGETS: {targets_to_suppress}")
             logger.info(f"Separating Waveformer targets: {targets_to_suppress}")
             
             # NORMALIZE input for Waveformer
