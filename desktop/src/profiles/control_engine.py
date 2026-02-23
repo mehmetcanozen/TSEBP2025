@@ -84,6 +84,9 @@ class ControlEngine:
         self.on_safety_alert: Optional[Callable[[Dict], None]] = None
         self.on_detections_updated: Optional[Callable[[Dict], None]] = None
 
+        # Thread safety
+        self._lock = threading.RLock()
+
         # Set default profile (Passthrough)
         passthrough = self.profile_manager.get_profile("default-passthrough")
         if passthrough:

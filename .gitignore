@@ -18,6 +18,7 @@ env/
 *.pth
 models/checkpoints/
 models/exports/
+models/AudioSep/
 
 # Waveformer local artifacts
 training/models/Waveformer/data/*/

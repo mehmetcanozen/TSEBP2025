@@ -36,4 +36,17 @@ speechbrain>=0.5.14
 pesq>=0.0.4
 pystoi>=0.3.3
 
+# AudioSep & Speech Enhancement
+deepfilternet
+lightning
+transformers
+torchvision
+timm
+ftfy
+regex
+torchlibrosa
+audioread
+pyloudnorm
+webdataset
+
 

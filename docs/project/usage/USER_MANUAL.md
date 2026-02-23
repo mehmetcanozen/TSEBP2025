@@ -30,8 +30,17 @@ The Semantic Suppressor is an AI-driven audio pipeline designed to intelligently
 
 ## 3. Setup & Installation <a name="setup--installation"></a>
 - **Virtual Environment**: Use `.\scripts\setup_env.ps1` on Windows.
-- **Models**: Run `python scripts\download_models.py` to fetch pretrained weights.
+- **Base Models**: Run `python scripts\download_models.py` to fetch pretrained Waveformer/YAMNet weights.
+- **AudioSep (Phase 3)**: Run `python desktop\scripts\install_audiosep.py` to clone the foundation model and download its heavy weights (~2GB).
 - **VB-Audio Cable (Optional but Recommended)**: Required for the [Virtual Microphone Simulation](#developer-tools-virtual-microphone).
+
+### Pre-requisites (Dependency Nightmare Prevention)
+The foundation models (AudioSep, DeepFilterNet) require a modern Python stack. Ensure you have run:
+```bash
+pip install -r desktop/requirements.txt
+pip install -r training/requirements.txt
+```
+If you encounter `ImportError` related to `lightning`, `transformers`, or `torchlibrosa`, these are provided by the `desktop/requirements.txt` update.
 
 ---
 
@@ -115,3 +124,5 @@ To test the suppressor without physically making noise, you can "stream" a WAV f
 - **"Empty Files"**: Ensure you have selected the correct `--device` ID. Use `--list-devices` to verify.
 - **"Clicks and Pops"**: This usually indicates the CPU is struggling. Try closing other apps or lowering the `--aggressiveness`.
 - **"Missing Detection"**: Check `shared/mappings/yamnet_to_waveformer.yaml` to ensure the sound you want is mapped to a category.
+- **"ImportError: No module named..."**: This usually means a foundational dependency (like `lightning`) is missing. Re-run `pip install -r desktop/requirements.txt`.
+- **"AudioSep Path Errors"**: Ensure you have run the `install_audiosep.py` script and that `models/AudioSep/pipeline.py` exists.

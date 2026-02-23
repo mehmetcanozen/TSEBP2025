@@ -59,7 +59,7 @@ class UniversalSeparator:
         if self.model is not None:
             return
             
-        repo_path = self.model_dir
+        repo_path = self.model_dir.resolve()
         if not repo_path.exists():
             raise FileNotFoundError(
                 f"AudioSep not found at {repo_path}. "
@@ -73,20 +73,40 @@ class UniversalSeparator:
             sys.path.insert(0, str(repo_path))
             
         try:
-            from pipeline import build_audiosep
-            
             logger.info(f"Loading AudioSep model to {self.device}...")
-            config_yaml = repo_path / "config" / "audiosep_base.yaml"
-            checkpoint = repo_path / "checkpoint" / "audiosep_base_4M_steps.ckpt"
             
-            if not checkpoint.exists():
-                raise FileNotFoundError(f"Checkpoint not found at {checkpoint}")
+            # AudioSep has hardcoded relative paths for some sub-weights (like CLAP)
+            # We must be in the AudioSep directory during initialization AND IMPORT
+            import os
+            import torch
+            import importlib.util
+            original_cwd = os.getcwd()
+            os.chdir(str(repo_path))
+            
+            # Monkeypatch torch.load for PyTorch 2.6+ compatibility with old weights
+            original_load = torch.load
+            def patched_load(*args, **kwargs):
+                if 'weights_only' not in kwargs:
+                    kwargs['weights_only'] = False
+                return original_load(*args, **kwargs)
+            torch.load = patched_load
+            
+            try:
+                # Use importlib to avoid namespace collisions and ensure fresh import in the right CWD
+                spec = importlib.util.spec_from_file_location("audiosep_pipeline", str(repo_path / "pipeline.py"))
+                pipeline_module = importlib.util.module_from_spec(spec)
+                sys.modules["audiosep_pipeline"] = pipeline_module
+                spec.loader.exec_module(pipeline_module)
                 
-            self.model = build_audiosep(
-                config_yaml=str(config_yaml),
-                checkpoint_path=str(checkpoint),
-                device=self.device
-            )
+                self.model = pipeline_module.build_audiosep(
+                    config_yaml="config/audiosep_base.yaml",
+                    checkpoint_path="checkpoint/audiosep_base_4M_steps.ckpt",
+                    device=self.device
+                )
+            finally:
+                torch.load = original_load
+                os.chdir(original_cwd)
+                
             logger.info("AudioSep ready!")
             
         except ImportError as e:
@@ -116,7 +136,6 @@ class UniversalSeparator:
             return np.zeros_like(audio)
             
         self._lazy_load_model()
-        from pipeline import inference
         
         # Combine prompts for AudioSep (it supports multi-concept queries via "and" or ",")
         text_query = ", ".join(prompts)
@@ -145,10 +164,22 @@ class UniversalSeparator:
         tensor_mono = tensor_mono.to(self.device)
         
         # 3. Use torch inference mode
-        with torch.inference_mode():
-            # Pass to inference pipeline (AudioSep expects numpy float32 mono audio)
-            audio_np = tensor_mono.cpu().squeeze().numpy()
-            sep_audio_np = inference(self.model, audio_np, text_query, device=self.device)
+        with torch.no_grad():
+            # Perform inference manually since pipeline.py is inconsistent across versions
+            # This follows the logic in pipeline.separate_audio but returns a numpy array
+            conditions = self.model.query_encoder.get_query_embed(
+                modality='text',
+                text=[text_query],
+                device=self.device
+            )
+
+            input_dict = {
+                "mixture": tensor_mono[None, :, :].to(self.device),
+                "condition": conditions,
+            } 
+
+            sep_segment = self.model.ss_model(input_dict)["waveform"]
+            sep_audio_np = sep_segment.squeeze(0).squeeze(0).data.cpu().numpy()
             
         # 4. Convert back to tensor and restore shape/sample rate
         sep_tensor = torch.from_numpy(sep_audio_np).unsqueeze(0).to(tensor.device)

@@ -165,7 +165,7 @@ def main():
     parser.add_argument(
         "--suppress", "-s",
         type=str,
-        required=True,
+        required=False,
         help="Comma-separated list of categories to suppress (e.g., typing,wind,traffic)"
     )
     parser.add_argument(
@@ -203,6 +203,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if not any([args.suppress, args.suppress_all, args.universal]):
+        parser.print_help()
+        print("\nERROR: You must specify at least one suppression mode: --suppress, --suppress-all, or --universal")
+        sys.exit(1)
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)

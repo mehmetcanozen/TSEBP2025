@@ -106,6 +106,16 @@ def install_audiosep():
         logger.error("Failed to download checkpoint.")
         return
 
+    # 3. Download CLAP weights (Required for HTSAT-base)
+    clap_url = "https://huggingface.co/spaces/badayvedat/AudioSep/resolve/main/checkpoint/music_speech_audioset_epoch_15_esc_89.98.pt"
+    clap_path = checkpoint_dir / "music_speech_audioset_epoch_15_esc_89.98.pt"
+    
+    try:
+        download_file(clap_url, clap_path)
+    except Exception:
+        logger.error("Failed to download CLAP weights.")
+        return
+
     logger.info("\n✅ AudioSep installation complete! You can now use the --universal flag.")
 
 

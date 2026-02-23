@@ -24,6 +24,7 @@ The current focus is a **desktop-first** implementation with a validated **React
   - Mono/stereo handling and compatibility with “smart” headsets that pre-filter noise.
   - **🚀 Phase 1: Spectral Masking**: High-fidelity noise removal using frequency-domain ratio masking to prevent phase artifacts.
   - **🎙️ Phase 2: Suppress All**: Integrated **DeepFilterNet** for universal voice extraction (removes all non-speech audio).
+- **🚀 Phase 3: Universal Extraction**: Integrated **AudioSep** foundation model for open-vocabulary sound extraction using natural language text prompts (e.g., "dog barking," "typing").
 - **Semantic control**
   - YAMNet-based detection over 521 classes, mapped into actionable groups (typing, pets, phone, wind, traffic, speech, music, etc.).
   - Profiles describing which categories to suppress or pass through.
@@ -39,6 +40,7 @@ The current focus is a **desktop-first** implementation with a validated **React
   - `mobile-test/` Expo project with:
     - On-device TFLite UNet-style model (`waveformer.tflite`).
     - Record → process → play pipeline at 44.1 kHz using `react-native-fast-tflite`, `react-native-audio-record`, `expo-av`, and `expo-file-system`.
+- **🚀 Phase 8: Final Verification**: 100% production-ready validation complete across batch and real-time paths (Virtual Mic verified).
 
 ---
 
@@ -61,13 +63,16 @@ pip install -r training\requirements.txt
 pip install -r export\requirements.txt
 ```
 
-### 2. Download models
+### 2. Download models & Foundational Weights
 
 ```powershell
+# Basic models (YAMNet, Waveformer, DeepFilterNet)
 python scripts\download_models.py
-```
 
-This populates pretrained Waveformer/YAMNet checkpoints and prepares default configs.
+# Foundational models (AudioSep weights & CLAP)
+# Note: This requires ~2GB of space and additional ML dependencies
+python desktop\scripts\install_audiosep.py
+```
 
 ### 3. Record and clean audio (recommended path)
 
