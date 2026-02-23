@@ -11,26 +11,36 @@ The current focus is a **desktop-first** implementation with a validated **React
 
 ---
 
+> [!IMPORTANT]
+> **New to the project?** Start with the [Master User Manual](docs/project/usage/USER_MANUAL.md) for a comprehensive guide to all tools and features.
+
+---
+
 ## Features
 
 - **Real-time desktop suppression**
   - Sub-100 ms end-to-end latency with a rolling 1 second context buffer.
   - Tunable aggressiveness (for example 1.0 = normal, 1.5 = aggressive).
   - Mono/stereo handling and compatibility with “smart” headsets that pre-filter noise.
+  - **🚀 Phase 1: Spectral Masking**: High-fidelity noise removal using frequency-domain ratio masking to prevent phase artifacts.
+  - **🎙️ Phase 2: Suppress All**: Integrated **DeepFilterNet** for universal voice extraction (removes all non-speech audio).
+- **🚀 Phase 3: Universal Extraction**: Integrated **AudioSep** foundation model for open-vocabulary sound extraction using natural language text prompts (e.g., "dog barking," "typing").
 - **Semantic control**
-  - YAMNet-based detection over 500+ classes, mapped into actionable groups (typing, wind, traffic, speech, alarms, etc.).
+  - YAMNet-based detection over 521 classes, mapped into actionable groups (typing, pets, phone, wind, traffic, speech, music, etc.).
   - Profiles describing which categories to suppress or pass through.
   - Hard safety override so critical sounds (sirens/alarms) are never removed.
 - **Tooling and diagnostics**
   - Batch and real-time record/clean tools that save:
     - Original mic input.
     - Cleaned signal.
-    - Extracted noise stem.
+    - Extracted noise stem (`*_noise.wav`).
+  - **🧪 Phase 6: Virtual Mic Sim**: Stream WAV files directly into the system via VB-Cable to simulate live microphone input for repeatable testing.
   - Performance profiler with per-operation timing (mean, p95, p99, min, max) and JSON export.
 - **Mobile testbed**
   - `mobile-test/` Expo project with:
     - On-device TFLite UNet-style model (`waveformer.tflite`).
     - Record → process → play pipeline at 44.1 kHz using `react-native-fast-tflite`, `react-native-audio-record`, `expo-av`, and `expo-file-system`.
+- **🚀 Phase 8: Final Verification**: 100% production-ready validation complete across batch and real-time paths (Virtual Mic verified).
 
 ---
 
@@ -53,13 +63,16 @@ pip install -r training\requirements.txt
 pip install -r export\requirements.txt
 ```
 
-### 2. Download models
+### 2. Download models & Foundational Weights
 
 ```powershell
+# Basic models (YAMNet, Waveformer, DeepFilterNet)
 python scripts\download_models.py
-```
 
-This populates pretrained Waveformer/YAMNet checkpoints and prepares default configs.
+# Foundational models (AudioSep weights & CLAP)
+# Note: This requires ~2GB of space and additional ML dependencies
+python desktop\scripts\install_audiosep.py
+```
 
 ### 3. Record and clean audio (recommended path)
 

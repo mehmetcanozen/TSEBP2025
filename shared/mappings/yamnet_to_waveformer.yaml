@@ -33,8 +33,13 @@ categories:
 
   # MUSIC
   music:
-    waveformer_targets: ["Acoustic_guitar", "Violin_or_fiddle", "Trumpet", "Saxophone", "Flute", "Clarinet"]
-    yamnet_indices: [137, 138, 139, 140]  # Music, Musical instrument, Piano, Guitar
+    waveformer_targets: [
+      "Acoustic_guitar", "Violin_or_fiddle", "Trumpet", "Saxophone", 
+      "Flute", "Clarinet", "Bass_drum", "Cello", "Cowbell", "Double_bass", 
+      "Electric_piano", "Glockenspiel", "Gong", "Harmonica", "Hi-hat", 
+      "Snare_drum", "Tambourine"
+    ]
+    yamnet_indices: [132, 133, 134, 135, 137, 138, 139, 140, 148, 149, 156, 157, 159, 160, 163, 166, 167, 169, 172, 176, 182, 184, 186, 188, 189, 190, 191, 192, 193]  
     priority: "medium"
     safety_override: false
 
@@ -56,8 +61,51 @@ categories:
 
   # NATURE SOUNDS
   nature:
-    waveformer_targets: ["Bark"]
-    yamnet_indices: [396, 397, 398]  # Rain, Thunderstorm, Dog
+    waveformer_targets: []
+    yamnet_indices: [277, 280, 281, 282, 283, 284, 285]  # Wind, Thunderstorm, Water, Rain
+    priority: "low"
+    safety_override: false
+
+  # PETS / ANIMALS
+  pets:
+    waveformer_targets: ["Bark", "Meow"]
+    yamnet_indices: [67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]  # Domestic animals, Dog, Bark, Cat, Meow, Purr
+    priority: "low"
+    safety_override: false
+
+  # PHONE / NOTIFICATIONS
+  phone:
+    waveformer_targets: ["Telephone"]
+    yamnet_indices: [383, 384, 385, 386, 387, 388]  # Telephone, Ringtone, Dial tone
+    priority: "medium"
+    safety_override: false
+    detection_threshold: 0.1
+
+  # ALERTS / CHIMES
+  chimes:
+    waveformer_targets: ["Chime"]
+    yamnet_indices: [195, 196, 197, 198, 200, 201, 202]  # Bell, Church bell, Chime
+    priority: "low"
+    safety_override: false
+
+  # EXPLOSIONS / WEAPONS
+  explosions:
+    waveformer_targets: ["Gunshot_or_gunfire", "Fireworks"]
+    yamnet_indices: [420, 421, 422, 423, 424, 425, 426, 427, 430]  # Explosion, Gunshot, Fireworks, Boom
+    priority: "low"
+    safety_override: false
+
+  # GLASS / IMPACT
+  glass_impact:
+    waveformer_targets: ["Shatter"]
+    yamnet_indices: [435, 436, 437, 463, 464]  # Glass, Shatter, Smash
+    priority: "low"
+    safety_override: false
+
+  # BODILY FUNCTIONS
+  bodily_functions:
+    waveformer_targets: ["Fart", "Burping_or_eructation"]
+    yamnet_indices: [52, 53, 54, 55]  # Stomach rumble, Burping, Hiccup, Fart
     priority: "low"
     safety_override: false
 
@@ -68,20 +116,20 @@ categories:
     priority: "low"
     safety_override: false
 
-  # MISCELLANEOUS
   misc:
     waveformer_targets: [
       "Applause",
       "Cough",
       "Knock",
       "Laughter",
-      "Sneeze",
       "Finger_snapping",
       "Drawer_open_or_close",
       "Keys_jangling",
-      "Scissors"
+      "Scissors",
+      "Squeak",
+      "Tearing"
     ]
-    yamnet_indices: [62, 42, 353, 13, 14, 44, 57, 357, 373, 375]  # Applause, Cough, Knock, Laughter, etc.
+    yamnet_indices: [62, 42, 353, 13, 14, 44, 57, 357, 373, 375, 355, 474]  # Applause, Cough, Knock, Laughter, etc.
     priority: "low"
     safety_override: false
 

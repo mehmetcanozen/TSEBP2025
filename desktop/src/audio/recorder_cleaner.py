@@ -35,16 +35,27 @@ def main():
     parser.add_argument("--output", "-o", type=str, default=None, help="Output filename (optional)")
     parser.add_argument("--threshold", "-t", type=float, default=0.03, help="Detection threshold")
     parser.add_argument("--aggressiveness", "-a", type=float, default=1.0, help="Suppression aggressiveness (1.0-2.0)")
+    parser.add_argument("--suppress-all", action="store_true", help="Use DeepFilterNet to universally suppress all background noise")
+    parser.add_argument("--universal", type=str, default=None, help="Phase 3: Open-vocabulary text prompts for exact sound extraction (e.g., 'typing, dog barking')")
+    parser.add_argument("--device", type=int, default=None, help="Input device ID (use 'python -m sounddevice' to list)")
+    parser.add_argument("--lookahead", type=float, default=0.5, help="Lookahead delay in seconds (0.0-1.5). Provides 'future' context to the model at the cost of processing latency.")
     
     args = parser.parse_args()
     
     # Setup output path
-    samples_dir = project_root / "samples" / "processed"
-    samples_dir.mkdir(parents=True, exist_ok=True)
-    
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = args.output if args.output else f"recording_{timestamp}_cleaned.wav"
-    output_path = samples_dir / filename
+    
+    # If user provided a path, respect it (relative to current location)
+    # Otherwise, default to samples/processed/
+    if args.output and (Path(args.output).parent != Path(".")):
+        output_path = Path(args.output).resolve()
+    else:
+        samples_dir = project_root / "samples" / "processed"
+        samples_dir.mkdir(parents=True, exist_ok=True)
+        output_path = samples_dir / filename
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Setup Engine
     logger.info("Initializing engine...")
@@ -74,11 +85,14 @@ def main():
     sample_rate = 44100
     
     # Rolling buffer for context (Waveformer needs context to work!)
-    # We keep 1.0s of history but only output the new 0.1s chunk
-    context_duration = 1.0 
+    # We keep 3.0s of history but only output the new 0.1s chunk
+    context_duration = 3.0 
     context_size = int(sample_rate * context_duration)
     rolling_buffer = np.zeros(context_size, dtype=np.float32)
     
+    # State for crossfading between processing blocks
+    prev_tail = None
+
     def audio_callback(indata, frames, time, status):
         
         # ... (callback remains same)
@@ -105,7 +119,23 @@ def main():
         except Exception:
             input_channels = 1
 
-        with sd.InputStream(samplerate=sample_rate, channels=input_channels, callback=audio_callback):
+        # CRITICAL FIX: Ensure blocksize is an exact multiple of the STFT hop_length (512)
+        # to prevent phase misalignment across sliding windows! We use 8192 (~185ms).
+        # Previously we used a ~0.1s blocksize (~4410 samples at 44.1 kHz), which is NOT
+        # an integer multiple of 512. That caused successive callback chunks to straddle
+        # different STFT frames, leading to phase-inconsistent overlap/add and audible
+        # artifacts (phasing / smearing / level modulation) when reconstructing audio.
+        #
+        # To avoid this, the input stream blocksize must be an exact multiple of the
+        # STFT hop_length so that each callback yields an integral number of STFT hops.
+        # We currently use 8192 samples (16 * 512) ≈ 185 ms at 44.1 kHz as a conservative
+        # choice that fully aligns with the STFT windows and eliminates those artifacts.
+        stft_aligned_blocksize = 8192
+        
+        if args.device is not None:
+            logger.info(f"🎤 Using specified input device ID: {args.device}")
+            
+        with sd.InputStream(samplerate=sample_rate, device=args.device, channels=input_channels, blocksize=stft_aligned_blocksize, callback=audio_callback):
             start_time = time.time()
             while time.time() - start_time < args.duration:
                 try:
@@ -129,22 +159,65 @@ def main():
                     # Process the FULL buffer to get context
                     # Bypass ControlEngine and call suppressor directly to use aggressiveness
                     targets = list(engine.current_profile.suppressions.keys()) if engine.current_profile else []
-                    if targets:
+                    universal_targets = [p.strip() for p in args.universal.split(",")] if args.universal else []
+                    
+                    if targets or args.suppress_all or universal_targets:
                         clean_full_buffer = engine.suppressor.suppress(
                             audio=rolling_buffer,
                             sample_rate=sample_rate,
                             suppress_categories=targets,
                             detection_threshold=args.threshold,
-                            aggressiveness=args.aggressiveness
+                            aggressiveness=args.aggressiveness,
+                            suppress_all=args.suppress_all,
+                            universal_prompts=universal_targets
                         )
                     else:
                         clean_full_buffer = rolling_buffer
                     
                     # Extract only the NEW part (the last chunk_len samples)
-                    clean_chunk = clean_full_buffer[-chunk_len:]
+                    # Offset into the buffer to allow lookahead
+                    # Taking the middle chunk gives the model "future" context
+                    lookahead_delay = args.lookahead
+                    offset = int(lookahead_delay * sample_rate)
                     
-                    # Store the ORIGINAL chunk (before suppression) for comparison
-                    original_chunk = mono_chunk.copy()  # This is the raw input
+                    # Ensure we don't go out of bounds
+                    end_idx = context_size - offset
+                    start_idx = end_idx - chunk_len
+                    
+                    # Get the current clean chunk
+                    raw_clean_chunk = clean_full_buffer[start_idx:end_idx]
+                    
+                    # Store the ORIGINAL chunk (aligned with suppression)
+                    original_chunk = rolling_buffer[start_idx:end_idx].copy()
+                    
+                    # We need to cross-fade the boundary between the *previous* chunk 
+                    # and the *current* chunk to eliminate clicking caused by STFT phase discontinuities.
+                    crossfade_frames = int(0.005 * sample_rate) # 5ms crossfade
+                    
+                    if prev_tail is None:
+                        # First chunk, no crossfade
+                        clean_chunk = raw_clean_chunk.copy()
+                        prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
+                    else:
+                        clean_chunk = raw_clean_chunk.copy()
+                        
+                        # Apply linear crossfade at the start of the current chunk
+                        # blending it with the overlapping tail of the previous full-buffer prediction
+                        fade_in = np.linspace(0, 1, crossfade_frames)
+                        fade_out = 1.0 - fade_in
+                        
+                        overlap_len = min(crossfade_frames, len(clean_chunk), len(prev_tail))
+                        
+                        # Blend the start of the current chunk
+                        clean_chunk[:overlap_len] = (
+                            clean_chunk[:overlap_len] * fade_in[:overlap_len] +
+                            prev_tail[:overlap_len] * fade_out[:overlap_len]
+                        )
+                        
+                        # Save the tail of this chunk's prediction for the NEXT chunk
+                        # We take the frames immediately *after* end_idx in the full buffer
+                        # Since we do lookahead, these frames exist in the buffer
+                        prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
                     
                     recorded_frames.append(clean_chunk)
                     
@@ -157,9 +230,9 @@ def main():
 
                     
                     # Log if significant suppression
-                    if np.max(np.abs(noise_chunk)) > 0.05:
-                         # logger.debug(f"Suppressed amplitude: {np.max(np.abs(noise_chunk)):.3f}")
-                         pass
+                    noise_peak = np.max(np.abs(noise_chunk))
+                    if noise_peak > 0.001:
+                         logger.info(f"Suppression active: peak amplitude removed = {noise_peak:.5f}")
                         
                 except queue.Empty:
                     # No new audio data was available within the timeout; continue loop and try again.
