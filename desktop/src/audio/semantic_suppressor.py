@@ -305,20 +305,37 @@ class SemanticSuppressor:
         while nperseg > min_len and nperseg > 64:
             nperseg //= 2
             
-        # Process each channel independently
-        for ch in range(audio_2d.shape[1]):
-            ch_mix = mix_aligned[:, ch]
-            ch_unwanted = unwanted_aligned[:, ch] if ch < unwanted_2d.shape[1] else unwanted_aligned[:, 0]
-            
-            if min_len < nperseg:
-                # Absolute fallback if buffer is microscopic (e.g. < 64 samples)
-                # We do simple waveform subtraction as a last resort
-                clean_audio[:min_len, ch] = ch_mix - (ch_unwanted * aggressiveness)
-                continue
-                
-            # 1. Compute STFT of Mixture and Unwanted
-            f, t, Zxx_mix = signal.stft(ch_mix, fs=sample_rate, nperseg=nperseg)
-            _, _, Zxx_unwanted = signal.stft(ch_unwanted, fs=sample_rate, nperseg=nperseg)
+        # Prepare unwanted signal to match the number of channels in the mix.
+        num_channels = audio_2d.shape[1]
+        unwanted_prepared = np.empty((min_len, num_channels), dtype=mix_aligned.dtype)
+        # Copy available unwanted channels
+        max_unwanted_ch = min(num_channels, unwanted_2d.shape[1])
+        unwanted_prepared[:, :max_unwanted_ch] = unwanted_aligned[:min_len, :max_unwanted_ch]
+        # For any extra channels, fall back to the first unwanted channel (previous behavior)
+        if max_unwanted_ch < num_channels:
+            unwanted_prepared[:, max_unwanted_ch:] = unwanted_aligned[:min_len, [0]]
+
+        if min_len < nperseg:
+            # Absolute fallback if buffer is microscopic (e.g. < 64 samples)
+            # We do simple waveform subtraction as a last resort, vectorized over channels
+            logger.warning(
+                "Spectral masking skipped due to very short buffer (min_len=%d < nperseg=%d); "
+                "falling back to time-domain subtraction. "
+                "Consider using larger audio chunks to avoid potential phase artifacts.",
+                min_len,
+                nperseg,
+            )
+            clean_audio[:min_len, :num_channels] = (
+                mix_aligned[:min_len, :num_channels] - (unwanted_prepared * aggressiveness)
+            )
+        else:
+            # 1. Compute STFT of Mixture and Unwanted (vectorized over channels)
+            # Transpose to (channels, time) for vectorized STFT processing
+            mix_aligned_t = mix_aligned[:min_len, :num_channels].T
+            unwanted_prepared_t = unwanted_prepared.T
+
+            f, t, Zxx_mix = signal.stft(mix_aligned_t, fs=sample_rate, nperseg=nperseg)
+            _, _, Zxx_unwanted = signal.stft(unwanted_prepared_t, fs=sample_rate, nperseg=nperseg)
             
             # 2. Compute Magnitudes
             mag_mix = np.abs(Zxx_mix)
@@ -334,11 +351,14 @@ class SemanticSuppressor:
             # 4. Apply Mask to Original Complex STFT (Preserves Phase)
             Zxx_clean = Zxx_mix * mask
             
-            # 5. Inverse STFT to get clean waveform
-            _, ch_clean = signal.istft(Zxx_clean, fs=sample_rate)
+            # 5. Inverse STFT to get clean waveform for all channels
+            # ISTFT expects (..., freq, time)
+            _, clean_multi_t = signal.istft(Zxx_clean, fs=sample_rate)
             
-            out_len = min(min_len, len(ch_clean))
-            clean_audio[:out_len, ch] = ch_clean[:out_len]
+            # Transpose back to (time, channels)
+            clean_multi = clean_multi_t.T
+            out_len = min(min_len, clean_multi.shape[0])
+            clean_audio[:out_len, :num_channels] = clean_multi[:out_len, :num_channels]
             
         if profiler:
             profiler.end('spectral_masking')

@@ -10,11 +10,11 @@ import threading
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-def find_cable_input_device() -> int:
-    """Find the device ID for the 'CABLE Input' virtual device."""
+def find_cable_input_device(search_name: str = "CABLE Input") -> int:
+    """Find the device ID for the virtual device matching the search name."""
     devices = sd.query_devices()
     for i, dev in enumerate(devices):
-        if dev['max_output_channels'] > 0 and 'CABLE Input' in dev['name']:
+        if dev['max_output_channels'] > 0 and search_name in dev['name']:
             return i
     
     # Fallback to general "CABLE" search
@@ -24,7 +24,7 @@ def find_cable_input_device() -> int:
             
     return -1
 
-def stream_virtual_mic(input_path: str, loop: bool = True):
+def stream_virtual_mic(input_path: str, loop: bool = True, device_name: str = "CABLE Input"):
     """
     Streams a WAV file directly into the Virtual Audio Cable.
     This makes the audio appear as if it's coming from a hardware microphone.
@@ -39,10 +39,10 @@ def stream_virtual_mic(input_path: str, loop: bool = True):
     if data.ndim == 1:
         data = np.stack((data, data), axis=-1)
         
-    cable_device_id = find_cable_input_device()
+    cable_device_id = find_cable_input_device(device_name)
     
     if cable_device_id == -1:
-        logger.error("Could not find 'CABLE Input' device. Is VB-Audio Virtual Cable installed?")
+        logger.error(f"Could not find device matching '{device_name}'. Is VB-Audio Virtual Cable installed?")
         logger.error("Available output devices:")
         for i, dev in enumerate(sd.query_devices()):
             if dev['max_output_channels'] > 0:
@@ -95,6 +95,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Stream a WAV file into a Virtual Audio Cable to simulate a microphone.")
     parser.add_argument("--input", type=str, required=True, help="Path to the WAV file to stream")
     parser.add_argument("--no-loop", action="store_true", help="Play the file only once instead of looping indefinitely")
+    parser.add_argument("--device-name", type=str, default="CABLE Input", help="Search string for the virtual output device")
     args = parser.parse_args()
     
-    stream_virtual_mic(args.input, loop=not args.no_loop)
+    stream_virtual_mic(args.input, loop=not args.no_loop, device_name=args.device_name)

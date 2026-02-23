@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import threading
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Callable
 
 import numpy as np
 
@@ -77,9 +77,13 @@ class ControlEngine:
         self.safety_status = SafetyStatus()
         self._pre_safety_profile: Optional[Profile] = None # For restoration after override
         
-        # Thread safety
-        self._lock = threading.RLock()
-        
+        # Callbacks for UI updates (restored for backward compatibility)
+        self.on_profile_changed: Optional[Callable[[Profile, str], None]] = None
+        self.on_gains_changed: Optional[Callable[[Dict], None]] = None
+        self.on_mode_changed: Optional[Callable[[ControlMode], None]] = None
+        self.on_safety_alert: Optional[Callable[[Dict], None]] = None
+        self.on_detections_updated: Optional[Callable[[Dict], None]] = None
+
         # Set default profile (Passthrough)
         passthrough = self.profile_manager.get_profile("default-passthrough")
         if passthrough:
@@ -102,12 +106,18 @@ class ControlEngine:
         with self._lock:
             self.mode = mode
             logger.info(f"Mode set to: {mode.value}")
+            if self.on_mode_changed:
+                self.on_mode_changed(mode)
 
     def set_profile(self, profile: Profile) -> None:
         """Manually set active profile."""
         with self._lock:
             self.current_profile = profile
             logger.info(f"Profile set to: {profile.name}")
+            if self.on_profile_changed:
+                self.on_profile_changed(profile, "manual")
+            if self.on_gains_changed:
+                self.on_gains_changed(dict(profile.gains) if profile.gains else {})
 
     def set_profile_by_id(self, profile_id: str) -> bool:
         """
@@ -190,8 +200,14 @@ class ControlEngine:
             detections: Dictionary of {category: confidence}
         """
         with self._lock:
+            # Trigger UI updates if callback registered
+            if self.on_detections_updated:
+                self.on_detections_updated(detections)
+
             # Check safety override first
             safety = self._check_safety_override(detections)
+            was_safety_active = self.safety_status.active
+            
             if safety.active:
                 self.safety_status = safety
                 logger.warning(
@@ -199,19 +215,28 @@ class ControlEngine:
                     f"(confidence: {safety.confidence:.2f})"
                 )
                 
+                # Trigger alert callback
+                if self.on_safety_alert:
+                    self.on_safety_alert({
+                        "category": safety.category,
+                        "confidence": safety.confidence
+                    })
+
                 # Force passthrough profile
                 passthrough = self.profile_manager.get_profile("default-passthrough")
                 if passthrough and self.current_profile != passthrough:
                     logger.warning("Switching to Passthrough due to safety override")
                     # Store previous profile only if we aren't already in override
-                    if not self.safety_status.active or not self._pre_safety_profile:
+                    if not was_safety_active:
                         self._pre_safety_profile = self.current_profile
                     self.current_profile = passthrough
+                    if self.on_profile_changed:
+                        self.on_profile_changed(passthrough, "safety")
                 
                 return
             else:
                 # Clear safety status if no longer active
-                if self.safety_status.active:
+                if was_safety_active:
                     logger.info("Safety override cleared")
                     self.safety_status = SafetyStatus()
                     
@@ -219,6 +244,8 @@ class ControlEngine:
                     if self._pre_safety_profile:
                         logger.info(f"Restoring profile: {self._pre_safety_profile.name}")
                         self.current_profile = self._pre_safety_profile
+                        if self.on_profile_changed:
+                            self.on_profile_changed(self._pre_safety_profile, "restore")
                         self._pre_safety_profile = None
             
             # Auto-mode profile switching
@@ -230,6 +257,8 @@ class ControlEngine:
                         f"→ {new_profile.name}"
                     )
                     self.current_profile = new_profile
+                    if self.on_profile_changed:
+                        self.on_profile_changed(new_profile, "auto")
 
     def _check_safety_override(self, detections: Dict[str, float]) -> SafetyStatus:
         """

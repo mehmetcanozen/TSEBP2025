@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--suppress-all", action="store_true", help="Use DeepFilterNet to universally suppress all background noise")
     parser.add_argument("--universal", type=str, default=None, help="Phase 3: Open-vocabulary text prompts for exact sound extraction (e.g., 'typing, dog barking')")
     parser.add_argument("--device", type=int, default=None, help="Input device ID (use 'python -m sounddevice' to list)")
+    parser.add_argument("--lookahead", type=float, default=0.5, help="Lookahead delay in seconds (0.0-1.5). Provides 'future' context to the model at the cost of processing latency.")
     
     args = parser.parse_args()
     
@@ -89,6 +90,9 @@ def main():
     context_size = int(sample_rate * context_duration)
     rolling_buffer = np.zeros(context_size, dtype=np.float32)
     
+    # State for crossfading between processing blocks
+    prev_tail = None
+
     def audio_callback(indata, frames, time, status):
         
         # ... (callback remains same)
@@ -164,7 +168,7 @@ def main():
                     # Extract only the NEW part (the last chunk_len samples)
                     # Offset into the buffer to allow lookahead
                     # Taking the middle chunk gives the model "future" context
-                    lookahead_delay = 0.5 # seconds
+                    lookahead_delay = args.lookahead
                     offset = int(lookahead_delay * sample_rate)
                     
                     # Ensure we don't go out of bounds
@@ -181,10 +185,10 @@ def main():
                     # and the *current* chunk to eliminate clicking caused by STFT phase discontinuities.
                     crossfade_frames = int(0.005 * sample_rate) # 5ms crossfade
                     
-                    if not hasattr(engine, '_prev_tail'):
+                    if prev_tail is None:
                         # First chunk, no crossfade
                         clean_chunk = raw_clean_chunk.copy()
-                        engine._prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
+                        prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
                     else:
                         clean_chunk = raw_clean_chunk.copy()
                         
@@ -193,18 +197,18 @@ def main():
                         fade_in = np.linspace(0, 1, crossfade_frames)
                         fade_out = 1.0 - fade_in
                         
-                        overlap_len = min(crossfade_frames, len(clean_chunk), len(engine._prev_tail))
+                        overlap_len = min(crossfade_frames, len(clean_chunk), len(prev_tail))
                         
                         # Blend the start of the current chunk
                         clean_chunk[:overlap_len] = (
                             clean_chunk[:overlap_len] * fade_in[:overlap_len] +
-                            engine._prev_tail[:overlap_len] * fade_out[:overlap_len]
+                            prev_tail[:overlap_len] * fade_out[:overlap_len]
                         )
                         
                         # Save the tail of this chunk's prediction for the NEXT chunk
                         # We take the frames immediately *after* end_idx in the full buffer
                         # Since we do lookahead, these frames exist in the buffer
-                        engine._prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
+                        prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
                     
                     recorded_frames.append(clean_chunk)
                     

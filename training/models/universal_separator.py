@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class UniversalSeparator:
     """
-    Wrapper for an open-vocabulary target sound exactor like AudioSep.
+    Wrapper for an open-vocabulary target sound extractor like AudioSep.
     Bypasses the fixed 41-class limitation of Waveformer entirely.
     """
     

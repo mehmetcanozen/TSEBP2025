@@ -241,7 +241,7 @@ class ProfileManager:
         profile = self.profiles.get(profile_id)
         if profile is None:
             logger.warning(f"Profile not found: {profile_id}")
-            raise KeyError(f"Profile not found: {profile_id}")
+            return None
         
         if profile.is_system_profile:
             raise PermissionError(f"Cannot update system profile: {profile.name}")
