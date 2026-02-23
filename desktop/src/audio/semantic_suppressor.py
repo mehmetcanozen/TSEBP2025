@@ -140,7 +140,8 @@ class SemanticSuppressor:
             safety_check: If True, override suppression for critical sounds (sirens, alarms)
             aggressiveness: Multiplier for subtraction (1.0 = normal, >1.0 = aggressive)
             suppress_all: If True, bypass categories and use generalized speech enhancement
-            universal_prompts: If provided, bypasses YAMNet/Waveformer and uses literal text prompts (Phase 3)
+            universal_prompts: If provided, bypasses YAMNet/Waveformer and uses literal text prompts (Phase 3).
+                Highly effective for sounds NOT in the fixed Waveformer category list.
         
         Returns:
             Clean audio with suppressed sounds removed, same shape as input
@@ -334,8 +335,8 @@ class SemanticSuppressor:
             mix_aligned_t = mix_aligned[:min_len, :num_channels].T
             unwanted_prepared_t = unwanted_prepared.T
 
-            f, t, Zxx_mix = signal.stft(mix_aligned_t, fs=sample_rate, nperseg=nperseg)
-            _, _, Zxx_unwanted = signal.stft(unwanted_prepared_t, fs=sample_rate, nperseg=nperseg)
+            f, t, Zxx_mix = signal.stft(mix_aligned_t, fs=sample_rate, nperseg=nperseg, noverlap=nperseg // 2)
+            _, _, Zxx_unwanted = signal.stft(unwanted_prepared_t, fs=sample_rate, nperseg=nperseg, noverlap=nperseg // 2)
             
             # 2. Compute Magnitudes
             mag_mix = np.abs(Zxx_mix)
@@ -345,15 +346,20 @@ class SemanticSuppressor:
             eps = 1e-8
             ratio = (mag_unwanted * aggressiveness) / (mag_mix + eps)
             
-            # Soft mask: 1.0 (keep) down to 0.0 (remove)
-            mask = np.clip(1.0 - ratio, 0.0, 1.0)
+            # Clamp ratio to avoid complete nulling of individual bins, which can introduce
+            # musical-noise artifacts. This enforces a small nonzero floor on the mask.
+            max_ratio = 0.95  # maximum per-bin suppression; mask floor = 1.0 - max_ratio
+            ratio = np.clip(ratio, 0.0, max_ratio)
+            
+            # Soft mask: 1.0 (keep) down to a small positive floor (avoid 0.0 hard nulls)
+            mask = 1.0 - ratio
             
             # 4. Apply Mask to Original Complex STFT (Preserves Phase)
             Zxx_clean = Zxx_mix * mask
             
             # 5. Inverse STFT to get clean waveform for all channels
             # ISTFT expects (..., freq, time)
-            _, clean_multi_t = signal.istft(Zxx_clean, fs=sample_rate)
+            _, clean_multi_t = signal.istft(Zxx_clean, fs=sample_rate, noverlap=nperseg // 2)
             
             # Transpose back to (time, channels)
             clean_multi = clean_multi_t.T

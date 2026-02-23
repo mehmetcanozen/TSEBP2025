@@ -166,7 +166,11 @@ def main():
         "--suppress", "-s",
         type=str,
         required=False,
-        help="Comma-separated list of categories to suppress (e.g., typing,wind,traffic)"
+        help=(
+            "Comma-separated list of categories to suppress (e.g., typing,wind,traffic). "
+            "Optional if using --suppress-all or --universal instead, but at least one of "
+            "--suppress, --suppress-all, or --universal must be provided."
+        )
     )
     parser.add_argument(
         "--threshold", "-t",

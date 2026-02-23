@@ -45,6 +45,7 @@ class Profile:
     updated_at: Optional[str] = None
     auto_triggers: List[AutoTrigger] = field(default_factory=list)
     is_system_profile: bool = False
+    is_default: bool = False
     gains: Optional[Dict[str, float]] = None
 
     @property
@@ -69,6 +70,7 @@ class Profile:
             updated_at=data.get("updated_at"),
             auto_triggers=triggers,
             is_system_profile=data.get("isSystemProfile", False),
+            is_default=data.get("isDefault", False),
             gains=data.get("gains"),
         )
 
@@ -87,9 +89,9 @@ class Profile:
                 for t in self.auto_triggers
             ],
             "isSystemProfile": self.is_system_profile,
+            "isDefault": self.is_default,
+            "gains": self.gains or {"speech": 1.0, "noise": 1.0, "events": 1.0},
         }
-        if self.gains is not None:
-            d["gains"] = self.gains
         return d
 
 

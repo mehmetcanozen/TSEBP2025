@@ -171,6 +171,7 @@ class CategoryConfig:
     priority: str = "medium"
     color: str = "#FFFFFF"
     safety_override: bool = False
+    reduce_type: str = "max"  # "max" for transients, "mean" for continuous sounds
 
 
 class SemanticDetective:
@@ -234,8 +235,8 @@ class SemanticDetective:
         """
         waveform = self._prepare_audio(audio, sample_rate)
         scores, _, _ = self.model(waveform)
-        # Use max over time so brief transient sounds (snaps, keyboard) aren't diluted
-        # when processing large chunks (like 10 seconds in batch mode or 3s in realtime)
+        # Note: Temporal aggregation currently uses max_scores to catch transients.
+        # In the future, this could also be made configurable per category.
         max_scores = tf.reduce_max(scores, axis=0)  # (521,)
         mapped = self._map_to_categories(max_scores)
 
@@ -303,8 +304,13 @@ class SemanticDetective:
                 continue
             idx_tensor = tf.constant(list(cfg.indices), dtype=tf.int32)
             selected = tf.gather(yamnet_scores, idx_tensor)
-            # Use max across mapped classes so any strong hit triggers the category
-            outputs[category] = float(tf.reduce_max(selected).numpy())
+            
+            # Aggregate based on category preference
+            if cfg.reduce_type == "mean":
+                outputs[category] = float(tf.reduce_mean(selected).numpy())
+            else:
+                # Default to max across mapped classes so any strong hit triggers the category
+                outputs[category] = float(tf.reduce_max(selected).numpy())
         return outputs
 
     def _load_class_map(self, path: Path) -> Dict[str, CategoryConfig]:
@@ -324,6 +330,7 @@ class SemanticDetective:
                 priority=cfg.get("priority", "medium"),
                 color=cfg.get("color", "#FFFFFF"),
                 safety_override=cfg.get("safety_override", False),
+                reduce_type=cfg.get("reduce_type", "max"),
             )
         return parsed
 

@@ -15,7 +15,6 @@ import torch
 import torchaudio
 
 # Add project root to path for shared utils
-from pathlib import Path
 import sys
 project_root = Path(__file__).resolve().parents[2]
 if str(project_root) not in sys.path:
@@ -68,7 +67,6 @@ class UniversalSeparator:
             )
             
         # Dynamically add AudioSep to python path to import its pipeline
-        import sys
         if str(repo_path) not in sys.path:
             sys.path.insert(0, str(repo_path))
             
@@ -78,7 +76,6 @@ class UniversalSeparator:
             # AudioSep has hardcoded relative paths for some sub-weights (like CLAP)
             # We must be in the AudioSep directory during initialization AND IMPORT
             import os
-            import torch
             import importlib.util
             original_cwd = os.getcwd()
             os.chdir(str(repo_path))

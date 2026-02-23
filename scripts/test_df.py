@@ -10,5 +10,5 @@ try:
     se = SpeechEnhancer()
     print("SpeechEnhancer initialized successfully!")
 except Exception as e:
-    with open("trace.txt", "w") as f:
+    with open(REPO_ROOT / "trace.txt", "w") as f:
         f.write(traceback.format_exc())

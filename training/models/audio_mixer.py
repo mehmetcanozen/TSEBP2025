@@ -155,7 +155,8 @@ class WaveformerSeparator:
         Note on Mono Conversion:
             This method FORCES mono conversion (averaging channels) because the 
             underlying Waveformer model is strictly mono. Stereo inputs will be
-            downmixed before inference.
+            downmixed before inference. This is a deliberate design choice as
+            Waveformer is not trained for stereo separation.
         """
         tensor = torch.as_tensor(audio, dtype=torch.float32)
         
@@ -239,8 +240,11 @@ class WaveformerSeparator:
             audio: mono/stereo buffer (np or torch), shape (samples,) or (samples, channels)
             sample_rate: input sample rate
             targets: None (all ones), list of class names, or explicit vector
+            
         Returns:
-            np.ndarray shape (samples, channels) at original sample_rate
+            np.ndarray shape (samples, channels) at original sample_rate. 
+            Note: The output will be mono (identical channels) as Waveformer 
+            strictly operates in mono.
         """
         mixture = self._to_channel_first(audio)
         needs_resample = sample_rate != TARGET_SAMPLE_RATE

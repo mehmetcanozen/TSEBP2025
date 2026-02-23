@@ -96,7 +96,8 @@ def install_audiosep():
         logger.info(f"AudioSep already exists at {audiosep_dir}")
 
     # 2. Download Checkpoint
-    checkpoint_url = "https://huggingface.co/spaces/badayvedat/AudioSep/resolve/main/checkpoint/audiosep_base_4M_steps.ckpt"
+    # Note: Using authoritative mirrors for AudioSep weights
+    checkpoint_url = "https://huggingface.co/Aisaka/AudioSep/resolve/main/audiosep_base_4M_steps.ckpt"
     checkpoint_dir = audiosep_dir / "checkpoint"
     checkpoint_path = checkpoint_dir / "audiosep_base_4M_steps.ckpt"
     
@@ -107,7 +108,7 @@ def install_audiosep():
         return
 
     # 3. Download CLAP weights (Required for HTSAT-base)
-    clap_url = "https://huggingface.co/spaces/badayvedat/AudioSep/resolve/main/checkpoint/music_speech_audioset_epoch_15_esc_89.98.pt"
+    clap_url = "https://huggingface.co/Aisaka/AudioSep/resolve/main/music_speech_audioset_epoch_15_esc_89.98.pt"
     clap_path = checkpoint_dir / "music_speech_audioset_epoch_15_esc_89.98.pt"
     
     try:

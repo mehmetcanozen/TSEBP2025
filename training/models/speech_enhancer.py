@@ -20,7 +20,6 @@ from shared.utils import audio_utils
 # PATCH for newer torchaudio versions (2.1+) to fix DeepFilterNet import
 if not hasattr(torchaudio, 'backend'):
     import types
-    import sys
     tb = types.ModuleType('torchaudio.backend')
     sys.modules['torchaudio.backend'] = tb
     torchaudio.backend = tb

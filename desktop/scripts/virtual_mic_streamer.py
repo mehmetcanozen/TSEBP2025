@@ -57,18 +57,18 @@ def stream_virtual_mic(input_path: str, loop: bool = True, device_name: str = "C
     data = np.concatenate((silence, data))
 
     # Keep alive flag
-    running = True
+    shutdown_event = threading.Event()
 
     def _play_loop():
-        nonlocal running
+        nonlocal shutdown_event
         iteration = 1
-        while running:
+        while not shutdown_event.is_set():
             logger.info(f"Streaming iter {iteration}... Press Ctrl+C to stop.")
             try:
                 sd.play(data, samplerate, device=cable_device_id)
                 sd.wait() # Blocking wait until the file finishes playing
             except Exception as e:
-                if running:  # Only log error if not actively shutting down
+                if not shutdown_event.is_set():  # Only log error if not actively shutting down
                     logger.error(f"Playback error: {e}")
                 break
                 
@@ -87,7 +87,7 @@ def stream_virtual_mic(input_path: str, loop: bool = True, device_name: str = "C
             time.sleep(0.5)
     except KeyboardInterrupt:
         logger.info("\nStopping virtual microphone stream...")
-        running = False
+        shutdown_event.set()
         sd.stop()
         thread.join(timeout=1.0)
         
