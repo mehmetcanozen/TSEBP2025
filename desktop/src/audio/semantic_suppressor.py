@@ -302,7 +302,7 @@ class SemanticSuppressor:
         # nperseg should be a power of 2, typically 1024 or 512.
         # If the input is smaller than 512, we adjust it down, but keeping it power of 2
         nperseg = 1024
-        while nperseg > min_len and nperseg > 64:
+        while nperseg > min_len and nperseg > 256:
             nperseg //= 2
             
         # Prepare unwanted signal to match the number of channels in the mix.

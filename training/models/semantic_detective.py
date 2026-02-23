@@ -116,6 +116,15 @@ class MedianSmoother:
         self.history: Dict[str, List[float]] = {}
 
     def smooth(self, detections: Mapping[str, float]) -> Dict[str, float]:
+        """
+        Applies a median filter to the confidence scores.
+
+        Args:
+            detections: A dictionary of category names to their current confidence scores.
+
+        Returns:
+            A dictionary of category names to their median-smoothed confidence scores.
+        """
         smoothed: Dict[str, float] = {}
         for category, confidence in detections.items():
             if category not in self.history:
@@ -214,6 +223,14 @@ class SemanticDetective:
 
         Returns a dictionary with raw scores, smoothed scores, stable flags, and
         hysteresis states suitable for UI display and automation logic.
+
+        Note on Detection Strategy:
+            We use 'reduce_max' over both the temporal and category-index dimensions.
+            This ensures that brief transient sounds (like a single 'snap' or key press)
+            trigger the category immediately without being diluted by the silence 
+            in the rest of the buffer. This significantly improves sensitivity for
+            non-continuous noises at the cost of being more susceptible to brief
+            false positives.
         """
         waveform = self._prepare_audio(audio, sample_rate)
         scores, _, _ = self.model(waveform)

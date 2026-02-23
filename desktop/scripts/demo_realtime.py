@@ -29,8 +29,13 @@ class RealtimeSuppressor:
         self.sample_rate = sample_rate
         # CRITICAL: Chunk size MUST be a multiple of the STFT hop length (512)
         # to prevent severe phase misalignments in ISTFT sliding windows!
-        # 4096 samples at 44100Hz = ~92.8ms
-        self.chunk_size = 4096 
+        # The backend STFT uses a hop length of 512 samples; we target ~0.1s
+        # chunks and round down to the nearest multiple of the hop length.
+        hop_length = 512
+        target_chunk_duration_s = 0.1
+        approx_chunk_size = int(self.sample_rate * target_chunk_duration_s)
+        self.chunk_size = max(hop_length, (approx_chunk_size // hop_length) * hop_length)
+        # For 44.1 kHz, this yields 4096 samples (~92.8ms).
         self.engine = ControlEngine()
         self.engine.set_profile_by_id(profile_id)
         self.engine.set_mode(ControlMode.MANUAL)

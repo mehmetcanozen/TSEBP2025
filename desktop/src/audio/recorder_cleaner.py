@@ -121,6 +121,15 @@ def main():
 
         # CRITICAL FIX: Ensure blocksize is an exact multiple of the STFT hop_length (512)
         # to prevent phase misalignment across sliding windows! We use 8192 (~185ms).
+        # Previously we used a ~0.1s blocksize (~4410 samples at 44.1 kHz), which is NOT
+        # an integer multiple of 512. That caused successive callback chunks to straddle
+        # different STFT frames, leading to phase-inconsistent overlap/add and audible
+        # artifacts (phasing / smearing / level modulation) when reconstructing audio.
+        #
+        # To avoid this, the input stream blocksize must be an exact multiple of the
+        # STFT hop_length so that each callback yields an integral number of STFT hops.
+        # We currently use 8192 samples (16 * 512) ≈ 185 ms at 44.1 kHz as a conservative
+        # choice that fully aligns with the STFT windows and eliminates those artifacts.
         stft_aligned_blocksize = 8192
         
         if args.device is not None:

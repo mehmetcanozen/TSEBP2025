@@ -213,10 +213,19 @@ def main():
         max_input_channels = 1
     
     try:
+        # CRITICAL: Chunk size MUST be a multiple of the STFT hop length (512)
+        # to prevent severe phase misalignments in ISTFT sliding windows!
+        hop_length = 512
+        samplerate = 44100
+        target_chunk_duration_s = 0.1
+        approx_chunk_size = int(samplerate * target_chunk_duration_s)
+        chunk_size = max(hop_length, (approx_chunk_size // hop_length) * hop_length)
+        # For 44.1 kHz, this yields 4096 samples (~92.8ms).
+
         with sd.Stream(
             device=(args.device, None), # Input is args.device, output is default
-            samplerate=44100,
-            blocksize=4096,  # ~93ms, 8 * 512 samples for STFT alignment
+            samplerate=samplerate,
+            blocksize=chunk_size,
             channels=max_input_channels,  # Auto-detect
             dtype='float32',
             callback=audio_callback

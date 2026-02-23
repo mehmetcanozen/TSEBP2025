@@ -14,6 +14,15 @@ import numpy as np
 import torch
 import torchaudio
 
+# Add project root to path for shared utils
+from pathlib import Path
+import sys
+project_root = Path(__file__).resolve().parents[2]
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from shared.utils import audio_utils
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,7 +144,7 @@ class UniversalSeparator:
             
         tensor_mono = tensor_mono.to(self.device)
         
-        # 3. Suppress torch inference mode
+        # 3. Use torch inference mode
         with torch.inference_mode():
             # Pass to inference pipeline (AudioSep expects numpy float32 mono audio)
             audio_np = tensor_mono.cpu().squeeze().numpy()
@@ -154,26 +163,11 @@ class UniversalSeparator:
         # Return cleanly shaped numpy array (T, C) or (T,)
         out = sep_tensor.cpu().numpy()
         
-        # Enforce exact length matching
-        # For 2D inputs, derive time length from the larger dimension
-        # to correctly handle both channel-last (T, C) and channel-first (C, T) inputs
-        target_len = audio.shape[0] if audio.ndim == 1 else max(audio.shape[0], audio.shape[1])
+        target_len = audio_utils.get_target_length(audio)
         
         if audio.ndim == 1:
-            result = out[0]
-            if len(result) > target_len:
-                return result[:target_len]
-            elif len(result) < target_len:
-                padded = np.zeros(target_len, dtype=result.dtype)
-                padded[:len(result)] = result
-                return padded
-            return result
+            return audio_utils.enforce_length(out[0], target_len)
         else:
+            # Match original channel-last shape (T, C)
             result = out.transpose(1, 0)
-            if len(result) > target_len:
-                return result[:target_len]
-            elif len(result) < target_len:
-                padded = np.zeros((target_len, result.shape[1]), dtype=result.dtype)
-                padded[:len(result)] = result
-                return padded
-            return result
+            return audio_utils.enforce_length(result, target_len)

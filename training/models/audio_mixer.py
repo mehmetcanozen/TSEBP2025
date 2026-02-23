@@ -148,9 +148,14 @@ class WaveformerSeparator:
         Args:
             audio: Input audio array (np.ndarray or torch.Tensor).
             input_format: Specify 'channel_first' or 'channel_last' explicitly.
-                If None, uses heuristic: assumes channel-last if samples > channels.
-                WARNING: The heuristic can be incorrect for edge cases, e.g. 2-channel audio with 1 sample.
-                For robust behavior, specify input_format explicitly.
+                If None, uses heuristic: assumes channel-last (T, C) if samples > channels.
+                WARNING: The heuristic can be incorrect for edge cases. For robust 
+                behavior, specify input_format explicitly.
+
+        Note on Mono Conversion:
+            This method FORCES mono conversion (averaging channels) because the 
+            underlying Waveformer model is strictly mono. Stereo inputs will be
+            downmixed before inference.
         """
         tensor = torch.as_tensor(audio, dtype=torch.float32)
         

@@ -13,6 +13,11 @@
             "appliances": true,
             "misc": true
         },
+        "gains": {
+            "speech": 1.0,
+            "noise": 1.0,
+            "events": 1.0
+        },
         "autoTriggers": [
             {
                 "category": "typing",
@@ -34,6 +39,11 @@
             "wind": true,
             "nature": true
         },
+        "gains": {
+            "speech": 1.0,
+            "noise": 1.0,
+            "events": 1.0
+        },
         "autoTriggers": [
             {
                 "category": "traffic",
@@ -50,6 +60,11 @@
         "created_at": "2026-02-05T00:00:00Z",
         "updated_at": "2026-02-05T00:00:00Z",
         "suppressions": {},
+        "gains": {
+            "speech": 1.0,
+            "noise": 1.0,
+            "events": 1.0
+        },
         "isSystemProfile": true
     },
     {
@@ -63,6 +78,11 @@
             "typing": true,
             "appliances": true,
             "misc": true
+        },
+        "gains": {
+            "speech": 1.0,
+            "noise": 1.0,
+            "events": 1.0
         },
         "autoTriggers": [
             {
