@@ -180,10 +180,10 @@ class ProfileManager:
     def create_profile(
         self,
         name: str,
+        gains: Optional[Dict[str, float]] = None,
         suppressions: Optional[Dict[str, bool]] = None,
         description: str = "",
         auto_triggers: Optional[List[AutoTrigger]] = None,
-        gains: Optional[Dict[str, float]] = None,
     ) -> Profile:
         """
         Create a new user profile.
