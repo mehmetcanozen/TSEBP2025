@@ -34,7 +34,6 @@ TARGET_SAMPLE_RATE = 44100
 # Default target list from the original Waveformer CLI
 TARGETS: Sequence[str] = (
     "Acoustic_guitar",
-    "Alarm",
     "Applause",
     "Bark",
     "Bass_drum",
@@ -67,7 +66,6 @@ TARGETS: Sequence[str] = (
     "Saxophone",
     "Scissors",
     "Shatter",
-    "Siren",
     "Snare_drum",
     "Squeak",
     "Tambourine",
@@ -281,27 +279,11 @@ class WaveformerSeparator:
             if cache_key in self._query_cache:
                 return self._query_cache[cache_key].clone()
 
-        # Use 41 as the strict Waveformer compatibility size
-        query = torch.zeros(1, 41, dtype=torch.float32, device=self.device)
+        query = torch.zeros(1, len(TARGETS), dtype=torch.float32, device=self.device)
         for target in targets:
             if target not in TARGETS:
                 raise ValueError(f"Unknown target '{target}'. Valid: {', '.join(TARGETS)}")
-            
-            # Siren and Alarm do not have Waveformer targets, so we skip adding them
-            # to the query vector.
-            if target in ("Siren", "Alarm"):
-                continue
-
-            # We use the original index of the target in TARGETS to set the query vector.
-            # However, because Siren and Alarm were added to the TARGETS list, we need to
-            # map the TARGETS index back to the 41 original targets.
-            index = TARGETS.index(target)
-            if index > TARGETS.index("Siren"):
-                index -= 1
-            if index > TARGETS.index("Alarm"):
-                index -= 1
-
-            query[0, index] = 1.0
+            query[0, TARGETS.index(target)] = 1.0
             
         # Add to cache for string lists
         if isinstance(targets, (list, tuple)) and all(isinstance(t, str) for t in targets):
@@ -342,8 +324,9 @@ class WaveformerSeparator:
 
         # ── Inference: ONNX Runtime or PyTorch ──
         if self._ort_session is not None:
+            mixture_cpu = mixture.cpu()
             ort_inputs = {
-                "audio_input": mixture.numpy(),
+                "audio_input": mixture_cpu.numpy(),
                 "query_vector": query.cpu().numpy(),
             }
             ort_output = self._ort_session.run(None, ort_inputs)[0]
@@ -412,7 +395,7 @@ class WaveformerSeparator:
         # ── Inference ──
         if self._ort_session is not None:
             # ONNX path: sequential per-query (shared preprocessed tensor)
-            mixture_np = mixture_unsqueeze.numpy()
+            mixture_np = mixture_unsqueeze.cpu().numpy()
             outputs_ct = []
             for q in queries:
                 ort_inputs = {

@@ -5,7 +5,7 @@ Context-aware adaptive noise suppression with semantic control.
 This project provides a real-time audio pipeline that:
 - **Separates** incoming audio into meaningful components using a pretrained Waveformer separator.
 - **Understands** the scene using YAMNet-style semantic classification.
-- **Suppresses** user-selected sound categories (typing, wind, traffic, siren, alarm, and more) while preserving speech.
+- **Suppresses** user-selected sound categories (typing, wind, traffic, and more) while preserving speech. See the Master User Manual for the currently supported categories.
 
 The current focus is a **desktop-first** implementation with a validated **React Native / Expo test app** proving the on-device TFLite pipeline.
 

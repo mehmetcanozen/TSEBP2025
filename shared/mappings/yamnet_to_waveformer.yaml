@@ -6,12 +6,12 @@
 categories:
   # ALERT SOUNDS (suppressible like any other category)
   siren:
-    waveformer_targets: ["Siren"]
+    waveformer_targets: []
     yamnet_indices: [388, 389, 390]  # Siren, Ambulance, Police car
     priority: "medium"
   
   alarm:
-    waveformer_targets: ["Alarm"]
+    waveformer_targets: []
     yamnet_indices: [387, 388, 403]  # Fire alarm, Smoke detector, Alarm
     priority: "medium"
 
