@@ -100,7 +100,6 @@ class DetectionThread(threading.Thread):
             return None
 
         top = self.detective.get_top_detections(detection["smoothed"])
-        safety = self.detective.check_safety_override(detection["states"])
 
         return {
             "raw": detection["raw"],
@@ -108,7 +107,6 @@ class DetectionThread(threading.Thread):
             "stable": detection["stable"],
             "states": detection["states"],
             "top": top,
-            "safety_override": safety,
         }
 
     def _compute_interval(self) -> float:

@@ -12,7 +12,6 @@ import numpy as np
 
 from profile_manager import ProfileManager, Profile
 from auto_controller import AutoController
-from safety_override import SafetyOverride, SafetyStatus
 from control_engine import ControlEngine, ControlMode
 from settings_store import SettingsStore
 
@@ -228,93 +227,6 @@ class TestAutoController:
             assert scores[i][1] >= scores[i + 1][1]
 
 
-class TestSafetyOverride:
-    """Test Safety Override System"""
-    
-    @pytest.fixture
-    def safety_override(self):
-        return SafetyOverride(enable_alerts=False)
-    
-    def test_initialization(self, safety_override):
-        """Test SafetyOverride initializes correctly"""
-        assert safety_override.status == SafetyStatus.NORMAL
-        assert not safety_override.is_active()
-    
-    def test_detect_siren(self, safety_override):
-        """Test detecting siren sound"""
-        detections = {'siren': 0.85, 'speech': 0.3}
-        alert = safety_override.check(detections)
-        
-        assert alert.active
-        assert alert.category == 'siren'
-        assert alert.confidence == 0.85
-    
-    def test_detect_alarm(self, safety_override):
-        """Test detecting alarm sound"""
-        detections = {'alarm': 0.75, 'speech': 0.3}
-        alert = safety_override.check(detections)
-        
-        assert alert.active
-        assert alert.category == 'alarm'
-    
-    def test_no_critical_sound(self, safety_override):
-        """Test normal operation without critical sounds"""
-        detections = {'speech': 0.8, 'traffic': 0.3}
-        alert = safety_override.check(detections)
-        
-        assert not alert.active
-        assert alert.category is None
-    
-    def test_apply_override(self, safety_override):
-        """Test applying safety override to gains"""
-        current_gains = {'speech': 0.0, 'noise': 0.0, 'events': 0.0}
-        detections = {'siren': 0.85, 'speech': 0.0}
-        
-        override_gains = safety_override.apply_override(current_gains, detections)
-        
-        # Events should be boosted to 1.0
-        assert override_gains['events'] == 1.0
-        
-        # Other sounds should be ducked
-        assert override_gains['speech'] <= 0.2
-        assert override_gains['noise'] <= 0.2
-    
-    def test_override_threshold(self, safety_override):
-        """Test that detection below threshold doesn't trigger override"""
-        detections = {'siren': 0.6}  # Below 0.7 threshold
-        alert = safety_override.check(detections)
-        
-        assert not alert.active
-    
-    def test_override_hold_time(self, safety_override):
-        """Test override hold time after critical sound disappears"""
-        import time
-        
-        # Trigger alert
-        detections_with_siren = {'siren': 0.85}
-        alert1 = safety_override.check(detections_with_siren)
-        assert alert1.active
-        
-        # Alert disappears
-        detections_without_siren = {'siren': 0.0}
-        
-        # Immediately after, should still be in hold time
-        alert2 = safety_override.check(detections_without_siren)
-        assert alert2.active
-        
-        # Status should be OVERRIDE_FADING
-        assert safety_override.status == SafetyStatus.OVERRIDE_FADING
-    
-    def test_status_string(self, safety_override):
-        """Test status string generation"""
-        detections = {'siren': 0.85}
-        safety_override.check(detections)
-        
-        status_str = safety_override.get_status_string()
-        assert 'SAFETY ALERT' in status_str
-        assert 'siren' in status_str.lower()
-
-
 class TestControlEngine:
     """Test Control Engine Integration"""
     
@@ -332,7 +244,6 @@ class TestControlEngine:
         """Test ControlEngine initializes correctly"""
         assert control_engine.mode == ControlMode.MANUAL
         assert control_engine.auto_controller is not None
-        assert control_engine.safety_override is not None
     
     def test_set_mode(self, control_engine):
         """Test switching modes"""
@@ -389,18 +300,6 @@ class TestControlEngine:
         
         # Should have switched to a profile with traffic trigger
         # (Note: commute mode has traffic trigger)
-    
-    def test_safety_override_in_detection(self, control_engine):
-        """Test safety override during detection update"""
-        control_engine.set_gains(speech=0.0, noise=0.0, events=0.0)
-        
-        # Siren detected
-        detections = {'siren': 0.85, 'speech': 0.0}
-        control_engine.on_detection_update(detections)
-        
-        # Should have applied override
-        assert control_engine.safety_override.is_active()
-        assert control_engine.current_gains['events'] == 1.0
     
     def test_bypass_model_check(self, control_engine):
         """Test passthrough detection"""

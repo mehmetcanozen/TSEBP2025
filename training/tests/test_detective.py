@@ -34,15 +34,12 @@ categories:
   speech:
     indices: [0]
     priority: medium
-    safety_override: false
   wind:
     indices: [310]
     priority: low
-    safety_override: false
   siren:
     indices: [396]
-    priority: critical
-    safety_override: true
+    priority: medium
 """
     path = tmp_path / "yamnet_map.yaml"
     path.write_text(yaml_content)
@@ -61,7 +58,6 @@ def test_classify_maps_categories(mock_load, tmp_path: Path):
     assert raw["speech"] == pytest.approx(0.8, rel=1e-6)
     assert raw["wind"] == pytest.approx(0.1, rel=1e-6)
     assert raw["siren"] == pytest.approx(0.95, rel=1e-6)
-    assert detective.check_safety_override(result["states"]) is True
 
 
 def test_confidence_buffer_majority_vote():
@@ -187,11 +183,9 @@ categories:
   empty_cat:
     indices: []
     priority: low
-    safety_override: false
   speech:
     indices: [0]
     priority: medium
-    safety_override: false
 """
     path = tmp_path / "empty_map.yaml"
     path.write_text(yaml_content)
@@ -212,7 +206,6 @@ categories:
   bad_cat:
     indices: [521]
     priority: low
-    safety_override: false
 """
     path = tmp_path / "bad_map.yaml"
     path.write_text(yaml_content)

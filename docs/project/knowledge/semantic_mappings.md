@@ -5,17 +5,14 @@ This document details the mapping between YAMNet (Semantic Detection) and Wavefo
 ## Core Mapping Logic
 The system uses `shared/mappings/yamnet_to_waveformer.yaml` to bridge the two models. YAMNet indices indicate *what* is present, and Waveformer targets indicate *what* can be removed.
 
-### Critical Safety Overrides
-Some sounds are flagged as `safety_override: true`.
-- **Siren** (Categories: Siren, Ambulance, Police car)
-- **Alarm** (Categories: Fire alarm, Smoke detector)
-
-When these are detected with confidence > 0.5, **all suppression is bypassed** to ensure the user stays aware of their environment.
+Most categories are user-controllable suppression targets. However, a category can only be suppressed if it has a corresponding Waveformer target (see the table below and `yamnet_to_waveformer.yaml`). As of now, Siren and Alarm do not have Waveformer targets and therefore cannot be directly suppressed via Waveformer.
 
 ### Fine-Tuned Categories
 
 | Category | YAMNet Indices (Ref) | Waveformer Target | Special Notes |
 | :--- | :--- | :--- | :--- |
+| **Siren** | 388-390 | N/A | Not currently mapped to a Waveformer target; cannot be directly suppressed until the mapping/TARGETS list is updated. |
+| **Alarm** | 387, 388, 403 | N/A | Not currently mapped to a Waveformer target; cannot be directly suppressed until the mapping/TARGETS list is updated. |
 | **Typing** | 378, 380 | Computer_keyboard | Lowered threshold (0.03) to catch quiet keystrokes. |
 | **Traffic** | 323-326 | Bus | Handles heavy engine drones well. |
 | **Wind** | 486-487 | N/A | Currently marked for DSP fallback (Spectral Gating). |

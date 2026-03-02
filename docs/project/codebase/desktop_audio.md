@@ -13,6 +13,7 @@
 | **`GainSmoother`** | `smooth()` | `Factor: 0.9, Floor: 0.1` | Prevents "zipper noise" and "watery" artifacts (via noise floor). |
 | **`RingBuffer`** | `read()` | `deque(maxlen=N)` | Standard lists are too slow; `deque` provides $O(1)$ pop/push. |
 | **`Suppressor`** | `suppress()` | `Scale: 1.0 / peak` | Models require normalized input; fails on quiet mics without this. |
+| **`Suppressor`** | Adaptive Boost | `relative < 0.1 → boost ≤ 4×` | Compensates for Waveformer under-extraction of quiet targets. |
 
 ---
 
@@ -54,10 +55,9 @@ graph TD
 *   **Why**: Total silence (0.0) sounds "dead" and highlights processing artifacts. Keeping 10% of the original atmosphere makes the transition between "loud noise" and "suppressed noise" feel natural to the human ear.
 
 ### [semantic_suppressor.py](file:///c:/SoftwareProjects/TSEBP2025/desktop/src/audio/semantic_suppressor.py)
-*   **Heuristic - Inverse Separation**: `clean = original - (unwanted * aggressiveness)`
-*   **Comparison**: 
-    - **Standard Gates**: "Muffle" or "Cut" everything below a threshold.
-    - **Our Way**: We selectively remove *just* the target noise, leaving the rest of the soundstage (voice, music) intact.
+*   **Per-Category Separation**: Each suppression category gets a dedicated Waveformer query to prevent loud sources from dominating quiet targets. Uses `separate_multi_query()` for batched GPU inference.
+*   **Adaptive Stem Boosting**: When a category's separated stem is under-extracted (< 10% of mix energy), it is boosted by up to 4× to make the spectral ratio mask effective.
+*   **Two-Stage Spectral Masking**: Stage 1 applies a ratio mask with adaptive floor; Stage 2 uses a targeted Wiener post-filter on noise-heavy bins only.
 
 > [!TIP]
 > Use the [profiler.py](file:///c:/SoftwareProjects/TSEBP2025/desktop/src/audio/profiler.py) to debug "Buffer Underruns". If the `waveformer_separation` step takes longer than 20ms consistently, the audio will stutter.

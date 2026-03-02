@@ -94,10 +94,12 @@ def main():
         print("  - wind         (wind noise)")
         print("  - music        (musical instruments)")
         print("  - nature       (rain, animals)")
+        print("  - pets         (dog barking, cat meowing)")
+        print("  - siren        (ambulance, police, fire truck)")
+        print("  - alarm        (smoke alarm, fire alarm)")
         print("  - appliances   (microwave, etc.)")
         print("  - misc         (applause, cough, etc.)")
-        print("\nNOTE: 'siren' and 'alarm' cannot be suppressed (safety override)")
-        print("\nExample: python demo_custom_realtime.py --suppress typing,wind")
+        print("\nExample: python demo_custom_realtime.py --suppress typing,wind,siren")
         return
     
     if args.list_devices:

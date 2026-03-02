@@ -8,16 +8,18 @@ The Semantic Noise Mixer is built on the principle of **Semantic Contextual Supp
 graph TD
     Mic[Microphone Input] --> Buff[Rolling Buffer 1s]
     Buff --> Det[Semantic Detective YAMNet]
-    Buff --> Sep[Waveformer Separator]
+    Buff --> Sep[Per-Category Waveformer Separation]
     Det --> Ctrl[Control Engine / Profile Manager]
-    Ctrl --> Agg[Aggressive Subtraction Logic]
-    Sep --> Agg
+    Ctrl --> Sep
+    Sep --> Boost[Adaptive Stem Boosting]
+    Boost --> Agg[Two-Stage Masking Pipeline]
     Agg --> Clean[Clean Audio Output]
     Clean --> Speaker[Speaker / Virtual Mic]
 
     subgraph "Core Intelligence"
         Det
         Sep
+        Boost
         Ctrl
     end
 ```
@@ -29,12 +31,15 @@ The project does not try to extract "clean speech" directly. Instead, it extract
 
 ### 2. Context-Aware Suppression
 By using YAMNet, the system identifies specific sound categories. This allows for:
-- **Priority-based handling**: Sirens and alarms are never suppressed (Safety Override).
+- **User-controlled suppression**: All categories (including siren, alarm, traffic, typing, etc.) are suppressible via profiles.
 - **User profiles**: Profiles like "Office" (suppress typing/appliances) vs "Commute" (suppress traffic).
 
-### 3. Real-time Decoupling
+### 3. Per-Category Separation with Adaptive Boosting
+Each suppression category (e.g. typing, pets, traffic) receives its own Waveformer query so that loud sources don't overwhelm quiet targets in the neural network output. Queries are batched into a single GPU forward pass for efficiency. After separation, weak stems are adaptively boosted (up to 4×) to compensate for Waveformer's tendency to under-extract quiet sounds in loud environments.
+
+### 4. Real-time Decoupling
 The detection logic (YAMNet) often runs at a different cadence than the separation (Waveformer). The system uses a sliding context window to ensure the deep learning models have enough temporal information for accurate inference while maintaining low perception-to-ear latency.
 
 ## Hardware & Environment
-- **Desktop**: Optimized for CUDA-enabled GPUs (RTX 30 series and above).
-- **Mobile**: Uses a specialized **Native UNet** to bypass complex-number limitations in TFLite.
+- **Desktop**: Optimized for CUDA-enabled GPUs (RTX 30 series and above). Supports `torch.compile`, ONNX Runtime acceleration, and batched multi-query inference.
+- **Mobile**: Uses a specialized **Native UNet** to bypass complex-number limitations in TFLite. Supports INT8 quantization for fast on-device inference.
