@@ -173,6 +173,7 @@ class SemanticSuppressor:
         if len(suppress_categories) == 0 and not universal_prompts:
             # Passthrough mode - no suppression needed
             logger.debug("No suppression categories or universal prompts specified, returning original audio")
+            self._overlap_save_tail = None
             return audio
             
         if universal_prompts:
@@ -249,6 +250,7 @@ class SemanticSuppressor:
 
         if not targets_to_suppress and not universal_prompts:
             logger.debug("No targets detected above threshold, returning original audio")
+            self._overlap_save_tail = None
             return audio
 
         # Step 4: Separate unwanted sounds using the appropriate foundational model
@@ -430,7 +432,9 @@ class SemanticSuppressor:
             # very beginning and end of the buffer. To get a fully reconstructed
             # signal across the entire chunk, we pad the audio with reflected samples,
             # process, and then discard the padding.
-            pad_len = nperseg
+            # Reflect padding requires pad_width < signal length along the padded axis.
+            # Clamp pad_len so that it never equals or exceeds min_len.
+            pad_len = min(nperseg, max(0, min_len - 1))
             mix_padded = np.pad(mix_aligned_t, ((0, 0), (pad_len, pad_len)), mode='reflect')
             unwanted_padded = np.pad(unwanted_prepared_t, ((0, 0), (pad_len, pad_len)), mode='reflect')
 
@@ -526,7 +530,7 @@ class SemanticSuppressor:
                     fade_out = 1.0 - fade_in
                     clean_multi[:actual_blend, :num_channels] = (
                         clean_multi[:actual_blend, :num_channels] * fade_in +
-                        prev_tail[:actual_blend, :num_channels] * fade_out
+                        prev_tail[-actual_blend:, :num_channels] * fade_out
                     )
             
             # Save the tail for the NEXT call

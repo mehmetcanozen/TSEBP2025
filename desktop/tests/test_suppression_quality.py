@@ -514,7 +514,7 @@ class TestOverlapSaveContinuity:
         assert boundary_jump < signal_rms * 1.5, (
             f"Chunk boundary discontinuity detected! "
             f"Jump={boundary_jump:.5f}, RMS={signal_rms:.5f}, "
-            f"Ratio={boundary_jump/signal_rms:.3f} (expected < 0.20)"
+            f"Ratio={boundary_jump/signal_rms:.3f} (expected < 1.50)"
         )
 
 

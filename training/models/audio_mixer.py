@@ -34,6 +34,7 @@ TARGET_SAMPLE_RATE = 44100
 # Default target list from the original Waveformer CLI
 TARGETS: Sequence[str] = (
     "Acoustic_guitar",
+    "Alarm",
     "Applause",
     "Bark",
     "Bass_drum",
@@ -66,6 +67,7 @@ TARGETS: Sequence[str] = (
     "Saxophone",
     "Scissors",
     "Shatter",
+    "Siren",
     "Snare_drum",
     "Squeak",
     "Tambourine",
@@ -319,20 +321,21 @@ class WaveformerSeparator:
                 ).to(mixture.device)
             mixture = self._resample_in[sample_rate](mixture)
 
-        mixture = mixture.unsqueeze(0).to(self.device)  # (1, C, T)
+        mixture = mixture.unsqueeze(0)  # (1, C, T)
         query = self._build_query(targets)
 
         # ── Inference: ONNX Runtime or PyTorch ──
         if self._ort_session is not None:
             ort_inputs = {
-                "audio_input": mixture.cpu().numpy(),
+                "audio_input": mixture.numpy(),
                 "query_vector": query.cpu().numpy(),
             }
             ort_output = self._ort_session.run(None, ort_inputs)[0]
             output = torch.from_numpy(ort_output).squeeze(0)  # (C, T)
         else:
+            mixture_gpu = mixture.to(self.device)
             with torch.inference_mode():
-                output = self.model(mixture, query).squeeze(0).cpu()  # (C, T)
+                output = self.model(mixture_gpu, query).squeeze(0).cpu()  # (C, T)
 
         if needs_resample:
             if sample_rate not in self._resample_out:
@@ -384,7 +387,7 @@ class WaveformerSeparator:
                 ).to(mixture.device)
             mixture = self._resample_in[sample_rate](mixture)
 
-        mixture_gpu = mixture.unsqueeze(0).to(self.device)     # (1, C, T)
+        mixture_unsqueeze = mixture.unsqueeze(0)
 
         # ── Build all queries ──
         queries = [self._build_query(list(tg)) for tg in target_groups]  # each (1, Q)
@@ -393,7 +396,7 @@ class WaveformerSeparator:
         # ── Inference ──
         if self._ort_session is not None:
             # ONNX path: sequential per-query (shared preprocessed tensor)
-            mixture_np = mixture_gpu.cpu().numpy()
+            mixture_np = mixture_unsqueeze.numpy()
             outputs_ct = []
             for q in queries:
                 ort_inputs = {
@@ -404,6 +407,7 @@ class WaveformerSeparator:
                 outputs_ct.append(torch.from_numpy(ort_out).squeeze(0))  # (C, T)
         else:
             # PyTorch path: batch all queries in a single forward pass
+            mixture_gpu = mixture_unsqueeze.to(self.device)
             mixture_batch = mixture_gpu.expand(n_groups, -1, -1)        # (N, C, T)
             queries_batch = torch.cat(queries, dim=0)                   # (N, Q)
             with torch.inference_mode():
