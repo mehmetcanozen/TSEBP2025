@@ -170,7 +170,6 @@ class CategoryConfig:
     indices: Sequence[int]
     priority: str = "medium"
     color: str = "#FFFFFF"
-    safety_override: bool = False
     reduce_type: str = "max"  # "max" for transients, "mean" for continuous sounds
 
 
@@ -256,12 +255,6 @@ class SemanticDetective:
         sorted_pairs = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
         return sorted_pairs[:n]
 
-    def check_safety_override(self, states: Mapping[str, bool]) -> bool:
-        """Return True if any safety-critical category is active."""
-        for category, cfg in self.categories.items():
-            if cfg.safety_override and states.get(category):
-                return True
-        return False
 
     # ------------------------------ internal helpers -------------------------- #
     def _prepare_audio(self, audio: np.ndarray, sample_rate: int) -> tf.Tensor:
@@ -296,21 +289,22 @@ class SemanticDetective:
         return tensor  # (T,) - YAMNet expects 1D waveform
 
     def _map_to_categories(self, yamnet_scores: tf.Tensor) -> Dict[str, float]:
-        """Aggregate YAMNet 521-class scores into our semantic categories."""
+        """Aggregate YAMNet 521-class scores into our semantic categories.
+        
+        Uses NumPy instead of TF ops for the aggregation to avoid per-op
+        TensorFlow dispatch overhead (significant for many small operations).
+        """
+        scores_np = yamnet_scores.numpy()  # single TF -> NumPy copy
         outputs: Dict[str, float] = {}
         for category, cfg in self.categories.items():
             if not cfg.indices:
                 outputs[category] = 0.0
                 continue
-            idx_tensor = tf.constant(list(cfg.indices), dtype=tf.int32)
-            selected = tf.gather(yamnet_scores, idx_tensor)
-            
-            # Aggregate based on category preference
+            selected = scores_np[self._index_arrays[category]]
             if cfg.reduce_type == "mean":
-                outputs[category] = float(tf.reduce_mean(selected).numpy())
+                outputs[category] = float(np.mean(selected))
             else:
-                # Default to max across mapped classes so any strong hit triggers the category
-                outputs[category] = float(tf.reduce_max(selected).numpy())
+                outputs[category] = float(np.max(selected))
         return outputs
 
     def _load_class_map(self, path: Path) -> Dict[str, CategoryConfig]:
@@ -320,6 +314,7 @@ class SemanticDetective:
             data = yaml.safe_load(f) or {}
         categories = data.get("categories", {})
         parsed: Dict[str, CategoryConfig] = {}
+        self._index_arrays: Dict[str, np.ndarray] = {}  # pre-built NumPy index arrays
         for name, cfg in categories.items():
             indices = cfg.get("indices", [])
             # Validate YAMNet index range (0-520)
@@ -329,9 +324,10 @@ class SemanticDetective:
                 indices=indices,
                 priority=cfg.get("priority", "medium"),
                 color=cfg.get("color", "#FFFFFF"),
-                safety_override=cfg.get("safety_override", False),
                 reduce_type=cfg.get("reduce_type", "max"),
             )
+            # Pre-build index array to avoid list->array conversion each frame
+            self._index_arrays[name] = np.array(indices, dtype=np.intp)
         return parsed
 
 

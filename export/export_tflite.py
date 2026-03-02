@@ -30,7 +30,7 @@ class TFLiteExporter:
         self,
         output_path: Path,
         temp_dir: Path = Path("models/temp_export"),
-        use_fp16: bool = True,
+        quantization: str = "fp16",
     ) -> Path:
         """
         Export model to TFLite.
@@ -38,12 +38,12 @@ class TFLiteExporter:
         Args:
             output_path: Path to save .tflite file
             temp_dir: Temporary directory for intermediate files
-            use_fp16: Apply FP16 quantization
+            quantization: Quantization mode: "fp32", "fp16", or "int8"
         
         Returns:
             Path to exported TFLite file
         """
-        logger.info(f"Exporting Waveformer to TFLite: {output_path}")
+        logger.info(f"Exporting Waveformer to TFLite: {output_path} (quantization={quantization})")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         temp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -66,19 +66,24 @@ class TFLiteExporter:
             "-osd" # Output standard TFLite
         ]
         
-        if use_fp16:
+        if quantization == "fp16":
             logger.info("Applying FP16 quantization...")
-            # onnx2tf uses --quantize_to_float16 or similar for FP16
-            # Actually, for TFLite it's often handled via converter options in TF, 
-            # but onnx2tf has --float16_quantization
-            cmd.append("-opt") # Optimization
+            cmd.append("-opt")
             cmd.append("--float16_quantization")
+        elif quantization == "int8":
+            logger.info("Applying INT8 quantization (for mobile CPU deployment)...")
+            cmd.append("-oiqt")  # onnx2tf flag for INT8 quantization
 
         try:
             subprocess.run(cmd, check=True)
             
             # Determine expected generated file based on quantization
-            expected_name = "model_float16.tflite" if use_fp16 else "model_float32.tflite"
+            name_map = {
+                "fp32": "model_float32.tflite",
+                "fp16": "model_float16.tflite",
+                "int8": "model_integer_quant.tflite",
+            }
+            expected_name = name_map.get(quantization, "model_float32.tflite")
             generated_file = output_path.parent / expected_name
 
             # Move the generated file to expected output path
@@ -88,7 +93,7 @@ class TFLiteExporter:
                 raise FileNotFoundError(
                     f"Expected TFLite file '{expected_name}' not found in "
                     f"'{output_path.parent}'. onnx2tf may have failed or produced "
-                    f"a differently named file (use_fp16={use_fp16})."
+                    f"a differently named file (quantization={quantization})."
                 )
 
             logger.info("onnx2tf conversion complete")
@@ -113,10 +118,23 @@ def main():
     parser.add_argument(
         "--no-fp16",
         action="store_true",
-        help="Disable FP16 quantization"
+        help="Disable FP16 quantization (use FP32)"
+    )
+    parser.add_argument(
+        "--int8",
+        action="store_true",
+        help="Use INT8 quantization for mobile CPU (4x smaller, 2-3x faster)"
     )
 
     args = parser.parse_args()
+
+    # Determine quantization mode
+    if args.int8:
+        quant_mode = "int8"
+    elif args.no_fp16:
+        quant_mode = "fp32"
+    else:
+        quant_mode = "fp16"
 
     # Initialize separator
     separator = WaveformerSeparator()
@@ -127,7 +145,7 @@ def main():
     try:
         tflite_path = exporter.export(
             output_path=args.output,
-            use_fp16=not args.no_fp16,
+            quantization=quant_mode,
         )
         print(f"\n✅ Export complete: {tflite_path}")
         

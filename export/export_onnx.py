@@ -32,6 +32,7 @@ class ONNXExporter:
         output_path: Path,
         opset_version: int = 17, # Use 17 for max compatibility with onnxrt/TFLite
         use_fp16: bool = True,
+        use_int8: bool = False,
     ) -> Path:
         """
         Export model to ONNX.
@@ -93,6 +94,19 @@ class ONNXExporter:
             output_path.unlink()
             fp16_path.rename(output_path)
             logger.info(f"FP16 quantized model saved: {output_path}")
+
+        # INT8 quantization (for mobile CPU inference — ~4x smaller, ~2-3x faster)
+        if use_int8:
+            logger.info("Applying INT8 dynamic quantization...")
+            from onnxruntime.quantization import quantize_dynamic, QuantType
+            
+            int8_path = output_path.with_stem(output_path.stem + "_int8")
+            quantize_dynamic(
+                str(output_path),
+                str(int8_path),
+                weight_type=QuantType.QInt8,
+            )
+            logger.info(f"INT8 quantized model saved: {int8_path}")
 
         return output_path
 
@@ -175,6 +189,11 @@ def main():
         action="store_true",
         help="Disable FP16 quantization"
     )
+    parser.add_argument(
+        "--int8",
+        action="store_true",
+        help="Also generate INT8 quantized model (for mobile CPU deployment)"
+    )
 
     args = parser.parse_args()
 
@@ -188,6 +207,7 @@ def main():
     onnx_path = exporter.export(
         output_path=args.output,
         use_fp16=not args.no_fp16,
+        use_int8=args.int8,
     )
 
     # Validate with dummy audio

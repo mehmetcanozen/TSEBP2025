@@ -16,15 +16,13 @@ categories:
 
   siren:
     indices: [316, 317, 318, 319, 390, 391]  # Emergency vehicle, Police car, Ambulance, Fire engine, Siren, Civil defense siren
-    priority: critical
+    priority: medium
     color: "#F44336"
-    safety_override: true
 
   alarm:
     indices: [382, 389, 392, 393, 394]  # Alarm, Alarm clock, Buzzer, Smoke detector, Fire alarm
-    priority: critical
+    priority: medium
     color: "#F44336"
-    safety_override: true
 
   typing:
     indices: [378, 380]  # Typing, Computer keyboard
