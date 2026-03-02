@@ -5,7 +5,7 @@ Context-aware adaptive noise suppression with semantic control.
 This project provides a real-time audio pipeline that:
 - **Separates** incoming audio into meaningful components using a pretrained Waveformer separator.
 - **Understands** the scene using YAMNet-style semantic classification.
-- **Suppresses** user-selected sound categories (for example typing, wind, traffic) while preserving important ones (for example speech, sirens, alarms).
+- **Suppresses** user-selected sound categories (typing, wind, traffic, siren, alarm, and more) while preserving speech.
 
 The current focus is a **desktop-first** implementation with a validated **React Native / Expo test app** proving the on-device TFLite pipeline.
 
@@ -25,10 +25,11 @@ The current focus is a **desktop-first** implementation with a validated **React
   - **🚀 Phase 1: Spectral Masking**: High-fidelity noise removal using frequency-domain ratio masking to prevent phase artifacts.
   - **🎙️ Phase 2: Suppress All**: Integrated **DeepFilterNet** for universal voice extraction (removes all non-speech audio).
 - **🚀 Phase 3: Universal Extraction**: Integrated **AudioSep** foundation model for open-vocabulary sound extraction using natural language text prompts (e.g., "dog barking," "typing").
+- **🎯 Per-Category Separation**: Each suppression category receives its own dedicated Waveformer query, preventing loud sources from masking quiet targets. Batched into a single GPU forward pass via `separate_multi_query()` for real-time performance.
+- **🔊 Adaptive Stem Boosting**: Under-extracted quiet sounds are automatically amplified (up to 4×) to compensate for Waveformer's limitations in low target-to-interference ratio environments.
 - **Semantic control**
   - YAMNet-based detection over 521 classes, mapped into actionable groups (typing, pets, phone, wind, traffic, speech, music, etc.).
   - Profiles describing which categories to suppress or pass through.
-  - Hard safety override so critical sounds (sirens/alarms) are never removed.
 - **Tooling and diagnostics**
   - Batch and real-time record/clean tools that save:
     - Original mic input.
@@ -126,20 +127,21 @@ python -m desktop.src.batch.batch_processor `
 
 Internally, YAMNet’s 521 classes are grouped into higher-level categories to simplify control and profiles:
 
-| Category       | Priority  | Safety override | Example sounds                          |
-|----------------|-----------|-----------------|------------------------------------------|
-| **siren**      | Critical  | Always pass     | Ambulance, fire truck, police siren     |
-| **alarm**      | Critical  | Always pass     | Smoke alarm, fire alarm                  |
-| **speech**     | Medium    | Normal          | Conversation, narration                  |
-| **traffic**    | Medium    | Normal          | Cars, engines, road noise               |
-| **music**      | Medium    | Normal          | Singing, instruments                     |
-| **wind**       | Low       | Suppressable    | Wind, microphone wind noise              |
-| **typing**     | Low       | Suppressable    | Keyboard clicks                          |
-| **nature**     | Low       | Suppressable    | Rain, birds, dogs                        |
-| **appliances** | Low       | Suppressable    | Microwave, blender, fan                  |
-| **misc**       | Low       | Suppressable    | Cough, snaps, key jangling              |
+| Category       | Priority  | Example sounds                          |
+|----------------|-----------|------------------------------------------|
+| **siren**      | Medium    | Ambulance, fire truck, police siren     |
+| **alarm**      | Medium    | Smoke alarm, fire alarm                  |
+| **speech**     | Medium    | Conversation, narration                  |
+| **traffic**    | Medium    | Cars, engines, road noise               |
+| **music**      | Medium    | Singing, instruments                     |
+| **wind**       | Low       | Wind, microphone wind noise              |
+| **typing**     | Low       | Keyboard clicks                          |
+| **nature**     | Low       | Rain, birds, dogs                        |
+| **pets**       | Low       | Dog barking, cat meowing                 |
+| **appliances** | Low       | Microwave, blender, fan                  |
+| **misc**       | Low       | Cough, snaps, key jangling              |
 
-Profiles and command-line options (for example `--suppress typing,wind`) operate on these groups.
+All categories are fully suppressible via profiles and command-line options (for example `--suppress typing,wind,siren`).
 
 ---
 
@@ -178,7 +180,7 @@ TSEBP2025/
 
 - **Purpose**: Desktop runtime, demos, and tests for the real-time suppression engine.
 - **Key modules**:
-  - `src/audio/semantic_suppressor.py` – core semantic suppression engine. Glues together semantic detection and Waveformer separation, implements inverse separation (`clean = mix - unwanted × aggressiveness`), and loads the YAMNet → Waveformer mapping.
+  - `src/audio/semantic_suppressor.py` – core semantic suppression engine. Glues together semantic detection and Waveformer separation, implements per-category separation with adaptive stem boosting and two-stage spectral masking, and loads the YAMNet → Waveformer mapping.
   - `src/audio/recorder_cleaner.py` – record-from-mic + suppress + write stems (original/clean/noise) with CLI options for duration, categories, and aggressiveness.
   - `src/audio/latency_profiler.py`, `src/audio/profiler.py`, `src/audio/profile_performance.py` – operation-level timing and JSON export for throughput/latency analysis.
   - `src/audio/ring_buffer.py`, `src/audio/detection_thread.py`, `src/audio/audio_io.py` – low-level pieces that keep streaming audio stable and decoupled from heavier model inference.
@@ -256,10 +258,11 @@ TSEBP2025/
 
 - **What is done**
   - Desktop real-time suppression pipeline, including:
-    - SemanticSuppressor with inverse separation \(Clean = Mix − Unwanted × aggressiveness\).
+    - SemanticSuppressor with per-category separation and adaptive stem boosting.
     - Rolling 1 second context buffer.
-    - Input normalization to handle quiet microphones and pre-filtered headsets.
-    - Safety overrides for critical sounds.
+    - Two-stage masking pipeline with adaptive floor and Wiener post-filter.
+    - Batched multi-query Waveformer inference via `separate_multi_query()`.
+    - Performance optimization: torch.compile, ONNX Runtime, STFT window caching.
   - Batch and recorder tooling.
   - A working on-device TFLite pipeline in the `mobile-test` app.
 

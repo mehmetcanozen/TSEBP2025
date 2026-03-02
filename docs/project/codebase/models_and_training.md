@@ -11,7 +11,8 @@
 | :--- | :--- | :--- | :--- |
 | **`SchmittTrigger`** | Hysteresis | `On: 0.7, Off: 0.4` | Stops toggle-flipping when noise volume is borderline. |
 | **`ConfidenceBuffer`** | Majority Vote | `2-of-3 frames` | Ignores momentary spikes (e.g. a single hand clap) from triggering profiles. |
-| **`Waveformer`** | Multitarget Query | `TARGETS (73)` | Allows a single model to separate dozens of different noise types. |
+| **`Waveformer`** | Per-Category Query | `TARGETS (41)` | Each category gets its own query to prevent loud sources from masking quiet targets. |
+| **`Waveformer`** | Batched Inference | `separate_multi_query()` | Multiple queries batched into a single GPU forward pass for real-time performance. |
 | **`AdaptiveDuty`** | Energy Control | `3s / 8s / 15s` | Scales detection cadence based on system battery percentage. |
 
 ---
@@ -45,8 +46,11 @@ graph LR
 
 ### [audio_mixer.py](file:///c:/SoftwareProjects/TSEBP2025/training/models/audio_mixer.py)
 *   **Method**: `_build_query()`
-*   **Detail**: Translates semantic group names (e.g., "Transportation") into a 73-dimensional multi-hot vector.
-*   **Why**: Waveformer is a **Unified Architecture**. Instead of loading 70 different models, we load one model and "tell" it what to separate using these query vectors.
+*   **Detail**: Translates semantic group names (e.g., "Computer_keyboard") into a 41-dimensional multi-hot vector.
+*   **Why**: Waveformer is a **Unified Architecture**. Instead of loading 41 different models, we load one model and "tell" it what to separate using these query vectors.
+*   **Method**: `separate_multi_query()`
+*   **Detail**: Preprocesses audio once (numpy→torch, resampling, GPU transfer) and batches multiple queries into a single `(N, C, T)` / `(N, Q)` forward pass.
+*   **Why**: Per-category separation requires one query per active category. Without batching, each pass repeats all preprocessing. Batching eliminates redundant work and exploits GPU parallelism.
 
 ### [yamnet_to_waveformer.yaml](file:///c:/SoftwareProjects/TSEBP2025/shared/mappings/yamnet_to_waveformer.yaml)
 *   **Logic**: This YAML bridges the 521 AudioSet classes to our 73 Waveformer target heads.
