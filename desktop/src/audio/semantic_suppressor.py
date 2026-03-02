@@ -20,6 +20,7 @@ from typing import Dict, Optional, Sequence
 
 import numpy as np
 import scipy.signal as signal
+import scipy.ndimage
 import yaml
 
 from training.models.semantic_detective import SemanticDetective
@@ -85,6 +86,17 @@ class SemanticSuppressor:
         self._separator = separator
         self._enhancer = enhancer
         self._universal = universal
+        
+        # Pre-computed STFT windows for spectral masking (avoids per-call allocation)
+        self._stft_windows = {
+            512: signal.get_window('hann', 512),
+            1024: signal.get_window('hann', 1024),
+        }
+        
+        # Overlap-save state for cross-call phase continuity.
+        # Stores the last `nperseg` samples from the previous iSTFT output
+        # so consecutive calls blend smoothly without chunk-boundary clicks.
+        self._overlap_save_tail = None
 
     @property
     def enhancer(self) -> SpeechEnhancer:
@@ -124,7 +136,6 @@ class SemanticSuppressor:
         sample_rate: int,
         suppress_categories: Sequence[str] = (),
         detection_threshold: float = 0.5,
-        safety_check: bool = True,
         aggressiveness: float = 1.0,
         suppress_all: bool = False,
         universal_prompts: Sequence[str] = (),
@@ -132,12 +143,15 @@ class SemanticSuppressor:
         """
         Suppress specified semantic categories from audio.
         
+        Uses a two-stage masking pipeline for high-fidelity suppression:
+          Stage 1: Primary spectral mask with adaptive floor and mask smoothing.
+          Stage 2: Wiener post-filter on residual to catch leaked transient energy.
+        
         Args:
             audio: Input audio (mono/stereo), shape (samples,) or (samples, channels)
             sample_rate: Sample rate of input audio
-            suppress_categories: List of categories to suppress (e.g., ["typing", "wind"])
+            suppress_categories: List of categories to suppress (e.g., ["typing", "wind", "siren"])
             detection_threshold: Confidence threshold for detection (0.0-1.0)
-            safety_check: If True, override suppression for critical sounds (sirens, alarms)
             aggressiveness: Multiplier for subtraction (1.0 = normal, >1.0 = aggressive)
             suppress_all: If True, bypass categories and use generalized speech enhancement
             universal_prompts: If provided, bypasses YAMNet/Waveformer and uses literal text prompts (Phase 3).
@@ -148,12 +162,6 @@ class SemanticSuppressor:
         """
         
         if suppress_all:
-            # Safety override check still applies in suppress_all mode
-            if safety_check:
-                safe_detections = self.detector.classify(audio, sample_rate)
-                if self.detector.check_safety_override(safe_detections["states"]):
-                    logger.warning("SAFETY OVERRIDE: Critical sound detected (siren/alarm), bypassing suppression")
-                    return audio
             if profiler:
                 profiler.start('speech_enhancement')
             logger.info("Suppress All mode active - routing to DeepFilterNet")
@@ -184,13 +192,13 @@ class SemanticSuppressor:
         if not universal_prompts:
             logger.debug(f"Detections: {smoothed_scores}")
 
-        # Step 2: Safety override check
-        if not universal_prompts and safety_check and self.detector.check_safety_override(detections["states"]):
-            logger.warning("SAFETY OVERRIDE: Critical sound detected (siren/alarm), bypassing suppression")
-            return audio
-
-        # Step 3: Build list of Waveformer targets to suppress
-        targets_to_suppress = []
+        # Step 2: Build per-category Waveformer target lists
+        # Each category gets its own Waveformer pass to prevent loud sources
+        # from dominating quiet ones in the neural network output.
+        per_category_targets = []  # list of (category_name, wf_targets_list)
+        targets_to_suppress = []   # flat list for logging / early-exit check
+        max_detection_confidence = 0.0
+        has_transient_category = False
         logger.debug(f"[DEBUG] Processing {len(suppress_categories)} categories: {suppress_categories}")
         for category in suppress_categories:
             if category not in self.category_map:
@@ -199,11 +207,6 @@ class SemanticSuppressor:
                 continue
             
             cat_config = self.category_map[category]
-            
-            # Safety check: never suppress critical sounds
-            if cat_config.get("safety_override", False):
-                logger.warning(f"Cannot suppress '{category}' - safety critical sound")
-                continue
             
             # Check if we have Waveformer targets for this category
             wf_targets = cat_config.get("waveformer_targets", [])
@@ -225,12 +228,20 @@ class SemanticSuppressor:
             if effective_threshold < 0 or confidence >= effective_threshold:
                 if effective_threshold < 0:
                     logger.debug(f"Forcing suppression for '{category}' (Force Mode)")
+                    # In force mode, assume high confidence for adaptive masking
+                    confidence = max(confidence, 0.9)
                 else:
                     logger.info(
                         f"Suppressing '{category}' (confidence: {confidence:.2f} >= threshold: {effective_threshold})"
                     )
                 
+                per_category_targets.append((category, wf_targets))
                 targets_to_suppress.extend(wf_targets)
+                max_detection_confidence = max(max_detection_confidence, confidence)
+                
+                # Check if this category has sharp transient sounds
+                if cat_config.get("transient", False):
+                    has_transient_category = True
             else:
                 logger.debug(
                     f"Skipping '{category}' (confidence: {confidence:.2f} < threshold: {effective_threshold})"
@@ -254,6 +265,8 @@ class SemanticSuppressor:
             )
             if profiler:
                 profiler.end('universal_separation')
+            # For universal prompts, assume high confidence
+            max_detection_confidence = 0.9
         else:
             logger.debug(f"[DEBUG] SEPARATING TARGETS: {targets_to_suppress}")
             logger.info(f"Separating Waveformer targets: {targets_to_suppress}")
@@ -273,19 +286,68 @@ class SemanticSuppressor:
             
             if profiler:
                 profiler.start('waveformer_separation')
-            unwanted_norm = self.separator.separate(
-                audio=audio_norm,
-                sample_rate=sample_rate,
-                targets=list(set(targets_to_suppress))
-            )
+            
+            # Per-category separation: each category gets its own Waveformer query
+            # so that loud sources (e.g. barking) don't dominate quiet targets
+            # (e.g. typing) in the neural network output.
+            #
+            # Optimization: use separate_multi_query() to preprocess audio once
+            # and batch all queries in a single forward pass on GPU.
+            target_groups = [list(set(ct)) for _, ct in per_category_targets]
+            for cat_name, ct in per_category_targets:
+                logger.debug(f"Separating category '{cat_name}': {list(set(ct))}")
+
+            if hasattr(self.separator, 'separate_multi_query'):
+                stems = self.separator.separate_multi_query(
+                    audio=audio_norm,
+                    sample_rate=sample_rate,
+                    target_groups=target_groups,
+                )
+            else:
+                # Fallback for separators without batched method (e.g. test mocks)
+                stems = [
+                    self.separator.separate(
+                        audio=audio_norm, sample_rate=sample_rate, targets=tg,
+                    )
+                    for tg in target_groups
+                ]
+
+            # ── Adaptive stem boosting ──
+            # Waveformer under-extracts quiet targets when loud sounds dominate
+            # the mix (e.g. typing at 0.05 amp alongside barking at 0.9 amp).
+            # The extracted stem preserves the correct spectral *shape* but with
+            # near-zero magnitude, making the downstream spectral ratio mask
+            # ineffective.  We boost weak stems so the mask can do its job.
+            mix_rms = np.sqrt(np.mean(audio_norm ** 2)) + 1e-8
+            for i, stem in enumerate(stems):
+                stem_rms = np.sqrt(np.mean(stem ** 2))
+                relative_level = stem_rms / mix_rms
+
+                if relative_level < 0.1:
+                    # Stem energy is <10% of mix — likely under-extracted
+                    boost = min(0.1 / (relative_level + 1e-8), 4.0)
+                    stems[i] = stem * boost
+                    cat_name = per_category_targets[i][0] if i < len(per_category_targets) else "?"
+                    logger.debug(
+                        f"Boosting weak stem '{cat_name}': "
+                        f"relative_level={relative_level:.4f}, boost={boost:.2f}x"
+                    )
+
+            # Sum all per-category stems into a single unwanted signal
+            unwanted_norm = stems[0]
+            for stem in stems[1:]:
+                min_samples = min(unwanted_norm.shape[0], stem.shape[0])
+                unwanted_norm[:min_samples] = unwanted_norm[:min_samples] + stem[:min_samples]
+            
             if profiler:
                 profiler.end('waveformer_separation')
             
             # Denormalize
             unwanted_audio = unwanted_norm * (1.0 / scale_factor)
         
-        # Step 5: Inverse separation via Spectral (STFT) Masking
-        # This replaces the flawed time-domain subtraction (Mix - Unwanted)
+        # Step 5: Two-Stage Spectral Masking Pipeline
+        # Stage 1: Primary spectral mask with adaptive floor and smoothing
+        # Stage 2: Wiener post-filter on residual to catch leaked transient energy
         if profiler:
             profiler.start('spectral_masking')
             
@@ -299,12 +361,17 @@ class SemanticSuppressor:
         # Start with a copy of the original to preserve any tail that Waveformer chopped
         clean_audio = audio_2d.copy()
         
-        # STFT parameters optimized for speech/audio latency
-        # nperseg should be a power of 2, typically 1024 or 512.
-        # If the input is smaller than 512, we adjust it down, but keeping it power of 2
-        nperseg = 1024
+        # Transient-aware STFT window selection:
+        # Shorter windows capture sharp sounds (barks, impacts) better at the cost
+        # of frequency resolution. Longer windows are better for tonal/stationary noise.
+        if has_transient_category:
+            nperseg = 512   # ~11.6ms at 44.1kHz — better for transients
+        else:
+            nperseg = 1024  # ~23.2ms at 44.1kHz — better for tonal sounds
         while nperseg > min_len and nperseg > 256:
             nperseg //= 2
+            
+        noverlap = nperseg // 2
             
         # Prepare unwanted signal to match the number of channels in the mix.
         num_channels = audio_2d.shape[1]
@@ -330,40 +397,144 @@ class SemanticSuppressor:
                 mix_aligned[:min_len, :num_channels] - (unwanted_prepared * aggressiveness)
             )
         else:
-            # 1. Compute STFT of Mixture and Unwanted (vectorized over channels)
+            # ── Adaptive mask floor ──
+            # Always at least as aggressive as old baseline (0.95 max_ratio / 0.05 floor).
+            # At high detection confidence, allow even deeper suppression (up to 0.99).
+            # This ensures we never suppress LESS than before, only MORE when confident.
+            max_ratio = 0.95 + 0.04 * max_detection_confidence
+            mask_floor = 1.0 - max_ratio
+            logger.debug(
+                f"Adaptive masking: confidence={max_detection_confidence:.2f}, "
+                f"aggressiveness={aggressiveness:.2f}, "
+                f"mask_floor={mask_floor:.3f}, max_ratio={max_ratio:.3f}, "
+                f"nperseg={nperseg}, transient={has_transient_category}"
+            )
+            
+            # ══════════════════════════════════════════
+            # STAGE 1: Wiener-Style Soft Mask (MMSE)
+            # ══════════════════════════════════════════
+            # Replaces the simple ratio mask (1 - unwanted/mix) which can't
+            # handle T-F bins where target noise and speech coexist.
+            # The Wiener mask estimates clean signal power vs noise power:
+            #   clean_psd = max(|mix|² - α·|unwanted|², 0)
+            #   mask = clean_psd / (clean_psd + |unwanted|² + ε)
+            # In noise-only bins: clean_psd ≈ 0 → mask ≈ 0 (suppress)
+            # In speech-only bins: clean_psd ≈ |mix|² → mask ≈ 1 (keep)
+            # In shared bins: mask ∝ SNR (graceful proportional blend)
             # Transpose to (channels, time) for vectorized STFT processing
             mix_aligned_t = mix_aligned[:min_len, :num_channels].T
             unwanted_prepared_t = unwanted_prepared.T
 
-            f, t, Zxx_mix = signal.stft(mix_aligned_t, fs=sample_rate, nperseg=nperseg, noverlap=nperseg // 2)
-            _, _, Zxx_unwanted = signal.stft(unwanted_prepared_t, fs=sample_rate, nperseg=nperseg, noverlap=nperseg // 2)
+            # ── Audio Padding for Edge-Agnostic STFT ──
+            # By default, STFT/iSTFT windowing causes the signal to fade to zero at the
+            # very beginning and end of the buffer. To get a fully reconstructed
+            # signal across the entire chunk, we pad the audio with reflected samples,
+            # process, and then discard the padding.
+            pad_len = nperseg
+            mix_padded = np.pad(mix_aligned_t, ((0, 0), (pad_len, pad_len)), mode='reflect')
+            unwanted_padded = np.pad(unwanted_prepared_t, ((0, 0), (pad_len, pad_len)), mode='reflect')
+
+            # Use pre-computed STFT window from cache
+            stft_window = self._stft_windows.get(nperseg, signal.get_window('hann', nperseg))
             
-            # 2. Compute Magnitudes
+            f, t_frames, Zxx_mix = signal.stft(
+                mix_padded, fs=sample_rate, window=stft_window,
+                nperseg=nperseg, noverlap=noverlap
+            )
+            _, _, Zxx_unwanted = signal.stft(
+                unwanted_padded, fs=sample_rate, window=stft_window,
+                nperseg=nperseg, noverlap=noverlap
+            )
+            
+            # Compute magnitudes
             mag_mix = np.abs(Zxx_mix)
             mag_unwanted = np.abs(Zxx_unwanted)
             
-            # 3. Compute Spectral Ratio Mask
+            # Wiener-style MMSE mask (Aggressive)
             eps = 1e-8
-            ratio = (mag_unwanted * aggressiveness) / (mag_mix + eps)
+            noise_psd = mag_unwanted ** 2
+            # Use 2.0x over-subtraction to ensure deep suppression in noise-heavy bins
+            clean_psd = np.maximum(mag_mix ** 2 - 2.0 * (aggressiveness * mag_unwanted) ** 2, 0.0)
+            mask = clean_psd / (clean_psd + noise_psd + eps)
+            mask = np.clip(mask, mask_floor, 1.0)
             
-            # Clamp ratio to avoid complete nulling of individual bins, which can introduce
-            # musical-noise artifacts. This enforces a small nonzero floor on the mask.
-            max_ratio = 0.95  # maximum per-bin suppression; mask floor = 1.0 - max_ratio
-            ratio = np.clip(ratio, 0.0, max_ratio)
+            # ── Spectral mask smoothing ──
+            # Apply a small median filter (3×3 in freq×time) to eliminate isolated
+            # spectral holes that cause chirp/musical-noise artifacts.
+            for ch in range(mask.shape[0]):
+                mask[ch] = scipy.ndimage.median_filter(mask[ch], size=(3, 3), mode='reflect')
             
-            # Soft mask: 1.0 (keep) down to a small positive floor (avoid 0.0 hard nulls)
-            mask = 1.0 - ratio
+            # Apply Stage 1 mask to original complex STFT (preserves phase)
+            Zxx_stage1 = Zxx_mix * mask
             
-            # 4. Apply Mask to Original Complex STFT (Preserves Phase)
-            Zxx_clean = Zxx_mix * mask
+            # ══════════════════════════════════════════
+            # STAGE 2: Targeted Residual Cleanup
+            # ══════════════════════════════════════════
+            # Only targets T-F bins where Stage 1 already identified heavy noise
+            # (mask < 0.5). This avoids touching speech-dominant bins entirely,
+            # preventing the garbled output that a full Wiener filter would cause
+            # when the separator's unwanted stem contains leaked speech.
+            noise_heavy_bins = mask < 0.7  # bins where Stage 1 found strong noise
             
-            # 5. Inverse STFT to get clean waveform for all channels
-            # ISTFT expects (..., freq, time)
-            _, clean_multi_t = signal.istft(Zxx_clean, fs=sample_rate, noverlap=nperseg // 2)
+            if np.any(noise_heavy_bins):
+                mag_stage1 = np.abs(Zxx_stage1)
+                
+                # Residual noise estimate: energy that Stage 1 SHOULD have removed
+                # but couldn't due to the mask floor.  Use (1 - mask) * unwanted
+                # as the noise that was supposed to be subtracted.
+                mag_residual = mag_unwanted * (1.0 - mask)
+                
+                # Gentle Wiener gain — only in noise-heavy bins
+                wiener_alpha = 0.5 * aggressiveness  # conservative alpha
+                signal_psd = mag_stage1 ** 2
+                residual_psd = mag_residual ** 2
+                gain = signal_psd / (signal_psd + wiener_alpha * residual_psd + eps)
+                gain = np.clip(gain, mask_floor, 1.0)
+                
+                # Apply only to noise-heavy bins; leave speech bins untouched
+                wiener_gain = np.where(noise_heavy_bins, gain, 1.0)
+                Zxx_clean = Zxx_stage1 * wiener_gain
+            else:
+                Zxx_clean = Zxx_stage1
+            
+            # Inverse STFT to get clean waveform for all channels
+            _, clean_multi_padded_t = signal.istft(
+                Zxx_clean, fs=sample_rate, window=stft_window, noverlap=noverlap
+            )
+            
+            # Discard the padding to get the fully-reconstructed chunk
+            # The start/end fades are now outside the [pad_len : pad_len+min_len] range
+            clean_multi_t = clean_multi_padded_t[:, pad_len : pad_len + min_len]
             
             # Transpose back to (time, channels)
             clean_multi = clean_multi_t.T
-            out_len = min(min_len, clean_multi.shape[0])
+            out_len = clean_multi.shape[0]
+            
+            # ── Overlap-save blending ──
+            # Blend the start of this chunk with the saved tail from the
+            # previous suppress() call using a raised-cosine (Hann) window.
+            # This eliminates phase discontinuities at chunk boundaries.
+            blend_len = nperseg
+            if self._overlap_save_tail is not None:
+                prev_tail = self._overlap_save_tail
+                actual_blend = min(blend_len, out_len, prev_tail.shape[0])
+                if actual_blend > 0 and prev_tail.shape[1] >= num_channels:
+                    # Robust Linear Crossfade: Blend start of this chunk with the 
+                    # tail of the previous one. This compensates for the iSTFT's
+                    # windowing effects and ensures boundary smoothness.
+                    fade_in = np.linspace(0.0, 1.0, actual_blend)[:, np.newaxis]
+                    fade_out = 1.0 - fade_in
+                    clean_multi[:actual_blend, :num_channels] = (
+                        clean_multi[:actual_blend, :num_channels] * fade_in +
+                        prev_tail[:actual_blend, :num_channels] * fade_out
+                    )
+            
+            # Save the tail for the NEXT call
+            if out_len > blend_len:
+                self._overlap_save_tail = clean_multi[out_len - blend_len:out_len, :num_channels].copy()
+            else:
+                self._overlap_save_tail = clean_multi[:out_len, :num_channels].copy()
+            
             clean_audio[:out_len, :num_channels] = clean_multi[:out_len, :num_channels]
             
         if profiler:

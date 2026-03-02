@@ -91,7 +91,7 @@ def main():
     rolling_buffer = np.zeros(context_size, dtype=np.float32)
     
     # State for crossfading between processing blocks
-    prev_tail = None
+    # (NO LONGER NEEDED: suppressor handles overlap-save internally)
 
     def audio_callback(indata, frames, time, status):
         
@@ -185,39 +185,12 @@ def main():
                     start_idx = end_idx - chunk_len
                     
                     # Get the current clean chunk
-                    raw_clean_chunk = clean_full_buffer[start_idx:end_idx]
+                    # No external crossfade needed — the suppressor handles
+                    # phase continuity internally via overlap-save blending.
+                    clean_chunk = clean_full_buffer[start_idx:end_idx].copy()
                     
                     # Store the ORIGINAL chunk (aligned with suppression)
                     original_chunk = rolling_buffer[start_idx:end_idx].copy()
-                    
-                    # We need to cross-fade the boundary between the *previous* chunk 
-                    # and the *current* chunk to eliminate clicking caused by STFT phase discontinuities.
-                    crossfade_frames = int(0.005 * sample_rate) # 5ms crossfade
-                    
-                    if prev_tail is None:
-                        # First chunk, no crossfade
-                        clean_chunk = raw_clean_chunk.copy()
-                        prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
-                    else:
-                        clean_chunk = raw_clean_chunk.copy()
-                        
-                        # Apply linear crossfade at the start of the current chunk
-                        # blending it with the overlapping tail of the previous full-buffer prediction
-                        fade_in = np.linspace(0, 1, crossfade_frames)
-                        fade_out = 1.0 - fade_in
-                        
-                        overlap_len = min(crossfade_frames, len(clean_chunk), len(prev_tail))
-                        
-                        # Blend the start of the current chunk
-                        clean_chunk[:overlap_len] = (
-                            clean_chunk[:overlap_len] * fade_in[:overlap_len] +
-                            prev_tail[:overlap_len] * fade_out[:overlap_len]
-                        )
-                        
-                        # Save the tail of this chunk's prediction for the NEXT chunk
-                        # We take the frames immediately *after* end_idx in the full buffer
-                        # Since we do lookahead, these frames exist in the buffer
-                        prev_tail = clean_full_buffer[end_idx:end_idx+crossfade_frames].copy()
                     
                     recorded_frames.append(clean_chunk)
                     

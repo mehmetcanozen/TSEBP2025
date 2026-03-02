@@ -79,13 +79,10 @@ def main() -> None:
     detective = SemanticDetective(model_handle=args.model_handle) if args.model_handle else SemanticDetective()
     results = detective.classify(audio, sr)
     top = detective.get_top_detections(results["smoothed"], n=5)
-    safety = detective.check_safety_override(results["states"])
 
     print("\nTop detections:")
     for name, score in top:
         print(f"- {name}: {score:.2f}")
-
-    print("\nSafety override:", "TRIGGERED" if safety else "clear")
 
 
 if __name__ == "__main__":
