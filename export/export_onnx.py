@@ -63,11 +63,11 @@ class ONNXExporter:
             opset_version=opset_version,
             input_names=["audio_input", "query_vector"],
             output_names=["separated_audio"],
-            # dynamic_axes={
-            #     "audio_input": {0: "batch_size", 2: "audio_length"},
-            #     "query_vector": {0: "batch_size"},
-            #     "separated_audio": {0: "batch_size", 2: "audio_length"},
-            # },
+            dynamic_axes={
+                "audio_input": {0: "batch_size", 2: "audio_length"},
+                "query_vector": {0: "batch_size"},
+                "separated_audio": {0: "batch_size", 2: "audio_length"},
+            },
             do_constant_folding=True,
         )
 

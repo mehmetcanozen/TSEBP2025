@@ -442,12 +442,22 @@ class SemanticSuppressor:
             stft_window = self._stft_windows.get(nperseg, signal.get_window('hann', nperseg))
             
             f, t_frames, Zxx_mix = signal.stft(
-                mix_padded, fs=sample_rate, window=stft_window,
-                nperseg=nperseg, noverlap=noverlap
+                mix_padded,
+                fs=sample_rate,
+                window=stft_window,
+                nperseg=nperseg,
+                noverlap=noverlap,
+                boundary=None,
+                padded=False,
             )
             _, _, Zxx_unwanted = signal.stft(
-                unwanted_padded, fs=sample_rate, window=stft_window,
-                nperseg=nperseg, noverlap=noverlap
+                unwanted_padded,
+                fs=sample_rate,
+                window=stft_window,
+                nperseg=nperseg,
+                noverlap=noverlap,
+                boundary=None,
+                padded=False,
             )
             
             # Compute magnitudes
@@ -516,7 +526,7 @@ class SemanticSuppressor:
             
             # ── Overlap-save blending ──
             # Blend the start of this chunk with the saved tail from the
-            # previous suppress() call using a raised-cosine (Hann) window.
+            # previous suppress() call using a linear ramp.
             # This eliminates phase discontinuities at chunk boundaries.
             blend_len = nperseg
             if self._overlap_save_tail is not None:

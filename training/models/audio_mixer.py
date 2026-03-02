@@ -281,11 +281,27 @@ class WaveformerSeparator:
             if cache_key in self._query_cache:
                 return self._query_cache[cache_key].clone()
 
-        query = torch.zeros(1, len(TARGETS), dtype=torch.float32, device=self.device)
+        # Use 41 as the strict Waveformer compatibility size
+        query = torch.zeros(1, 41, dtype=torch.float32, device=self.device)
         for target in targets:
             if target not in TARGETS:
                 raise ValueError(f"Unknown target '{target}'. Valid: {', '.join(TARGETS)}")
-            query[0, TARGETS.index(target)] = 1.0
+            
+            # Siren and Alarm do not have Waveformer targets, so we skip adding them
+            # to the query vector.
+            if target in ("Siren", "Alarm"):
+                continue
+
+            # We use the original index of the target in TARGETS to set the query vector.
+            # However, because Siren and Alarm were added to the TARGETS list, we need to
+            # map the TARGETS index back to the 41 original targets.
+            index = TARGETS.index(target)
+            if index > TARGETS.index("Siren"):
+                index -= 1
+            if index > TARGETS.index("Alarm"):
+                index -= 1
+
+            query[0, index] = 1.0
             
         # Add to cache for string lists
         if isinstance(targets, (list, tuple)) and all(isinstance(t, str) for t in targets):
@@ -408,8 +424,8 @@ class WaveformerSeparator:
         else:
             # PyTorch path: batch all queries in a single forward pass
             mixture_gpu = mixture_unsqueeze.to(self.device)
-            mixture_batch = mixture_gpu.expand(n_groups, -1, -1)        # (N, C, T)
-            queries_batch = torch.cat(queries, dim=0)                   # (N, Q)
+            mixture_batch = mixture_gpu.expand(n_groups, -1, -1).contiguous()  # (N, C, T)
+            queries_batch = torch.cat(queries, dim=0)                          # (N, Q)
             with torch.inference_mode():
                 batch_output = self.model(mixture_batch, queries_batch)  # (N, C, T)
             outputs_ct = [batch_output[i].cpu() for i in range(n_groups)]

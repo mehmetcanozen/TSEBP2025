@@ -66,6 +66,9 @@ class TFLiteExporter:
             "-osd" # Output standard TFLite
         ]
         
+        if quantization not in {"fp32", "fp16", "int8"}:
+            raise ValueError(f"Unsupported quantization: {quantization}. Must be one of: 'fp32', 'fp16', 'int8'")
+
         if quantization == "fp16":
             logger.info("Applying FP16 quantization...")
             cmd.append("-opt")
