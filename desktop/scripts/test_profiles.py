@@ -80,16 +80,11 @@ def test_control_engine():
         status = engine.get_status()
         logger.info(f"Engine status: {status}")
         
-        # Test safety override detection
-        logger.info("\n--- Testing Safety Override ---")
+        # Test detection update (no safety override - all categories are suppressible)
+        logger.info("\n--- Testing Detection Update ---")
         detections = {"siren": 0.85, "typing": 0.6}
         engine.on_detection_update(detections)
-        
-        if engine.safety_status.active:
-            logger.info(f"✅ Safety override activated for: {engine.safety_status.category}")
-            logger.info(f"   Profile switched to: {engine.current_profile.name}")
-        else:
-            logger.warning("⚠️ Safety override not triggered (might need higher threshold)")
+        logger.info(f"✅ Detection update processed (siren and alarm are now regular categories)")
         
         # Test auto-mode profile switching
         logger.info("\n--- Testing Auto-Mode ---")

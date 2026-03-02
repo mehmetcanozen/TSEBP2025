@@ -35,15 +35,12 @@ categories:
   speech:
     indices: [0]
     priority: medium
-    safety_override: false
   wind:
     indices: [310]
     priority: low
-    safety_override: false
   siren:
     indices: [396]
-    priority: critical
-    safety_override: true
+    priority: medium
 """
     path = tmp_path / "yamnet_map.yaml"
     path.write_text(yaml_content)
@@ -121,7 +118,6 @@ def test_detection_thread_callback_invoked(mock_load, tmp_path: Path):
     assert "raw" in payload
     assert "smoothed" in payload
     assert "top" in payload
-    assert "safety_override" in payload
 
 
 @patch("models.semantic_detective.hub.load", return_value=FakeYamnet())

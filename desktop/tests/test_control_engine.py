@@ -1,5 +1,5 @@
 """
-Unit tests for ControlEngine - profile/control logic and safety overrides.
+Unit tests for ControlEngine - profile/control logic.
 """
 
 import sys
@@ -21,13 +21,12 @@ class FakeSuppressor:
     def __init__(self):
         self.suppress_calls = []
 
-    def suppress(self, audio, sample_rate, suppress_categories, safety_check=True):
+    def suppress(self, audio, sample_rate, suppress_categories):
         """Track suppression calls and return mock processed audio."""
         self.suppress_calls.append({
             "audio_shape": audio.shape,
             "sample_rate": sample_rate,
             "suppress_categories": suppress_categories,
-            "safety_check": safety_check,
         })
         # Return slightly modified audio to verify processing occurred
         return audio * 0.9
@@ -95,7 +94,6 @@ def test_engine_initialization(engine):
     assert engine.mode == ControlMode.MANUAL
     assert engine.current_profile is not None
     assert engine.current_profile.name == "Passthrough"
-    assert not engine.safety_status.active
 
 
 def test_set_mode(engine):
@@ -149,7 +147,6 @@ def test_active_suppression(engine, audio_buffer):
 
     # Verify correct categories
     assert set(call["suppress_categories"]) == {"typing", "wind"}
-    assert call["safety_check"] is True
     assert call["sample_rate"] == 16000
 
     # Verify audio was processed (scaled by 0.9 in FakeSuppressor)
@@ -157,64 +154,41 @@ def test_active_suppression(engine, audio_buffer):
     assert np.allclose(result, audio_buffer * 0.9)
 
 
-def test_safety_override_detection(engine):
-    """Test safety override detection with critical sounds."""
-    # No critical sounds
-    detections = {"typing": 0.8, "wind": 0.5}
-    status = engine._check_safety_override(detections)
-    assert not status.active
+def test_siren_is_suppressible(engine, audio_buffer):
+    """Test that siren can be suppressed like any other category."""
+    profile = Profile(
+        id="test-siren",
+        name="Suppress Siren",
+        description="Test siren suppression",
+        suppressions={"siren": True},
+    )
+    engine.set_profile(profile)
 
-    # Siren detected but below threshold
-    detections = {"siren": 0.6, "typing": 0.8}
-    status = engine._check_safety_override(detections)
-    assert not status.active
-
-    # Siren detected above threshold
-    detections = {"siren": 0.8, "typing": 0.5}
-    status = engine._check_safety_override(detections)
-    assert status.active
-    assert status.category == "siren"
-    assert status.confidence == 0.8
-
-    # Alarm detected above threshold
-    detections = {"alarm": 0.9, "wind": 0.3}
-    status = engine._check_safety_override(detections)
-    assert status.active
-    assert status.category == "alarm"
-    assert status.confidence == 0.9
-
-
-def test_safety_override_forces_passthrough(engine, audio_buffer):
-    """Test that safety override switches to passthrough and suppression stops."""
-    # Start with active suppression
-    focus = engine.profile_manager.get_profile("focus")
-    engine.set_profile(focus)
-
-    # Trigger safety override with siren
-    detections = {"siren": 0.85, "typing": 0.7}
-    engine.on_detection_update(detections)
-
-    # Should have switched to passthrough
-    assert engine.current_profile.name == "Passthrough"
-    assert engine.safety_status.active
-    assert engine.safety_status.category == "siren"
-
-    # Process audio - should NOT suppress
     result = engine.process_audio(audio_buffer, 16000)
-    assert np.array_equal(result, audio_buffer)
+
+    # Siren should be processed through suppressor (not bypassed)
+    assert len(engine._suppressor.suppress_calls) == 1
+    call = engine._suppressor.suppress_calls[0]
+    assert "siren" in call["suppress_categories"]
+    assert not np.array_equal(result, audio_buffer)
 
 
-def test_safety_override_clears(engine):
-    """Test that safety override clears when critical sound stops."""
-    # Activate safety override
-    detections = {"siren": 0.85}
-    engine.on_detection_update(detections)
-    assert engine.safety_status.active
+def test_alarm_is_suppressible(engine, audio_buffer):
+    """Test that alarm can be suppressed like any other category."""
+    profile = Profile(
+        id="test-alarm",
+        name="Suppress Alarm",
+        description="Test alarm suppression",
+        suppressions={"alarm": True, "typing": True},
+    )
+    engine.set_profile(profile)
 
-    # Clear siren - safety should clear
-    detections = {"siren": 0.3, "typing": 0.6}
-    engine.on_detection_update(detections)
-    assert not engine.safety_status.active
+    result = engine.process_audio(audio_buffer, 16000)
+
+    assert len(engine._suppressor.suppress_calls) == 1
+    call = engine._suppressor.suppress_calls[0]
+    assert "alarm" in call["suppress_categories"]
+    assert "typing" in call["suppress_categories"]
 
 
 def test_auto_mode_profile_switching(engine):
