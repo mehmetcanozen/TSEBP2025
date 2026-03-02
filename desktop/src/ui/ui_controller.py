@@ -152,16 +152,6 @@ class UIController:
             except Exception as e:
                 print(f"Error deleting profile: {e}")
     
-    def handle_safety_toggle(self, enabled: bool):
-        """
-        Handle safety override toggle
-        
-        Args:
-            enabled: Whether safety is enabled
-        """
-        if self.control_engine:
-            self.control_engine.safety_override.is_running = enabled
-    
     def handle_mute_all(self):
         """Handle mute all button"""
         self.handle_slider_change(0.0, 0.0, 0.0)

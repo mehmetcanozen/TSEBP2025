@@ -2,7 +2,7 @@
 Control Engine - Central coordinator for semantic noise suppression.
 
 Integrates detection, profile management, and suppression logic.
-Handles auto-mode, manual-mode, and safety overrides.
+Handles auto-mode and manual-mode.
 """
 
 from __future__ import annotations
@@ -29,14 +29,6 @@ class ControlMode(Enum):
     MANUAL = "manual"  # User manually selects profile
 
 
-class SafetyStatus:
-    """Safety override status."""
-    def __init__(self, active: bool = False, category: str = "", confidence: float = 0.0):
-        self.active = active
-        self.category = category
-        self.confidence = confidence
-
-
 class ControlEngine:
     """
     Central control logic for semantic noise suppression.
@@ -44,7 +36,6 @@ class ControlEngine:
     Responsibilities:
     - Coordinate detection → profile selection → suppression
     - Handle auto/manual mode switching
-    - Enforce safety overrides (siren/alarm always pass through)
     - Manage passthrough bypass optimization
     
     Usage:
@@ -74,14 +65,11 @@ class ControlEngine:
         
         self.mode = ControlMode.MANUAL
         self.current_profile: Optional[Profile] = None
-        self.safety_status = SafetyStatus()
-        self._pre_safety_profile: Optional[Profile] = None # For restoration after override
         
-        # Callbacks for UI updates (restored for backward compatibility)
+        # Callbacks for UI updates
         self.on_profile_changed: Optional[Callable[[Profile, str], None]] = None
         self.on_gains_changed: Optional[Callable[[Dict], None]] = None
         self.on_mode_changed: Optional[Callable[[ControlMode], None]] = None
-        self.on_safety_alert: Optional[Callable[[Dict], None]] = None
         self.on_detections_updated: Optional[Callable[[Dict], None]] = None
 
         # Thread safety
@@ -184,7 +172,6 @@ class ControlEngine:
                 audio=audio,
                 sample_rate=sample_rate,
                 suppress_categories=active_suppressions,
-                safety_check=True,  # Always enforce safety
             )
             return clean_audio
         except Exception as e:
@@ -206,50 +193,6 @@ class ControlEngine:
             # Trigger UI updates if callback registered
             if self.on_detections_updated:
                 self.on_detections_updated(detections)
-
-            # Check safety override first
-            safety = self._check_safety_override(detections)
-            was_safety_active = self.safety_status.active
-            
-            if safety.active:
-                self.safety_status = safety
-                logger.warning(
-                    f"SAFETY OVERRIDE: {safety.category} detected "
-                    f"(confidence: {safety.confidence:.2f})"
-                )
-                
-                # Trigger alert callback
-                if self.on_safety_alert:
-                    self.on_safety_alert({
-                        "category": safety.category,
-                        "confidence": safety.confidence
-                    })
-
-                # Force passthrough profile
-                passthrough = self.profile_manager.get_profile("default-passthrough")
-                if passthrough and self.current_profile != passthrough:
-                    logger.warning("Switching to Passthrough due to safety override")
-                    # Store previous profile only if we aren't already in override
-                    if not was_safety_active:
-                        self._pre_safety_profile = self.current_profile
-                    self.current_profile = passthrough
-                    if self.on_profile_changed:
-                        self.on_profile_changed(passthrough, "safety")
-                
-                return
-            else:
-                # Clear safety status if no longer active
-                if was_safety_active:
-                    logger.info("Safety override cleared")
-                    self.safety_status = SafetyStatus()
-                    
-                    # Restore previous profile if possible
-                    if self._pre_safety_profile:
-                        logger.info(f"Restoring profile: {self._pre_safety_profile.name}")
-                        self.current_profile = self._pre_safety_profile
-                        if self.on_profile_changed:
-                            self.on_profile_changed(self._pre_safety_profile, "restore")
-                        self._pre_safety_profile = None
             
             # Auto-mode profile switching
             if self.mode == ControlMode.AUTO:
@@ -262,27 +205,6 @@ class ControlEngine:
                     self.current_profile = new_profile
                     if self.on_profile_changed:
                         self.on_profile_changed(new_profile, "auto")
-
-    def _check_safety_override(self, detections: Dict[str, float]) -> SafetyStatus:
-        """
-        Check if safety override should be triggered.
-        
-        Returns:
-            SafetyStatus indicating if override is active
-        """
-        CRITICAL_CATEGORIES = ["siren", "alarm"]
-        OVERRIDE_THRESHOLD = 0.7
-        
-        for category in CRITICAL_CATEGORIES:
-            confidence = detections.get(category, 0.0)
-            if confidence >= OVERRIDE_THRESHOLD:
-                return SafetyStatus(
-                    active=True,
-                    category=category,
-                    confidence=confidence,
-                )
-        
-        return SafetyStatus(active=False)
 
     def _evaluate_auto_mode(self, detections: Dict[str, float]) -> Optional[Profile]:
         """
@@ -327,10 +249,7 @@ class ControlEngine:
                 "mode": self.mode.value,
                 "profile": self.current_profile.name if self.current_profile else None,
                 "profile_id": self.current_profile.id if self.current_profile else None,
-                "safety_active": self.safety_status.active,
-                "safety_category": self.safety_status.category,
-                "safety_confidence": self.safety_status.confidence,
             }
 
 
-__all__ = ["ControlEngine", "ControlMode", "SafetyStatus"]
+__all__ = ["ControlEngine", "ControlMode"]
