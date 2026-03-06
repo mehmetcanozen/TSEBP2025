@@ -37,14 +37,14 @@ graph LR
 
 ## 📂 Component Deep Dive
 
-### [semantic_detective.py](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/detection/semantic_detective.py)
+### [semantic_detective.py](../../../ai/ai_runtime/detection/semantic_detective.py)
 *   **The "Schmitt Trigger" (Hysteresis)**:
     - **Logic**: A sound must hit **0.7** confidence to turn "On", but only needs to drop below **0.4** to turn "Off".
     - **Why**: Imagine a dog barking far away. The AI confidence might jump between 0.45 and 0.55. Without hysteresis, the noise suppression would rapidly click on and off.
 *   **Majority Voting**:
     - **Logic**: We keep a history of the last 3 frames. A sound is "Stable" only if it was present in 2 out of those 3.
 
-### [waveformer_separator.py](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/separation/waveformer_separator.py)
+### [waveformer_separator.py](../../../ai/ai_runtime/separation/waveformer_separator.py)
 *   **Method**: `_build_query()`
 *   **Detail**: Translates semantic group names (e.g., "Computer_keyboard") into a 41-dimensional multi-hot vector.
 *   **Why**: Waveformer is a **Unified Architecture**. Instead of loading 41 different models, we load one model and "tell" it what to separate using these query vectors.
@@ -52,7 +52,7 @@ graph LR
 *   **Detail**: Preprocesses audio once (numpy→torch, resampling, GPU transfer) and batches multiple queries into a single `(N, C, T)` / `(N, Q)` forward pass.
 *   **Why**: Per-category separation requires one query per active category. Without batching, each pass repeats all preprocessing. Batching eliminates redundant work and exploits GPU parallelism.
 
-### [yamnet_to_waveformer.yaml](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/config/yamnet_to_waveformer.yaml)
+### [yamnet_to_waveformer.yaml](../../../ai/ai_runtime/config/yamnet_to_waveformer.yaml)
 *   **Logic**: This YAML bridges the 521 AudioSet classes to our 73 Waveformer target heads.
 *   **Heuristic Overrides**: Keyboard noise (`typing`) has a lower detection threshold than `wind` because keyboards produce quiet but consistent high-frequency energy that YAMNet often under-scores.
 

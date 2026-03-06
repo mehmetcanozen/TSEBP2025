@@ -17,7 +17,7 @@
 
 ## 📂 Component Deep Dive
 
-### [control_engine.py](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/profiles/control_engine.py)
+### [control_engine.py](../../../ai/ai_runtime/profiles/control_engine.py)
 *   **Method**: `process_audio()`
 *   **Logic**: 
     1. Check for **Passthrough** (no active suppressions).

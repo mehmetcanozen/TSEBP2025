@@ -28,6 +28,7 @@ print("Showing top 5 detected sounds every 0.5 seconds...\n")
 
 duration = 30
 sample_rate = 16000
+remaining = duration
 
 
 def audio_callback(indata, frames, time_info, status):

@@ -9,6 +9,8 @@ from .paths import (
     get_models_path,
     get_models_checkpoints_path,
     get_data_audio_path,
+    get_temp_export_path,
+    get_exports_onnx_path,
     setup_project_path,
 )
 
