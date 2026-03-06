@@ -12,8 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from desktop.src.profiles.control_engine import ControlEngine, ControlMode
-from desktop.src.profiles.profile_manager import Profile, AutoTrigger
+from ai.ai_runtime.profiles import ControlEngine, ControlMode, Profile, AutoTrigger
 
 
 class FakeSuppressor:

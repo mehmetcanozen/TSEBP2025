@@ -6,7 +6,7 @@ import customtkinter as ctk
 import psutil
 import threading
 from typing import Optional, Callable
-from theme import Theme, PADDING_NORMAL, FONT_SIZE_SMALL
+from desktop.src.ui.theme import Theme, PADDING_NORMAL, FONT_SIZE_SMALL
 
 
 class StatusBar(ctk.CTkFrame):

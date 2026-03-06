@@ -1,0 +1,81 @@
+categories:
+  speech:
+    indices: [0, 1, 2, 3, 4]  # Speech, Child speech, Conversation, Narration, Babbling
+    priority: medium
+    color: "#4CAF50"
+
+  wind:
+    indices: [277, 279]  # Wind, Wind noise (microphone)
+    priority: low
+    color: "#2196F3"
+
+  traffic:
+    indices: [294, 301, 321, 337]  # Vehicle, Car, Traffic noise, Engine
+    priority: medium
+    color: "#FF9800"
+
+  siren:
+    indices: [316, 317, 318, 319, 390, 391]  # Emergency vehicle, Police car, Ambulance, Fire engine, Siren, Civil defense siren
+    priority: medium
+    color: "#F44336"
+
+  alarm:
+    indices: [382, 389, 392, 393, 394]  # Alarm, Alarm clock, Buzzer, Smoke detector, Fire alarm
+    priority: medium
+    color: "#F44336"
+
+  typing:
+    indices: [378, 380]  # Typing, Computer keyboard
+    priority: low
+    color: "#9C27B0"
+
+  music:
+    # 16 distinct instruments mapped in yamnet_to_waveformer.yaml
+    indices: [132, 133, 134, 135, 137, 138, 139, 140, 148, 149, 156, 157, 159, 160, 163, 166, 167, 169, 172, 176, 182, 184, 186, 188, 189, 190, 191, 192, 193]
+    priority: medium
+    color: "#E91E63"
+
+  nature:
+    indices: [277, 280, 281, 282, 283, 284, 285]  # Wind, Thunderstorm, Water, Rain
+    priority: low
+    color: "#8BC34A"
+
+  appliances:
+    indices: [362, 363, 371, 367]  # Microwave oven, Blender, Vacuum cleaner, Hair dryer
+    priority: low
+    color: "#607D8B"
+
+  misc:
+    indices: [62, 42, 353, 13, 14, 44, 57, 357, 373, 375, 355, 474]  # Applause, Cough, Knock, Laughter, etc.
+    priority: low
+    color: "#795548"
+
+  pets:
+    indices: [67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]  # Dog, Bark, Cat, Meow, Purr
+    priority: low
+    color: "#CDDC39"
+
+  phone:
+    indices: [383, 384, 385, 386, 387, 388]  # Telephone, Ringtone, Dial tone
+    priority: medium
+    color: "#9E9E9E"
+
+  chimes:
+    indices: [195, 196, 197, 198, 200, 201, 202]  # Bell, Church bell, Chime
+    priority: low
+    color: "#FFEB3B"
+
+  explosions:
+    indices: [420, 421, 422, 423, 424, 425, 426, 427, 430]  # Explosion, Gunshot, Fireworks, Boom
+    priority: low
+    color: "#F44336"
+
+  glass_impact:
+    indices: [435, 436, 437, 463, 464]  # Glass, Shatter, Smash
+    priority: low
+    color: "#03A9F4"
+
+  bodily_functions:
+    indices: [52, 53, 54, 55]  # Stomach rumble, Burping, Hiccup, Fart
+    priority: low
+    color: "#8D6E63"

@@ -12,7 +12,7 @@ graph TD
     Det --> Ctrl[Control Engine / Profile Manager]
     Ctrl --> Sep
     Sep --> Boost[Adaptive Stem Boosting]
-    Boost --> Agg[Two-Stage Masking Pipeline]
+    Boost --> Agg[Decision-Directed Wiener Filter]
     Agg --> Clean[Clean Audio Output]
     Clean --> Speaker[Speaker / Virtual Mic]
 

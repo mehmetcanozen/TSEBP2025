@@ -2,19 +2,27 @@
 Main Application - Semantic Mixer desktop application
 """
 
+import sys
+from pathlib import Path
+
+# Ensure project root is on path for package imports
+_root = Path(__file__).resolve().parents[3]
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
 import customtkinter as ctk
 import tkinter as tk
 from typing import Optional
-from pathlib import Path
 
-from theme import Theme, PADDING_NORMAL, CORNER_RADIUS
-from mode_frame import ModeFrame
-from detection_frame import DetectionFrame
-from mixer_frame import MixerFrame
-from safety_frame import SafetyFrame
-from status_bar import StatusBar
-from shortcuts import KeyboardShortcuts
-from ui_controller import UIController
+from desktop.src.ui.theme import Theme, PADDING_NORMAL, CORNER_RADIUS
+from desktop.src.ui.components import (
+    ModeFrame,
+    DetectionFrame,
+    MixerFrame,
+    StatusBar,
+)
+from desktop.src.ui.shortcuts import KeyboardShortcuts
+from desktop.src.ui.ui_controller import UIController
 
 
 class SaveProfileDialog(ctk.CTkToplevel):
@@ -111,7 +119,6 @@ class SemanticMixerApp(ctk.CTk):
         self.mode_frame: Optional[ModeFrame] = None
         self.detection_frame: Optional[DetectionFrame] = None
         self.mixer_frame: Optional[MixerFrame] = None
-        self.safety_frame: Optional[SafetyFrame] = None
         self.status_bar: Optional[StatusBar] = None
         
         # Handle window close
@@ -143,10 +150,6 @@ class SemanticMixerApp(ctk.CTk):
         # Mixer frame
         self.mixer_frame = MixerFrame(main_frame, theme_name=self.theme_name)
         self.mixer_frame.pack(fill='both', expand=True, pady=10)
-        
-        # Safety frame
-        self.safety_frame = SafetyFrame(main_frame, theme_name=self.theme_name)
-        self.safety_frame.pack(fill='x', pady=10)
         
         # Status bar
         self.status_bar = StatusBar(self, theme_name=self.theme_name)
@@ -180,17 +183,11 @@ class SemanticMixerApp(ctk.CTk):
             self.mixer_frame.on_mute_all = self._on_mute_all
             self.mixer_frame.on_passthrough = self._on_passthrough
         
-        # Safety frame callbacks
-        if self.safety_frame:
-            self.safety_frame.on_safety_toggle = self.ui_controller.handle_safety_toggle
-        
         # UI controller callbacks
         self.ui_controller.on_profile_list_update = self._on_profile_list_update
         self.ui_controller.on_mode_changed = self._on_mode_changed
         self.ui_controller.on_gains_update = self._on_gains_update
         self.ui_controller.on_detections_update = self._on_detections_update
-        self.ui_controller.on_safety_alert = self._on_safety_alert
-        self.ui_controller.on_safety_clear = self._on_safety_clear
     
     def _initialize_ui_state(self):
         """Initialize UI with current controller state"""
@@ -256,14 +253,6 @@ class SemanticMixerApp(ctk.CTk):
     def _on_detections_update(self, detections: dict):
         """Handle detection update"""
         self.detection_frame.update_detections(detections)
-    
-    def _on_safety_alert(self, category: str, confidence: float):
-        """Handle safety alert"""
-        self.safety_frame.show_alert(category, confidence)
-    
-    def _on_safety_clear(self):
-        """Handle safety alert clear"""
-        self.safety_frame.clear_alert()
     
     def on_closing(self):
         """Handle window close"""

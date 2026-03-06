@@ -39,17 +39,19 @@ graph LR
 
 ## 📂 Component Deep Dive
 
-### [export_onnx.py](file:///c:/SoftwareProjects/TSEBP2025/export/export_onnx.py)
+### [export_onnx.py](../../../ai/export/export_onnx.py)
 *   **The "Static Shape" Constraint**:
     - **Logic**: We hard-export the model with exactly `44100 * 3` samples.
     - **Why**: While PyTorch is flexible, mobile hardware accelerators (like Apple's CoreML or Android's NNAPI) are optimized for "Static Graphs". If the input size changes every time, the hardware must re-allocate memory, destroying real-time performance.
+*   **Boundary Update**:
+    - Export scripts now import model runtime from `ai/ai_runtime/separation/`.
 
-### [WaveformerInferenceService.ts](file:///c:/SoftwareProjects/TSEBP2025/mobile-test/services/WaveformerInferenceService.ts) (Mobile)
+### [WaveformerInferenceService.ts](../../../mobile-test/services/WaveformerInferenceService.ts) (Mobile)
 *   **The "Chunked Inference" Strategy**:
     - **Logic**: Audio is sliced into 3-second blocks. Each block is processed, then the resulting PCM data is appended to a staging file.
     - **Why**: A 10-minute recording can be 100MB. Attempting to run deep learning on that all at once would crash most mobile apps with an **OOM (Out of Memory)** error.
 
-### [useSuppressionDemo.ts](file:///c:/SoftwareProjects/TSEBP2025/mobile-test/hooks/useSuppressionDemo.ts) (Mobile)
+### [useSuppressionDemo.ts](../../../mobile-test/hooks/useSuppressionDemo.ts) (Mobile)
 *   **Logic**: Manages the the `ready` -> `recording` -> `processed` UI state. 
 *   **Safety**: Uses the RMS energy of the recording to provide a visual "Waveform" to the user, ensuring they know the mic is actually working before they start the heavy processing task.
 

@@ -19,9 +19,9 @@ Instead of combining all suppression targets into a single multi-hot Waveformer 
 
 *   **Batched Inference**: Multiple query vectors are batched into a single GPU forward pass via `separate_multi_query()`, eliminating redundant preprocessing (resampling, device transfer).
 *   **Adaptive Stem Boosting**: After separation, each stem's RMS energy is compared to the mix. Stems weaker than 10% of the mix are boosted by up to 4× to compensate for Waveformer's under-extraction of quiet sounds.
-*   **Two-Stage Spectral Masking**: The boosted stems are summed and processed through a spectral ratio mask (Stage 1) and a targeted Wiener post-filter on noise-heavy bins (Stage 2).
+*   **Decision-Directed Wiener Filter**: The boosted stems are summed and processed through an Ephraim-Malah Decision-Directed mask. It tracks a priori SNR across time to eliminate musical noise without spectral blurring.
 
-`Clean = Original × SpectralMask(Unwanted, Original)`
+`Clean = Original × DecisionDirectedWiener(Unwanted, Original)`
 
 ## 4. Latency Management
 - **Inference Latency**: Target < 50ms per model.

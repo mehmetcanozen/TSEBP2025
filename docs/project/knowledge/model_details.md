@@ -14,7 +14,7 @@ The Semantic Noise Mixer leverages three distinct neural network architectures t
 - **Source**: TensorFlow Hub (Pre-trained on AudioSet).
 - **Classes**: 521 semantic categories.
 - **Inference**: Runs on 0.975s chunks with a hop of 0.48s.
-- **Output**: Probabilities across all classes, which are then mapped to the focus categories defined in `shared/mappings`.
+- **Output**: Probabilities across all classes, which are then mapped to the focus categories defined in `ai/ai_runtime/config`.
 
 ## 3. Native UNet (Mobile-Optimized)
 - **Purpose**: Mobile-friendly noise suppression for the `mobile-test` app.
