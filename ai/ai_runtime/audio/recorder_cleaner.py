@@ -102,10 +102,11 @@ def main() -> None:
                 cat_default = engine.suppressor.category_map[cat].get(
                     "detection_threshold", 0.5
                 )
+                # Use more sensitive (lower) threshold; -1 (always suppress) passes through
                 effective = (
                     cat_default
-                    if cat_default < args.threshold
-                    else max(args.threshold, cat_default)
+                    if cat_default < 0
+                    else min(args.threshold, cat_default)
                 )
                 engine.suppressor.category_map[cat]["detection_threshold"] = effective
                 logger.info(
