@@ -4,7 +4,7 @@ Mode Frame - Control mode selection and profile management
 
 import customtkinter as ctk
 from typing import Callable, Optional, List
-from theme import Theme, PADDING_NORMAL, CORNER_RADIUS, FONT_SIZE_HEADING, FONT_SIZE_SMALL
+from desktop.src.ui.theme import Theme, PADDING_NORMAL, CORNER_RADIUS, FONT_SIZE_HEADING, FONT_SIZE_SMALL
 
 
 class ModeFrame(ctk.CTkFrame):

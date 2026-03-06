@@ -3,7 +3,7 @@
 This document details the mapping between YAMNet (Semantic Detection) and Waveformer (Signal Separation).
 
 ## Core Mapping Logic
-The system uses `shared/mappings/yamnet_to_waveformer.yaml` to bridge the two models. YAMNet indices indicate *what* is present, and Waveformer targets indicate *what* can be removed.
+The system uses `ai/ai_runtime/config/yamnet_to_waveformer.yaml` to bridge the two models. YAMNet indices indicate *what* is present, and Waveformer targets indicate *what* can be removed.
 
 Most categories are user-controllable suppression targets. However, a category can only be suppressed if it has a corresponding Waveformer target (see the table below and `yamnet_to_waveformer.yaml`). As of now, Siren and Alarm do not have Waveformer targets and therefore cannot be directly suppressed via Waveformer.
 

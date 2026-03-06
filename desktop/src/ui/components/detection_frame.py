@@ -4,7 +4,7 @@ Detection Frame - Display real-time detected sounds
 
 import customtkinter as ctk
 from typing import Dict, Optional
-from theme import Theme, PADDING_NORMAL, CORNER_RADIUS, FONT_SIZE_HEADING, FONT_SIZE_SMALL
+from desktop.src.ui.theme import Theme, PADDING_NORMAL, CORNER_RADIUS, FONT_SIZE_HEADING, FONT_SIZE_SMALL
 
 
 class DetectionCard(ctk.CTkFrame):

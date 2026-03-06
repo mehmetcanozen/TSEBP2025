@@ -2,9 +2,9 @@ name: Python CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, master]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, master]
 
 jobs:
   test:
@@ -19,18 +19,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd TSEBP2025/training
-          pip install -r requirements.txt
+          pip install -r desktop/requirements.txt
+          pip install -r ai/training/requirements.txt
           pip install pytest pytest-cov
           
       - name: Run tests
         run: |
-          cd TSEBP2025/training
-          pytest tests/ --cov=. --cov-report=xml || true
+          pytest --cov=ai --cov=desktop --cov-report=xml || true
           
       - name: Upload coverage
         uses: codecov/codecov-action@v3
         with:
-          file: TSEBP2025/training/coverage.xml
+          file: coverage.xml
           fail_ci_if_error: false
 

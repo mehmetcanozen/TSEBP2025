@@ -39,10 +39,12 @@ graph LR
 
 ## 📂 Component Deep Dive
 
-### [export_onnx.py](file:///c:/SoftwareProjects/TSEBP2025/export/export_onnx.py)
+### [export_onnx.py](file:///c:/SoftwareProjects/TSEBP2025/ai/export/export_onnx.py)
 *   **The "Static Shape" Constraint**:
     - **Logic**: We hard-export the model with exactly `44100 * 3` samples.
     - **Why**: While PyTorch is flexible, mobile hardware accelerators (like Apple's CoreML or Android's NNAPI) are optimized for "Static Graphs". If the input size changes every time, the hardware must re-allocate memory, destroying real-time performance.
+*   **Boundary Update**:
+    - Export scripts now import model runtime from `ai/ai_runtime/separation/`.
 
 ### [WaveformerInferenceService.ts](file:///c:/SoftwareProjects/TSEBP2025/mobile-test/services/WaveformerInferenceService.ts) (Mobile)
 *   **The "Chunked Inference" Strategy**:

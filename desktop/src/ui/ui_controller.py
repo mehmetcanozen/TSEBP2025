@@ -5,20 +5,14 @@ UI Controller - Bridge between UI and backend audio processing
 import threading
 import queue
 from typing import Optional, Callable, Dict, List
-from enum import Enum
+
+from ai.ai_runtime.profiles import ControlMode
 
 
 class DetectionUpdate:
     """Detection update message"""
     def __init__(self, detections: Dict[str, float]):
         self.detections = detections
-
-
-class SafetyAlert:
-    """Safety alert message"""
-    def __init__(self, category: str, confidence: float):
-        self.category = category
-        self.confidence = confidence
 
 
 class UIController:
@@ -34,14 +28,11 @@ class UIController:
         # Communication queues
         self.ui_event_queue = queue.Queue()
         self.detection_queue = queue.Queue()
-        self.safety_queue = queue.Queue()
         
         # Callbacks from UI components
         self.on_profile_list_update: Optional[Callable[[List[tuple]], None]] = None
         self.on_mode_changed: Optional[Callable[[str], None]] = None
         self.on_detections_update: Optional[Callable[[Dict], None]] = None
-        self.on_safety_alert: Optional[Callable[[str, float], None]] = None
-        self.on_safety_clear: Optional[Callable[[], None]] = None
         self.on_gains_update: Optional[Callable[[float, float, float], None]] = None
         
         # State
@@ -67,7 +58,6 @@ class UIController:
         self.control_engine.on_profile_changed = self._on_profile_changed
         self.control_engine.on_mode_changed = self._on_mode_changed
         self.control_engine.on_gains_changed = self._on_gains_changed
-        self.control_engine.on_safety_alert = self._on_safety_alert
         self.control_engine.on_detections_updated = self._on_detections_updated
         
         # Send initial profile list
@@ -96,7 +86,7 @@ class UIController:
         if self.control_engine:
             # Switch to manual mode if not already
             if self.current_mode != 'manual':
-                self.control_engine.set_mode('manual')
+                self.control_engine.set_mode(ControlMode.MANUAL)
             
             # Set gains
             self.control_engine.set_gains(speech, noise, events)
@@ -109,7 +99,6 @@ class UIController:
             mode: 'auto' or 'manual'
         """
         if self.control_engine:
-            from control_engine import ControlMode
             mode_enum = ControlMode.AUTO if mode == 'auto' else ControlMode.MANUAL
             self.control_engine.set_mode(mode_enum)
             self.current_mode = mode
@@ -159,7 +148,7 @@ class UIController:
     def handle_passthrough(self):
         """Handle passthrough button"""
         self.handle_slider_change(1.0, 1.0, 1.0)
-    
+
     # Backend Event Handlers (called by control engine)
     
     def _on_profile_changed(self, profile, reason: str):
@@ -169,7 +158,6 @@ class UIController:
     
     def _on_mode_changed(self, mode):
         """Called when mode changes"""
-        from control_engine import ControlMode
         mode_str = 'auto' if mode == ControlMode.AUTO else 'manual'
         self.current_mode = mode_str
         if self.on_mode_changed:
@@ -183,15 +171,6 @@ class UIController:
                 gains.get('noise', 1.0),
                 gains.get('events', 1.0)
             )
-    
-    def _on_safety_alert(self, alert_info: Dict):
-        """Called when safety alert triggers"""
-        if alert_info and alert_info.get('show_banner'):
-            if self.on_safety_alert:
-                self.on_safety_alert(
-                    alert_info.get('category', 'unknown'),
-                    alert_info.get('confidence', 0.0)
-                )
     
     def _on_detections_updated(self, detections: Dict):
         """Called when detections update"""
@@ -222,16 +201,6 @@ class UIController:
                     if isinstance(update, DetectionUpdate):
                         self._on_detections_updated(update.detections)
                 
-                # Check for safety alerts
-                if not self.safety_queue.empty():
-                    alert = self.safety_queue.get_nowait()
-                    if isinstance(alert, SafetyAlert):
-                        self._on_safety_alert({
-                            'category': alert.category,
-                            'confidence': alert.confidence,
-                            'show_banner': True
-                        })
-            
             except queue.Empty:
                 pass
             except Exception as e:

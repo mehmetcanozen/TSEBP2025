@@ -1,0 +1,32 @@
+# Export-specific dependencies (ONNX / TFLite).
+# IMPORTANT: Use a dedicated venv for export. TensorFlow 2.15 and numpy<2 conflict with
+# the desktop/training stack (TF 2.13+, numpy>=1.24). The main setup_env.ps1 installs
+# a subset of export tools into the shared venv; for full ONNX/TFLite export workflows:
+#
+#   python -m venv .venv-export
+#   .venv-export\Scripts\Activate.ps1
+#   pip install -r ai/export/requirements.txt
+#
+# Then run export scripts from that venv.
+
+# Core ML runtimes used by exporters
+torch
+numpy<2
+tensorflow==2.15.0
+
+# ONNX / TFLite export toolchain
+onnx==1.16.0
+onnxruntime
+onnx-tf
+onnx2tf
+tensorflow-probability==0.23.0
+ai-edge-litert
+
+# Optional ONNX graph tooling / simplification
+onnx-graphsurgeon
+sng4onnx
+onnxsim
+simple_onnx_processing_tools
+onnxscript
+toposort
+

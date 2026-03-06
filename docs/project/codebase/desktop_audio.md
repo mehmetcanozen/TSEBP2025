@@ -44,26 +44,26 @@ graph TD
 
 ## 📂 Component Deep Dive
 
-### [audio_io.py](file:///c:/SoftwareProjects/TSEBP2025/desktop/src/audio/audio_io.py)
+### [audio_io.py](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/audio/audio_io.py)
 *   **Method**: `set_high_priority()`
 *   **Logic**: Uses `psutil` to set `psutil.HIGH_PRIORITY_CLASS`.
 *   **Why**: This makes the Windows scheduler prioritize our audio buffers over background tasks like Windows Update, preventing pops/clicks during heavy CPU load.
 
-### [gain_smoother.py](file:///c:/SoftwareProjects/TSEBP2025/desktop/src/audio/gain_smoother.py)
+### [gain_smoother.py](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/audio/gain_smoother.py)
 *   **Heuristic**: `max(smoothed, self.noise_floor)`
 *   **Detail**: We maintain a **10% noise floor** (`0.1`). 
 *   **Why**: Total silence (0.0) sounds "dead" and highlights processing artifacts. Keeping 10% of the original atmosphere makes the transition between "loud noise" and "suppressed noise" feel natural to the human ear.
 
-### [semantic_suppressor.py](file:///c:/SoftwareProjects/TSEBP2025/desktop/src/audio/semantic_suppressor.py)
+### [semantic_suppressor.py](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/suppression/semantic_suppressor.py)
 *   **Per-Category Separation**: Each suppression category gets a dedicated Waveformer query to prevent loud sources from dominating quiet targets. Uses `separate_multi_query()` for batched GPU inference.
 *   **Adaptive Stem Boosting**: When a category's separated stem is under-extracted (< 10% of mix energy), it is boosted by up to 4× to make the spectral ratio mask effective.
-*   **Two-Stage Spectral Masking**: Stage 1 applies a ratio mask with adaptive floor; Stage 2 uses a targeted Wiener post-filter on noise-heavy bins only.
+*   **Decision-Directed Wiener Filter**: Uses the Ephraim-Malah (1984) algorithm to track a priori SNR across time, eliminating musical noise without blurring frequency bins. Includes a perceptual A-weighting floor.
 
 > [!TIP]
-> Use the [profiler.py](file:///c:/SoftwareProjects/TSEBP2025/desktop/src/audio/profiler.py) to debug "Buffer Underruns". If the `waveformer_separation` step takes longer than 20ms consistently, the audio will stutter.
+> Use the [profiler.py](file:///c:/SoftwareProjects/TSEBP2025/ai/ai_runtime/profiles/profiler.py) to debug "Buffer Underruns". If the `waveformer_separation` step takes longer than 20ms consistently, the audio will stutter.
 
 ---
 
 ### 🛡️ Safety & Stability
-- **`DetectionThread`**: Runs YAMNet on a separate cadence (default 3s).
+- **`DetectionThread`**: Runs YAMNet on a separate cadence (default 3s) from `ai/ai_runtime/detection`.
 - **Adaptive Duty**: Automatically sleeps longer if the battery is low (checks `psutil.sensors_battery`).

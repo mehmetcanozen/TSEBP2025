@@ -52,27 +52,27 @@ The current focus is a **desktop-first** implementation with a validated **React
 From the repo root:
 
 ```powershell
-# Option A: Use the setup script (installs full desktop stack)
-.\scripts\setup_env.ps1
-.\desktop\.venv\Scripts\Activate.ps1
+# Option A: Use the shared setup script (AI + desktop stack)
+.\shared\scripts\setup_env.ps1
+.\.venv\Scripts\Activate.ps1
 
 # Option B: Manual venv + requirements
 python -m venv .\.venv
 .\.venv\Scripts\Activate.ps1
 pip install -r desktop\requirements.txt
-pip install -r training\requirements.txt
-pip install -r export\requirements.txt
+pip install -r ai\training\requirements.txt
+pip install -r ai\export\requirements.txt
 ```
 
 ### 2. Download models & Foundational Weights
 
 ```powershell
 # Basic models (YAMNet, Waveformer, DeepFilterNet)
-python scripts\download_models.py
+python ai\scripts\setup\download_models.py
 
 # Foundational models (AudioSep weights & CLAP)
 # Note: This requires ~2GB of space and additional ML dependencies
-python desktop\scripts\install_audiosep.py
+python ai\scripts\setup\install_audiosep.py
 ```
 
 ### 3. Record and clean audio (recommended path)
@@ -81,16 +81,16 @@ Record from your microphone, apply semantic suppression, and save stems:
 
 ```powershell
 # 10 seconds, suppress typing only
-python -m desktop.src.audio.recorder_cleaner `
+python -m ai.ai_runtime.audio.recorder_cleaner `
   --duration 10 `
   --suppress typing `
-  --output samples\processed\session_clean.wav
+  --output ai\data\audio\processed\session_clean.wav
 
 # Suppress multiple categories
-python -m desktop.src.audio.recorder_cleaner `
+python -m ai.ai_runtime.audio.recorder_cleaner `
   --duration 10 `
   --suppress typing,wind `
-  --output samples\processed\session_clean.wav
+  --output ai\data\audio\processed\session_clean.wav
 ```
 
 Outputs (filenames may vary based on `--output`):
@@ -102,21 +102,21 @@ Outputs (filenames may vary based on `--output`):
 
 ```powershell
 # Default focus-style behavior (suppress typing)
-python desktop\scripts\demo_custom_realtime.py --suppress typing
+python ai\scripts\demos\demo_custom_realtime.py --suppress typing
 
 # If your mic or headset heavily pre-filters noise, lower the threshold:
-python desktop\scripts\demo_custom_realtime.py --suppress typing --threshold 0.03
+python ai\scripts\demos\demo_custom_realtime.py --suppress typing --threshold 0.03
 
 # List available categories and options
-python desktop\scripts\demo_custom_realtime.py --help
+python ai\scripts\demos\demo_custom_realtime.py --help
 ```
 
 ### 5. Process existing WAV files
 
 ```powershell
-python -m desktop.src.batch.batch_processor `
-  --input samples\audio\keyboard.wav `
-  --output samples\processed\keyboard_clean.wav `
+python -m ai.ai_runtime.batch.batch_processor `
+  --input ai\data\audio\raw\keyboard.wav `
+  --output ai\data\audio\processed\keyboard_clean.wav `
   --suppress typing `
   --threshold 0.3
 ```
@@ -151,25 +151,21 @@ All categories are fully suppressible via profiles and command-line options (for
 TSEBP2025/
 ├── desktop/
 │   ├── src/
-│   │   ├── audio/        # Real-time suppression, recorder/cleaner, buffers
-│   │   ├── profiles/     # Profile manager, control engine, safety logic
-│   │   └── batch/        # Offline batch processor
-│   ├── scripts/          # Demo and diagnostic scripts
+│   │   └── profiles/     # Profile manager, control engine, safety logic
 │   └── requirements.txt  # Desktop runtime stack
-├── training/
-│   ├── models/           # Waveformer wrapper and related code
-│   ├── configs/          # Training/eval configuration
-│   └── requirements.txt  # Training and metrics stack
-├── export/
-│   ├── export_onnx.py    # PyTorch → ONNX export
-│   ├── export_tflite.py  # ONNX → TFLite export (UNet-based model)
-│   └── requirements.txt  # ONNX/TFLite toolchain
-├── models/               # Downloaded checkpoints and exports
+├── ai/
+│   ├── ai_runtime/       # Canonical AI runtime (detection/separation/suppression, config/)
+│   ├── training/         # Training configs and training dependency set
+│   ├── export/           # PyTorch → ONNX/TFLite export factory
+│   ├── scripts/          # AI scripts (setup/, demos/, diagnostics/)
+│   └── tests/            # AI tests (runtime/, integration/, manual/)
+├── ai/models/            # Downloaded checkpoints and exports
+├── ai/data/audio/        # Raw and processed audio datasets
 ├── mobile/               # Main React Native app (future integration target)
 ├── mobile-test/          # Self-contained Expo testbed for TFLite pipeline
-├── samples/              # Input and processed WAV files
 ├── docs/                 # Additional documentation and test notes
-└── scripts/              # Environment setup, model download, utilities
+└── shared/
+    └── scripts/         # Shared setup (e.g. setup_env.ps1 for .venv)
 ```
 
 ---
@@ -180,34 +176,34 @@ TSEBP2025/
 
 - **Purpose**: Desktop runtime, demos, and tests for the real-time suppression engine.
 - **Key modules**:
-  - `src/audio/semantic_suppressor.py` – core semantic suppression engine. Glues together semantic detection and Waveformer separation, implements per-category separation with adaptive stem boosting and two-stage spectral masking, and loads the YAMNet → Waveformer mapping.
-  - `src/audio/recorder_cleaner.py` – record-from-mic + suppress + write stems (original/clean/noise) with CLI options for duration, categories, and aggressiveness.
-  - `src/audio/latency_profiler.py`, `src/audio/profiler.py`, `src/audio/profile_performance.py` – operation-level timing and JSON export for throughput/latency analysis.
-  - `src/audio/ring_buffer.py`, `src/audio/detection_thread.py`, `src/audio/audio_io.py` – low-level pieces that keep streaming audio stable and decoupled from heavier model inference.
-  - `src/profiles/profile_manager.py` – loads/stores profiles from JSON, including custom user profiles.
+  - `ai/ai_runtime/suppression/semantic_suppressor.py` – core semantic suppression engine. Glues together semantic detection and Waveformer separation, implements per-category separation with adaptive stem boosting and two-stage spectral masking, and loads the YAMNet → Waveformer mapping.
+  - `ai/ai_runtime/audio/recorder_cleaner.py` – record-from-mic + suppress + write stems (original/clean/noise) with CLI options for duration, categories, and aggressiveness.
+  - `ai/ai_runtime/audio/latency_profiler.py`, `ai/ai_runtime/profiles/profiler.py`, `ai/scripts/diagnostics/profile_performance.py` – operation-level timing and JSON export for throughput/latency analysis.
+  - `ai/ai_runtime/audio/ring_buffer.py`, `ai/ai_runtime/detection/detection_thread.py`, `ai/ai_runtime/audio/audio_io.py` – low-level pieces that keep streaming audio stable and decoupled from heavier model inference.
+  - `ai/ai_runtime/profiles/profile_manager.py` – loads/stores profiles from JSON, including custom user profiles.
   - `src/profiles/control_engine.py` – central logic for auto/manual modes, applying profiles, and enforcing safety rules.
-  - `src/batch/batch_processor.py` – offline processor for existing WAV files; uses the same suppression logic as the live path.
-  - `scripts/demo_custom_realtime.py` – primary realtime demo with `--suppress`, `--threshold`, and helper flags.
-  - `scripts/demo_realtime.py`, `scripts/demo_debug_realtime.py`, `scripts/show_yamnet_detections.py` – debugging/visualization helpers.
+  - `ai/ai_runtime/batch/batch_processor.py` – offline processor for existing WAV files; uses the same suppression logic as the live path.
+  - `ai/scripts/demos/demo_custom_realtime.py` – primary realtime demo with `--suppress`, `--threshold`, and helper flags.
+  - `ai/scripts/demos/demo_realtime.py`, `ai/scripts/demos/demo_debug_realtime.py`, `ai/scripts/diagnostics/show_yamnet_detections.py` – debugging/visualization helpers.
   - `tests/` + `test_*` scripts – pytest tests and script-level smoke tests for end-to-end behavior.
 
-### `training`
+### `ai/training`
 
 - **Purpose**: Training, fine-tuning, and evaluation for the models used by the mixer.
 - **Key modules**:
-  - `models/audio_mixer.py` – defines `WaveformerSeparator`, the inference wrapper that:
+  - `ai/ai_runtime/separation/waveformer_separator.py` – defines `WaveformerSeparator`, the inference wrapper that:
     - Loads Waveformer configs and checkpoints.
     - Resamples audio to the model’s sample rate.
     - Produces separated stems in a shape that the desktop code expects.
-  - `models/semantic_detective.py` – YAMNet-based detector that:
+  - `ai/ai_runtime/detection/semantic_detective.py` – YAMNet-based detector that:
     - Runs classification on windows of audio.
     - Aggregates/confidence-smooths predictions.
     - Produces semantic labels used by the control engine.
-  - `models/Waveformer/` – upstream Waveformer project (configs, data loaders, training scripts, experiments).
-  - `configs/yamnet_class_map.yaml` – mapping from raw YAMNet indices to the intermediate semantic categories used in `shared/mappings`.
+  - `ai/models/Waveformer/` – upstream Waveformer project (configs, data loaders, training scripts, experiments).
+  - `ai/ai_runtime/config/yamnet_class_map.yaml` – canonical mapping from raw YAMNet indices to semantic categories.
   - `requirements.txt` – full training + metrics + visualization stack.
 
-### `export`
+### `ai/export`
 
 - **Purpose**: Model export “factory” for desktop and mobile formats.
 - **Key modules**:
@@ -219,25 +215,34 @@ TSEBP2025/
     - Runs the ONNX exporter.
     - Calls `onnx2tf` via `subprocess.run(...)`.
     - Moves the generated `model_float32.tflite` into the configured output location (for example the mobile assets directory).
-  - `requirements.txt` – dependencies for export only (does not need to be installed in the main desktop venv unless you are actively exporting).
+  - `requirements.txt` – dependencies for export only. **Use a separate venv** for full ONNX/TFLite export (TF 2.15, numpy<2 conflict with desktop/training). See `ai/export/requirements.txt` header.
 
-### `shared`
+### `ai/ai_runtime/config`
 
-- **Purpose**: Cross-cutting configuration and profiles used by multiple components.
+- **Purpose**: Canonical config (YAMNet mappings, profile defaults, schemas).
 - **Key files**:
-  - `mappings/yamnet_to_waveformer.yaml` – the primary mapping from YAMNet indices into semantic groups such as `typing`, `wind`, `traffic`, `siren`, `alarm`, etc. This is where class IDs were corrected based on empirical detection (for example for typing).
-  - `profiles/default_profiles.json` – pre-defined profiles such as focus/office/commute that:
-    - Specify which semantic categories to suppress.
-    - Set default aggressiveness and thresholds.
+  - `yamnet_class_map.yaml`, `yamnet_to_waveformer.yaml` – YAMNet category mappings.
+  - `default_profiles.json` – pre-defined profiles (focus/office/commute) specifying suppressions and gains.
+  - `profile_schema.json` – JSON schema for profile validation.
 
-### `scripts`
+### `shared/scripts`
 
-- **Purpose**: Utility scripts that sit at the repo root.
+- **Purpose**: Shared tooling used by AI and desktop.
 - **Key scripts**:
-  - `setup_env.ps1` – creates and populates `desktop\.venv` with a known-good stack on Windows (CUDA-enabled PyTorch, audio libs, TensorFlow, ONNX/TFLite tooling, etc.).
-  - `download_models.py` – pulls pretrained checkpoints and unpacks them into `models/` and `training/models/Waveformer/experiments/`.
-  - `test_inference.py` – simple end-to-end check that the core models can be imported and executed.
-  - `sample_noise.wav`, `sample_waveformer_out.wav` – audio samples for quick validation.
+  - `setup_env.ps1` – creates and populates `.venv` at project root with the full stack (AI + desktop) on Windows (CUDA-enabled PyTorch, audio libs, TensorFlow, ONNX/TFLite tooling, etc.).
+
+### `ai/scripts`
+
+- **Purpose**: AI utility scripts for downloads and smoke checks.
+- **Key scripts**:
+  - `setup/download_models.py` – pulls pretrained checkpoints and unpacks them into `ai/models/` (including `ai/models/Waveformer/experiments/`).
+
+### `ai/tests`
+
+- **Purpose**: AI-owned automated tests and smoke-style validation modules.
+- **Key modules**:
+  - `test_audio.py`, `test_detection_thread.py`, `test_waveformer_separator.py`, `test_suppression_quality.py` – core AI runtime behavior tests.
+  - `test_inference.py`, `test_df.py`, `test_system.py` – validation-focused smoke helpers kept under test ownership.
 
 ### `mobile` and `mobile-test`
 
