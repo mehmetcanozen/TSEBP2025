@@ -63,8 +63,9 @@ The system groups 500+ YAMNet classes into actionable categories. You can contro
 | `misc` | Coughing, laughter, sneezing, keys jangling. |
 
 ### Tuning Parameters
-- **`--threshold [0.0-1.0]`**: Sensitivity. Lower values (e.g., `0.03`) make the detector more aggressive.
-- **`--aggressiveness [1.0-4.0]`**: Determines how "deeply" to strip the noise. `1.0` is natural, `4.0` is total erasure.
+- **`--threshold [0.0-1.0]`**: Detection sensitivity. Lower values make the detector more aggressive. Categories like typing and pets use `-1` (always suppress when requested).
+- **`--aggressiveness [1.0-2.0]`**: Suppression strength. Default `1.5`. Higher values strip noise more deeply; typing and pets use per-category overrides (1.8, 1.6).
+- **`--separation-fail-ratio [0.85-0.95]`**: Bypass suppression when separation fails (unwanted ≈ mix). Default `0.90`.
 
 ---
 
@@ -78,6 +79,9 @@ Process existing audio files with maximum accuracy.
 ```bash
 # Example: Clean a keyboard recording and save the noise stem
 python -m ai.ai_runtime.batch.batch_processor --input mysample.wav --output clean.wav --suppress typing --output-noise
+
+# With custom aggressiveness (default 1.5)
+python -m ai.ai_runtime.batch.batch_processor --input noisy.wav --output clean.wav --suppress typing,pets --aggressiveness 1.8
 ```
 
 ### B. Real-time Recorder & Cleaner <a name="real-time-recorder--cleaner"></a>
@@ -88,6 +92,9 @@ Record directly from your mic and get a cleaned version instantly.
 ```bash
 # Record for 15 seconds, suppressing pets and phone sounds
 python -m ai.ai_runtime.audio.recorder_cleaner --duration 15 --suppress pets,phone --device 0
+
+# Stronger suppression (default aggressiveness 1.5)
+python -m ai.ai_runtime.audio.recorder_cleaner --duration 15 --suppress typing,pets --aggressiveness 1.8 --device 0
 ```
 
 ### C. Live Suppression Demo <a name="live-suppression-demo"></a>

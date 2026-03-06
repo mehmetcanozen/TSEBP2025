@@ -50,13 +50,13 @@ class SemanticSuppressor:
         self._overlap_save_tail = None
 
         # Separation params
-        self.weak_stem_boost_cap = 3.0  # Higher cap for under-extracted stems
-        self.separation_fail_ratio = 0.88  # Bypass if unwanted/mix > this (separation failed)
-        self.under_extract_scale = 1.5  # Scale unwanted when under-extracted (ratio low)
+        self.weak_stem_boost_cap = 4.5  # Higher cap for under-extracted stems
+        self.separation_fail_ratio = 0.90  # Bypass if unwanted/mix > this (separation failed)
+        self.under_extract_scale = 2.0  # Scale unwanted when under-extracted (ratio low)
         # Adaptive spectral masking params
         self.spectral_nperseg = 2048
-        self.perceptual_floor_min = 0.05  # Floor in ear-insensitive bands (<200Hz, >10kHz)
-        self.perceptual_floor_max = 0.18  # Floor in ear-sensitive bands (1-5 kHz)
+        self.perceptual_floor_min = 0.01  # Floor in ear-insensitive bands (<200Hz, >10kHz)
+        self.perceptual_floor_max = 0.05  # Floor in ear-sensitive bands (1-5 kHz)
         self.dd_alpha = 0.98              # Decision-Directed tracking factor (Ephraim-Malah)
         self._decision_directed_state: dict = {} # Per-channel tracking state (clean_power, unw_power)
         self._perceptual_floor_cache: dict = {}  # Cache keyed by (nperseg, sample_rate)
@@ -225,8 +225,8 @@ class SemanticSuppressor:
             for i, stem in enumerate(stems):
                 stem_rms = np.sqrt(np.mean(stem**2))
                 relative_level = stem_rms / mix_rms
-                if relative_level < 0.2 and max_detection_confidence >= 0.3:
-                    boost = min(0.2 / (relative_level + 1e-8), self.weak_stem_boost_cap)
+                if relative_level < 0.3 and max_detection_confidence >= 0.2:
+                    boost = min(0.3 / (relative_level + 1e-8), self.weak_stem_boost_cap)
                     stems[i] = stem * boost
 
             unwanted_norm = stems[0]
@@ -257,13 +257,24 @@ class SemanticSuppressor:
             profiler.start("decision_directed_mask")
 
         # Scale unwanted when under-extracted (low ratio = weak stem)
-        under_extract_threshold = 0.4
+        under_extract_threshold = 0.3
         if separation_ratio < under_extract_threshold and separation_ratio > 1e-6:
             scale = min(
                 self.under_extract_scale,
                 under_extract_threshold / separation_ratio,
             )
             unwanted_audio = unwanted_audio * scale
+
+        # Per-category aggressiveness override (stronger suppression for typing/pets)
+        aggressiveness_override = 0.0
+        for cat, _ in per_category_targets:
+            override = self.category_map.get(cat, {}).get("aggressiveness_override", 0)
+            aggressiveness_override = max(aggressiveness_override, override)
+        effective_aggressiveness = max(aggressiveness, aggressiveness_override)
+
+        # Transient categories: shorter STFT window + faster DD alpha for better time resolution
+        mask_nperseg = 1024 if has_transient_category else self.spectral_nperseg
+        mask_dd_alpha = 0.92 if has_transient_category else self.dd_alpha
 
         # Adaptive Wiener-IRM masking: three-layer pipeline
         # Layer 1: Wiener-IRM gain (SNR-proportional soft mask)
@@ -272,8 +283,10 @@ class SemanticSuppressor:
         clean_audio = self._decision_directed_mask(
             mix=audio,
             unwanted=unwanted_audio,
-            aggressiveness=aggressiveness,
+            aggressiveness=effective_aggressiveness,
             sample_rate=sample_rate,
+            nperseg=mask_nperseg,
+            dd_alpha=mask_dd_alpha,
         )
 
         if profiler:
@@ -336,6 +349,8 @@ class SemanticSuppressor:
         unwanted: np.ndarray,
         aggressiveness: float,
         sample_rate: int,
+        nperseg: Optional[int] = None,
+        dd_alpha: Optional[float] = None,
     ) -> np.ndarray:
         """Ephraim-Malah Decision-Directed masking pipeline.
 
@@ -351,9 +366,9 @@ class SemanticSuppressor:
         Layer 2 — Perceptual A-weighting floor:
             Gain_clamped = max(Gain, perceptual_floor(f))
         """
-        nperseg = self.spectral_nperseg
+        nperseg = nperseg if nperseg is not None else self.spectral_nperseg
         noverlap = nperseg // 2
-        alpha = self.dd_alpha
+        alpha = dd_alpha if dd_alpha is not None else self.dd_alpha
         eps = 1e-10
 
         mix_2d = mix.reshape(-1, 1) if mix.ndim == 1 else mix

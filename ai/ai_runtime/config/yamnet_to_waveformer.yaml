@@ -51,7 +51,9 @@ categories:
     waveformer_targets: ["Computer_keyboard", "Writing"]
     yamnet_indices: [378, 380]  # Typing, Computer keyboard (CORRECT INDICES!)
     priority: "low"
-    detection_threshold: 0.06  # Raised from 0.03 to reduce false positives; low values increase false triggers
+    detection_threshold: -1  # Always suppress when user requests (bypass YAMNet gate)
+    transient: true  # Short impulsive sounds; shorter STFT for better time resolution
+    aggressiveness_override: 1.8
 
   # NATURE SOUNDS
   nature:
@@ -64,15 +66,16 @@ categories:
     waveformer_targets: ["Bark", "Meow"]
     yamnet_indices: [67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]  # Domestic animals, Dog, Bark, Cat, Meow, Purr
     priority: "low"
-    detection_threshold: 0.12
+    detection_threshold: -1  # Always suppress when user requests (bypass YAMNet gate)
     transient: true  # Sharp impulsive sounds - use shorter STFT window
+    aggressiveness_override: 1.6
 
   # PHONE / NOTIFICATIONS
   phone:
     waveformer_targets: ["Telephone"]
     yamnet_indices: [383, 384, 385, 386, 387, 388]  # Telephone, Ringtone, Dial tone
     priority: "medium"
-    detection_threshold: 0.1
+    detection_threshold: 0.08
 
   # ALERTS / CHIMES
   chimes:

@@ -39,12 +39,12 @@ def main() -> None:
     parser.add_argument("--output", "-o", type=str, default=None, help="Output filename (optional)")
     parser.add_argument("--threshold", "-t", type=float, default=0.06, help="Detection threshold (raised from 0.03 to reduce false positives)")
     parser.add_argument(
-        "--aggressiveness", "-a", type=float, default=1.0, help="Suppression aggressiveness (1.0-2.0)"
+        "--aggressiveness", "-a", type=float, default=1.5, help="Suppression aggressiveness (1.0-2.0)"
     )
     parser.add_argument(
         "--separation-fail-ratio",
         type=float,
-        default=0.88,
+        default=0.90,
         help="Bypass suppression when unwanted/mix energy ratio exceeds this (0.85-0.95). Higher = more bypass when separation fails.",
     )
     parser.add_argument(
@@ -94,7 +94,7 @@ def main() -> None:
     engine.set_profile(profile)
     engine.set_mode(ControlMode.MANUAL)
 
-    # Apply threshold: use the higher of CLI and category default to reduce false positives
+    # Apply threshold: use category default when it's more sensitive (lower) than CLI; else max of both
     if hasattr(engine, "suppressor"):
         _ = engine.suppressor
         for cat in suppressions.keys():
@@ -102,7 +102,11 @@ def main() -> None:
                 cat_default = engine.suppressor.category_map[cat].get(
                     "detection_threshold", 0.5
                 )
-                effective = max(args.threshold, cat_default)
+                effective = (
+                    cat_default
+                    if cat_default < args.threshold
+                    else max(args.threshold, cat_default)
+                )
                 engine.suppressor.category_map[cat]["detection_threshold"] = effective
                 logger.info(
                     "Category '%s': threshold %.3f (CLI %.3f, config default %.3f)",

@@ -35,7 +35,7 @@ By using YAMNet, the system identifies specific sound categories. This allows fo
 - **User profiles**: Profiles like "Office" (suppress typing/appliances) vs "Commute" (suppress traffic).
 
 ### 3. Per-Category Separation with Adaptive Boosting
-Each suppression category (e.g. typing, pets, traffic) receives its own Waveformer query so that loud sources don't overwhelm quiet targets in the neural network output. Queries are batched into a single GPU forward pass for efficiency. After separation, weak stems are adaptively boosted (up to 4×) to compensate for Waveformer's tendency to under-extract quiet sounds in loud environments.
+Each suppression category (e.g. typing, pets, traffic) receives its own Waveformer query so that loud sources don't overwhelm quiet targets in the neural network output. Queries are batched into a single GPU forward pass for efficiency. After separation, weak stems are adaptively boosted (up to 4.5×) with relaxed triggers. Under-extracted stems are scaled by up to 2×. Per-category aggressiveness overrides (typing 1.8, pets 1.6) and transient-specific STFT tuning improve suppression for typing and pets.
 
 ### 4. Real-time Decoupling
 The detection logic (YAMNet) often runs at a different cadence than the separation (Waveformer). The system uses a sliding context window to ensure the deep learning models have enough temporal information for accurate inference while maintaining low perception-to-ear latency.
