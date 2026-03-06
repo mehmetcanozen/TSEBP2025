@@ -43,6 +43,7 @@ class BatchProcessor:
         suppress_categories: List[str],
         chunk_size_seconds: float = 10.0,
         detection_threshold: float = 0.5,
+        aggressiveness: float = 1.5,
         suppress_all: bool = False,
         universal_prompts: List[str] = None,
         output_noise: bool = False,
@@ -69,6 +70,7 @@ class BatchProcessor:
                         sample_rate=sample_rate,
                         suppress_categories=suppress_categories,
                         detection_threshold=detection_threshold,
+                        aggressiveness=aggressiveness,
                         suppress_all=suppress_all,
                         universal_prompts=universal_prompts or [],
                     )
@@ -83,6 +85,7 @@ class BatchProcessor:
                         sample_rate=sample_rate,
                         suppress_categories=suppress_categories,
                         detection_threshold=detection_threshold,
+                        aggressiveness=aggressiveness,
                         suppress_all=suppress_all,
                         universal_prompts=universal_prompts or [],
                     )
@@ -130,6 +133,7 @@ def main() -> None:
         ),
     )
     parser.add_argument("--threshold", "-t", type=float, default=0.5, help="Detection confidence threshold (0.0-1.0)")
+    parser.add_argument("--aggressiveness", "-a", type=float, default=1.5, help="Suppression aggressiveness (1.0-2.0)")
     parser.add_argument(
         "--suppress-all",
         action="store_true",
@@ -164,6 +168,7 @@ def main() -> None:
         suppress_categories=suppress_categories,
         chunk_size_seconds=args.chunk_size,
         detection_threshold=args.threshold,
+        aggressiveness=args.aggressiveness,
         suppress_all=args.suppress_all,
         universal_prompts=universal_prompts,
         output_noise=args.output_noise,

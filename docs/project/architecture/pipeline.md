@@ -18,8 +18,8 @@ Deep learning models are sensitive to input amplitudes. Microphone levels vary w
 Instead of combining all suppression targets into a single multi-hot Waveformer query (which allows loud sources to dominate quiet ones), each category receives its own dedicated Waveformer pass:
 
 *   **Batched Inference**: Multiple query vectors are batched into a single GPU forward pass via `separate_multi_query()`, eliminating redundant preprocessing (resampling, device transfer).
-*   **Adaptive Stem Boosting**: After separation, each stem's RMS energy is compared to the mix. Stems weaker than 10% of the mix are boosted by up to 4× to compensate for Waveformer's under-extraction of quiet sounds.
-*   **Decision-Directed Wiener Filter**: The boosted stems are summed and processed through an Ephraim-Malah Decision-Directed mask. It tracks a priori SNR across time to eliminate musical noise without spectral blurring.
+*   **Adaptive Stem Boosting**: Stems weaker than 30% of the mix are boosted by up to 4.5× when detection confidence ≥ 0.2. Under-extracted stems (ratio < 0.3) are scaled by up to 2× before masking.
+*   **Decision-Directed Wiener Filter**: The boosted stems are summed and processed through an Ephraim-Malah mask. Transient categories (typing, pets) use shorter STFT (1024) and faster dd_alpha (0.92) for better time resolution.
 
 `Clean = Original × DecisionDirectedWiener(Unwanted, Original)`
 
