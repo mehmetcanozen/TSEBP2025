@@ -51,7 +51,6 @@ class SemanticSuppressor:
 
         # Separation params
         self.weak_stem_boost_cap = 4.5  # Higher cap for under-extracted stems
-        self.separation_fail_ratio = 0.90  # Bypass if unwanted/mix > this (separation failed)
         self.under_extract_scale = 2.0  # Scale unwanted when under-extracted (ratio low)
         # Adaptive spectral masking params
         self.spectral_nperseg = 2048
@@ -177,7 +176,7 @@ class SemanticSuppressor:
             if profiler:
                 profiler.end("universal_separation")
             max_detection_confidence = 0.9
-            # Separation quality gate for universal separator too
+            # Compute separation ratio for under-extraction scaling
             min_len_u = min(audio.shape[0], unwanted_audio.shape[0])
             mix_rms_u = np.sqrt(np.mean(audio[:min_len_u] ** 2)) + 1e-8
             unwanted_rms_u = np.sqrt(np.mean(unwanted_audio[:min_len_u] ** 2)) + 1e-8
@@ -228,8 +227,7 @@ class SemanticSuppressor:
 
             unwanted_audio = unwanted_norm * (1.0 / scale_factor)
 
-            # Separation quality gate: if unwanted ≈ mix, separation failed (e.g. no pets in mix)
-            # Bypass suppression to avoid over-suppressing speech/other content
+            # Compute separation ratio for under-extraction scaling
             mix_rms_post = np.sqrt(np.mean(audio[: unwanted_audio.shape[0]] ** 2)) + 1e-8
             unwanted_rms = np.sqrt(np.mean(unwanted_audio**2)) + 1e-8
             separation_ratio = unwanted_rms / mix_rms_post

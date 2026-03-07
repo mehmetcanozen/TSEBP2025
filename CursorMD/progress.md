@@ -26,7 +26,7 @@
 - [x] **ControlEngine**: Thread-safe handling of auto-switching and manual overrides.
 - [x] **Profile System**: (Safety override feature was removed; SafetyFrame UI removed 2026-03-06.)
 
-### 4. Real-time Processing (✅ PRODUCTION READY)
+### 4. Real-time Processing (✅ VERIFIED)
 - [x] **Low-Latency Loop**: STFT-aligned block sizes eliminate phasing artifacts and smearing.
 - [x] **Overlap-Add Smoothing**: 5ms cross-fade into sliding window chunks for buttery transition at boundaries.
 - [x] **Lookahead Context**: Configurable delay (0.0-1.5s) providing the model with "future" context for better separation.
@@ -63,7 +63,9 @@
 Successfully integrated foundational, open-vocabulary sound extraction into a real-time system, bypassing the traditional limitations of fixed-class neural separators. Managed to stabilize relative-path intensive third-party models (AudioSep) through dynamic process-working-directory management and non-strict checkpoint loading.
 
 ## 🚀 Final Status
-**100% Verified. Production Ready. All PR Review Feedback addressed.**
+As of 2026-03-06:
+- The features and workflows described above have been manually verified in the documented scenarios.
+- All known Copilot PR review feedback has been addressed in the sections below.
 
 ### 2026-03-06 Copilot PR Review Fixes
 - **USER_MANUAL.md**: Clarified `--separation-fail-ratio` as recorder-only (not supported by batch processor).
@@ -397,10 +399,10 @@ Successfully integrated foundational, open-vocabulary sound extraction into a re
 ### #Validation
 - [x] All 17 tests pass (test_suppression_quality, test_control_engine).
 
-### #Separation quality gate (2026-03-06)
-- [x] Added separation_fail_ratio (0.88): bypass suppression when unwanted/mix energy > 88% (separation failed, e.g. no pets in mix).
-- [x] Prevents over-suppression when Waveformer outputs full mix instead of target.
-- [x] recorder_cleaner: --separation-fail-ratio option.
+### #Separation quality gate (2026-03-06, REVERTED)
+- [ ] [REVERTED] Added separation_fail_ratio (0.88): bypass suppression when unwanted/mix energy > 88% (removed in later PR).
+- [ ] [REVERTED] Prevents over-suppression when Waveformer outputs full mix instead of target (behavior no longer gated by separation_fail_ratio).
+- [ ] [REMOVED] recorder_cleaner: --separation-fail-ratio option (flag removed in current codebase).
 
 ### #Fundamental suppression fix (2026-03-06)
 - [x] Replaced spectral masking with direct residual output: clean = mix - aggressiveness * unwanted.
