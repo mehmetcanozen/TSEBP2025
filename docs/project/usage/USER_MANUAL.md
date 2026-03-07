@@ -65,7 +65,6 @@ The system groups 500+ YAMNet classes into actionable categories. You can contro
 ### Tuning Parameters
 - **`--threshold [0.0-1.0]`**: Detection sensitivity. Lower values make the detector more aggressive. Categories like typing and pets use `-1` (always suppress when requested).
 - **`--aggressiveness [1.0-2.0]`**: Suppression strength. Default `1.5`. Higher values strip noise more deeply; typing and pets use per-category overrides (1.8, 1.6).
-- **`--separation-fail-ratio [0.85-0.95]`** *(Real-time Recorder & Cleaner only)*: Bypass suppression when separation fails (unwanted ≈ mix). Default `0.90`.
 
 ---
 

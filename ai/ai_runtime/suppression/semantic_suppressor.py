@@ -114,7 +114,6 @@ class SemanticSuppressor:
 
         if len(suppress_categories) == 0 and not universal_prompts:
             self._overlap_save_tail = None
-            self._decision_directed_state.clear()
             return audio
 
         if universal_prompts:
@@ -165,7 +164,6 @@ class SemanticSuppressor:
 
         if not targets_to_suppress and not universal_prompts:
             self._overlap_save_tail = None
-            self._decision_directed_state.clear()
             return audio
 
         if universal_prompts:
@@ -184,14 +182,6 @@ class SemanticSuppressor:
             mix_rms_u = np.sqrt(np.mean(audio[:min_len_u] ** 2)) + 1e-8
             unwanted_rms_u = np.sqrt(np.mean(unwanted_audio[:min_len_u] ** 2)) + 1e-8
             separation_ratio = unwanted_rms_u / mix_rms_u
-            if separation_ratio > self.separation_fail_ratio:
-                logger.info(
-                    "Universal separation failed (unwanted/mix ratio > %.2f), bypassing",
-                    self.separation_fail_ratio,
-                )
-                self._overlap_save_tail = None
-                self._decision_directed_state.clear()
-                return audio
         else:
             if profiler:
                 profiler.start("input_normalization")
@@ -243,15 +233,6 @@ class SemanticSuppressor:
             mix_rms_post = np.sqrt(np.mean(audio[: unwanted_audio.shape[0]] ** 2)) + 1e-8
             unwanted_rms = np.sqrt(np.mean(unwanted_audio**2)) + 1e-8
             separation_ratio = unwanted_rms / mix_rms_post
-            if separation_ratio > self.separation_fail_ratio:
-                logger.info(
-                    "Separation failed (unwanted/mix ratio %.2f > %.2f), bypassing suppression",
-                    separation_ratio,
-                    self.separation_fail_ratio,
-                )
-                self._overlap_save_tail = None
-                self._decision_directed_state.clear()
-                return audio
 
         if profiler:
             profiler.start("decision_directed_mask")
