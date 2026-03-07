@@ -42,12 +42,6 @@ def main() -> None:
         "--aggressiveness", "-a", type=float, default=1.5, help="Suppression aggressiveness (1.0-2.0)"
     )
     parser.add_argument(
-        "--separation-fail-ratio",
-        type=float,
-        default=0.90,
-        help="Bypass suppression when unwanted/mix energy ratio exceeds this (0.85-0.95). Higher = more bypass when separation fails.",
-    )
-    parser.add_argument(
         "--suppress-all",
         action="store_true",
         help="Use DeepFilterNet to universally suppress all background noise",
@@ -171,7 +165,6 @@ def main() -> None:
                     universal_targets = [p.strip() for p in args.universal.split(",")] if args.universal else []
 
                     if targets or args.suppress_all or universal_targets:
-                        engine.suppressor.separation_fail_ratio = args.separation_fail_ratio
                         clean_full_buffer = engine.suppressor.suppress(
                             audio=rolling_buffer,
                             sample_rate=sample_rate,
