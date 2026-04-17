@@ -3,6 +3,12 @@
   "compilerOptions": {
     "strict": true,
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true
-  }
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "exclude": [
+    "node_modules",
+    "node_modules_old"
+  ]
 }

@@ -4,7 +4,7 @@ import AudioRecord from 'react-native-audio-record';
 import { Buffer } from 'buffer';
 import { waveformerService } from '../services/WaveformerInferenceService';
 import { writeWavFile } from '../utils/wavUtils';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { Platform, PermissionsAndroid } from 'react-native';
 
 interface UseSuppressionDemoResult {
