@@ -147,10 +147,9 @@ export default function DashboardScreen() {
                                     <Text style={[styles.activeTargetTitle, { color: colors.text }]}>
                                         {targets.find(t => t.id === target)?.label}
                                     </Text>
-                                    <Text style={styles.activeTargetSubtitle}>5 Sec</Text>
+                                    <Text style={styles.activeTargetSubtitle}>15 Sec</Text>
                                 </View>
                             </View>
-                            <Text style={styles.activeUntilText}>Ready to process audio</Text>
                         </View>
 
                         <View style={styles.mainCardBottomRight}>
@@ -203,8 +202,6 @@ export default function DashboardScreen() {
                     <View style={styles.playbackSection}>
                         <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 15 }]}>Recent Activity</Text>
                         
-                        {debugInfo ? <Text style={[styles.debugText, { color: colors.textSecondary }]}>{debugInfo}</Text> : null}
-
                         {originalUri && (
                             <>
                                 <View style={[styles.playbackCard, { backgroundColor: colors.card }]}>
