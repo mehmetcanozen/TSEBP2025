@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Semantic Smart Noise Cancellation",
+    "name": "SNC",
     "slug": "mobile-test",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/fav.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/fav.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,

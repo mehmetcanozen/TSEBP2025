@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ScrollView, Image } from 'react-native';
 import { AuthContext } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -46,6 +46,11 @@ export default function SignupScreen({ navigation }: { navigation: any }) {
                     />
                     
                     <View style={styles.headerGreeting}>
+                        <Image 
+                            source={require('../../assets/fav.png')} 
+                            style={styles.logo}
+                            resizeMode="contain"
+                        />
                         <Text style={styles.greetingTitle}>Create Account</Text>
                         <Text style={styles.greetingSubtitle}>Sign up to get started</Text>
                     </View>
@@ -171,6 +176,11 @@ const styles = StyleSheet.create({
     },
     headerGreeting: {
         alignItems: 'center',
+    },
+    logo: {
+        width: 80,
+        height: 80,
+        marginBottom: 20,
     },
     greetingTitle: {
         color: '#FFF',
