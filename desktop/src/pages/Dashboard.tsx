@@ -1,448 +1,514 @@
-import { useState, useEffect, useRef } from "react";
-import {
-  Play, Pause, Mic, Square, Circle, Upload, FileAudio, X,
-  Sparkles, Wand2, ChevronDown,
-  Volume2, Download,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import HeaderBar from "@/components/HeaderBar";
+import CategorySelector from "@/components/desktop/CategorySelector";
+import PresetStrip from "@/components/desktop/PresetStrip";
+import SignalMeter from "@/components/desktop/SignalMeter";
+import { useDesktopRuntime } from "@/contexts/DesktopRuntimeContext";
 
-
-/* ───── Waveform Visualizer ───── */
-const WaveformDisplay = ({ isRecording }: { isRecording: boolean }) => {
-  const [bars, setBars] = useState<number[]>(Array(80).fill(0.12));
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (isRecording) {
-      intervalRef.current = setInterval(() => {
-        setBars(prev => prev.map(() => 0.08 + Math.random() * 0.92));
-      }, 70);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      setBars(prev => prev.map(() => 0.06 + Math.random() * 0.1));
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isRecording]);
-
-  return (
-    <div className="relative h-44 rounded-2xl bg-muted/50 border border-border overflow-hidden flex items-center justify-center px-3 gap-[2px]">
-      {isRecording && (
-        <div className="absolute inset-0 pointer-events-none opacity-20"
-          style={{ background: "linear-gradient(90deg, hsl(207 90% 54% / 0.15), hsl(174 72% 50% / 0.2), hsl(207 90% 54% / 0.15))" }}
-        />
-      )}
-      {bars.map((h, i) => (
-        <motion.div
-          key={i}
-          className="rounded-full flex-1 min-w-[2px] max-w-[4px]"
-          style={{
-            background: isRecording
-              ? "linear-gradient(180deg, hsl(207 90% 54%), hsl(174 72% 50%))"
-              : "hsl(var(--muted-foreground) / 0.25)",
-          }}
-          animate={{ height: `${h * 100}%` }}
-          transition={{ duration: 0.07, ease: "easeOut" }}
-        />
-      ))}
-      <div className="absolute left-0 right-0 h-[1px] bg-border/30 top-1/2" />
-    </div>
-  );
+const formatMillis = (value?: number | null) => {
+  if (value == null || Number.isNaN(value)) {
+    return "--";
+  }
+  return `${value.toFixed(0)} ms`;
 };
 
-/* ───── Sound Categories Data ───── */
-const soundGroups = [
-  { header: "Background Noise", items: ["Wind", "Rain", "Traffic", "Crowd Chatter", "Construction", "AC / HVAC", "Fan Noise", "Street Noise"] },
-  { header: "Voice & Speech", items: ["Background Voices", "Echo / Reverb", "Breathing", "Mouth Clicks", "Plosives", "Sibilance", "Mumbling"] },
-  { header: "Electronic & Device", items: ["Keyboard Typing", "Mouse Clicks", "Computer Fan", "Electrical Hum 60Hz", "Electrical Hum 50Hz", "Microphone Buzz", "Notification Sounds", "TV / Radio Bleed"] },
-  { header: "Music & Tones", items: ["Background Music", "Low Frequency Bass", "High Frequency Hiss", "White Noise", "Pink Noise", "Static"] },
-  { header: "Environment", items: ["Office Noise", "Cafe Noise", "Airport Noise", "Restaurant Noise", "Nature Sounds", "Animal Sounds", "Church / Hall Reverb"] },
-  { header: "Recording Artifacts", items: ["Clipping", "Distortion", "Popping", "Crackling", "Room Tone", "Tape Hiss"] },
-];
-
-/* ───── Sounds Dropdown ───── */
-const SoundsDropdown = ({ selected, onChange }: { selected: string[]; onChange: (s: string[]) => void }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const toggle = (item: string) => {
-    onChange(selected.includes(item) ? selected.filter(s => s !== item) : [...selected, item]);
-  };
-
-  const label = selected.length === 0
-    ? "Select sounds to remove..."
-    : selected.length === 1
-      ? selected[0]
-      : `${selected.length} sounds will be filtered`;
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-display transition-all ${
-          open
-            ? "border-primary bg-primary/5 text-foreground"
-            : "border-border bg-card text-muted-foreground hover:border-primary/40"
-        }`}
-      >
-        <span className={selected.length > 0 ? "text-foreground" : ""}>{label}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15 }}
-            className="absolute z-50 mt-2 w-full max-h-72 overflow-y-auto rounded-xl border border-border bg-card shadow-lg"
-          >
-            {soundGroups.map(group => (
-              <div key={group.header}>
-                <div className="px-3 py-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground bg-muted/40 sticky top-0">
-                  {group.header}
-                </div>
-                {group.items.map(item => (
-                  <button
-                    key={item}
-                    onClick={() => toggle(item)}
-                    className={`w-full text-left px-4 py-2 text-sm font-display transition-colors ${
-                      selected.includes(item)
-                        ? "bg-primary/10 text-primary"
-                        : "text-foreground/80 hover:bg-muted/50"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Chips */}
-      {selected.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {selected.map(item => (
-            <motion.span
-              key={item}
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30 text-xs font-display text-primary"
-            >
-              {item}
-              <button onClick={() => toggle(item)} className="hover:text-destructive transition-colors">
-                <X className="w-3 h-3" />
-              </button>
-            </motion.span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ───── Mini Player ───── */
-const MiniPlayer = ({ label, color, gradient }: { label: string; color: string; gradient: string }) => {
-  const [playing, setPlaying] = useState(false);
-  const bars = Array(50).fill(0).map(() => 0.1 + Math.random() * 0.9);
-
-  return (
-    <div className="flex-1 p-4 rounded-2xl bg-card border border-border">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-        <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{label}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setPlaying(!playing)}
-          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border transition-colors"
-          style={{
-            background: playing ? `${color}18` : "transparent",
-            borderColor: `${color}50`,
-            color,
-          }}
-        >
-          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-        </motion.button>
-        <div className="flex items-center h-12 gap-[1.5px] flex-1 overflow-hidden">
-          {bars.map((h, i) => (
-            <div
-              key={i}
-              className="rounded-full flex-1 min-w-[1.5px]"
-              style={{
-                height: `${h * 100}%`,
-                background: gradient,
-                opacity: playing ? 0.8 : 0.3,
-                transition: "opacity 0.3s",
-              }}
-            />
-          ))}
-        </div>
-        <span className="text-[10px] font-mono text-muted-foreground shrink-0">0:32</span>
-      </div>
-    </div>
-  );
-};
-
-/* ───── File Import Section ───── */
-const FileImport = () => {
-  const [dragOver, setDragOver] = useState(false);
-  const [files, setFiles] = useState<string[]>([]);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    setFiles(prev => [...prev, "audio_sample.wav"]);
-  };
-
-  return (
-    <div className="p-4 rounded-2xl bg-card border border-border">
-      <div className="flex items-center gap-2 mb-3">
-        <FileAudio className="w-4 h-4 text-primary" />
-        <h3 className="text-sm font-semibold font-display text-foreground">Import Audio</h3>
-      </div>
-      <div
-        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => setFiles(prev => [...prev, `recording_${prev.length + 1}.wav`])}
-        className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
-          dragOver
-            ? "border-primary bg-primary/5"
-            : "border-border hover:border-primary/40 hover:bg-muted/30"
-        }`}
-      >
-        <Upload className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-xs text-muted-foreground font-display">
-          Drop audio files or <span className="text-primary font-medium">browse</span>
-        </p>
-        <p className="text-[10px] text-muted-foreground/60 mt-1 font-mono">.wav .mp3 .flac .ogg</p>
-      </div>
-      <AnimatePresence>
-        {files.map((f, i) => (
-          <motion.div
-            key={`${f}-${i}`}
-            initial={{ x: -8, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex items-center justify-between p-2 mt-2 rounded-lg bg-muted/50 border border-border"
-          >
-            <div className="flex items-center gap-2">
-              <FileAudio className="w-3.5 h-3.5 text-primary" />
-              <span className="text-xs font-mono text-foreground/80">{f}</span>
-            </div>
-            <button
-              onClick={e => { e.stopPropagation(); setFiles(prev => prev.filter((_, j) => j !== i)); }}
-              className="text-muted-foreground hover:text-destructive transition-colors"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  );
-};
-
-/* ───── Noise Removal ───── */
-const NoiseRemoval = () => {
-  const [active, setActive] = useState(false);
-  const makeBars = (variant: "before" | "after") =>
-    Array(40).fill(0).map(() => variant === "before" ? 0.15 + Math.random() * 0.85 : 0.1 + Math.random() * 0.45);
-
-  return (
-    <div className="p-4 rounded-2xl bg-card border border-border">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Wand2 className="w-4 h-4 text-accent" />
-          <h3 className="text-sm font-semibold font-display text-foreground">Noise Removal</h3>
-        </div>
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setActive(!active)}
-          className={`relative w-11 h-6 rounded-full transition-colors ${active ? "bg-accent/30" : "bg-muted"}`}
-        >
-          <motion.div
-            className={`absolute top-0.5 w-5 h-5 rounded-full shadow ${active ? "bg-accent" : "bg-muted-foreground/50"}`}
-            animate={{ left: active ? "22px" : "2px" }}
-            transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          />
-        </motion.button>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {(["before", "after"] as const).map(variant => (
-          <div key={variant} className="rounded-xl bg-muted/40 border border-border p-3">
-            <div className="flex items-center gap-1.5 mb-2">
-              <div className={`w-1.5 h-1.5 rounded-full ${variant === "before" ? "bg-neon-orange" : "bg-accent"}`} />
-              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{variant}</span>
-              {variant === "after" && active && <Sparkles className="w-3 h-3 text-accent ml-auto animate-float" />}
-            </div>
-            <div className="flex items-center h-12 gap-[2px] px-1">
-              {makeBars(variant).map((h, i) => (
-                <div key={i} className="rounded-full flex-1 min-w-[2px]"
-                  style={{
-                    height: `${h * 100}%`,
-                    background: variant === "before"
-                      ? `hsl(var(--neon-orange) / ${0.4 + h * 0.6})`
-                      : `hsl(var(--accent) / ${0.4 + h * 0.6})`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="w-full mt-3 py-2.5 rounded-xl bg-accent/10 border border-accent/30 text-accent text-xs font-semibold font-display flex items-center justify-center gap-2 hover:bg-accent/20 transition-all"
-      >
-        <Sparkles className="w-3.5 h-3.5" />
-        Clean Audio
-      </motion.button>
-    </div>
-  );
-};
-
-/* ═══════════ DASHBOARD ═══════════ */
 const Dashboard = () => {
-  
-  const [isRecording, setIsRecording] = useState(false);
-  const [selectedSounds, setSelectedSounds] = useState<string[]>([]);
-  const status = isRecording ? "Recording" : "Idle";
+  const {
+    categories,
+    presets,
+    devices,
+    runtimeMetrics,
+    selectedCategories,
+    aggressiveness,
+    lookaheadMs,
+    inputDeviceId,
+    outputDeviceId,
+    inputPath,
+    outputPath,
+    recordEnabled,
+    recordOutputPath,
+    liveStatus,
+    liveMeter,
+    offlineProgress,
+    activeLiveSessionId,
+    activeOfflineJobId,
+    isLoading,
+    isStartingLive,
+    isOfflineRunning,
+    error,
+    toggleCategory,
+    applyPreset,
+    setAggressiveness,
+    setLookaheadMs,
+    setInputDeviceId,
+    setOutputDeviceId,
+    setInputPath,
+    setOutputPath,
+    setRecordEnabled,
+    setRecordOutputPath,
+    browseInputPath,
+    browseOutputPath,
+    browseRecordOutputPath,
+    refreshDevices,
+    refreshRuntimeMetrics,
+    startOffline,
+    cancelOffline,
+    startLive,
+    stopLive,
+    clearError,
+  } = useDesktopRuntime();
+
+  const inputDevices = devices.filter((device) => device.direction === "input");
+  const outputDevices = devices.filter((device) => device.direction === "output");
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background transition-colors duration-300">
+    <div className="flex h-screen flex-col overflow-hidden bg-background transition-colors duration-300">
       <HeaderBar />
 
+      <main className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                Runtime
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-foreground">
+                {runtimeMetrics?.provider ?? "loading"}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                {runtimeMetrics?.warmed ? "session warmed" : "awaiting warmup"}
+              </div>
+            </div>
 
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                Live Queue
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-foreground">
+                {formatMillis(liveStatus?.queueDepthMs)}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                {liveStatus?.state ?? "stopped"} / xruns {liveStatus?.xruns ?? 0}
+              </div>
+            </div>
 
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                Inference
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-foreground">
+                {formatMillis(liveStatus?.inferenceMs)}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                lookahead {lookaheadMs} ms
+              </div>
+            </div>
 
-      <main className="flex-1 overflow-y-auto p-5">
-        <div className="max-w-7xl mx-auto space-y-5">
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                Targets
+              </div>
+              <div className="mt-3 text-2xl font-semibold text-foreground">
+                {selectedCategories.length}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                exact-15 categories selected
+              </div>
+            </div>
+          </section>
 
-          {/* ─── Top: Waveform + Categories ─── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Left: Waveform & Controls */}
-            <div className="lg:col-span-2 space-y-4">
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-                className="p-5 rounded-2xl bg-card border border-border shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-semibold text-foreground font-display">Live Audio</h2>
-                    <AnimatePresence>
-                      {isRecording && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0 }}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-destructive/15 border border-destructive/30"
-                        >
-                          <Circle className="w-2 h-2 fill-destructive text-destructive animate-pulse-glow" />
-                          <span className="text-[10px] font-mono text-destructive font-medium tracking-wider">REC</span>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+          {error && (
+            <section className="rounded-2xl border border-destructive/35 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <div className="flex items-center justify-between gap-4">
+                <span>{error}</span>
+                <button
+                  type="button"
+                  onClick={clearError}
+                  className="rounded-lg border border-destructive/35 px-2 py-1 text-xs font-semibold uppercase tracking-wide"
+                >
+                  dismiss
+                </button>
+              </div>
+            </section>
+          )}
+
+          <section className="grid gap-5 xl:grid-cols-[1.35fr_1fr]">
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                    Exact-15 Target Surface
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
-                    <span className={`px-2 py-0.5 rounded-full ${isRecording ? "bg-destructive/10 text-destructive" : "bg-muted"}`}>
-                      {status}
-                    </span>
-                    <span>48kHz · 16-bit</span>
+                  <h2 className="mt-2 text-2xl font-semibold text-foreground">
+                    Live suppression profile
+                  </h2>
+                  <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                    The desktop app now uses the model-backed 15-category surface directly. Presets come from the
+                    Hive15 desktop profiles, and the same selection drives both offline and live processing.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void refreshDevices();
+                    void refreshRuntimeMetrics();
+                  }}
+                  className="rounded-xl border border-border bg-muted/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-foreground/80 transition-colors hover:border-primary/30 hover:bg-primary/10"
+                >
+                  refresh
+                </button>
+              </div>
+
+              <div className="mt-5">
+                <PresetStrip
+                  presets={presets}
+                  selectedCategories={selectedCategories}
+                  onApply={applyPreset}
+                />
+              </div>
+
+              <div className="mt-5">
+                <CategorySelector
+                  categories={categories}
+                  selected={selectedCategories}
+                  onToggle={toggleCategory}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                Shared Controls
+              </div>
+              <h2 className="mt-2 text-2xl font-semibold text-foreground">Inference tuning</h2>
+
+              <div className="mt-5 space-y-5">
+                <label className="block">
+                  <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
+                    <span>Aggressiveness</span>
+                    <span className="font-mono text-muted-foreground">x{aggressiveness.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={3}
+                    step={0.05}
+                    value={aggressiveness}
+                    onChange={(event) => setAggressiveness(Number(event.target.value))}
+                    className="w-full accent-[hsl(var(--primary))]"
+                  />
+                </label>
+
+                <label className="block">
+                  <div className="mb-2 flex items-center justify-between text-sm font-semibold text-foreground">
+                    <span>Live lookahead</span>
+                    <span className="font-mono text-muted-foreground">{lookaheadMs} ms</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={250}
+                    max={1000}
+                    step={50}
+                    value={lookaheadMs}
+                    onChange={(event) => setLookaheadMs(Number(event.target.value))}
+                    className="w-full accent-[hsl(var(--accent))]"
+                  />
+                </label>
+
+                <div className="rounded-2xl border border-border bg-muted/30 p-4">
+                  <div className="text-sm font-semibold text-foreground">Runtime health</div>
+                  <div className="mt-3 grid gap-3 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between gap-4">
+                      <span>Available providers</span>
+                      <span className="text-right font-mono text-foreground/80">
+                        {runtimeMetrics?.availableProviders.join(", ") || "--"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span>Active sessions</span>
+                      <span className="font-mono text-foreground/80">{runtimeMetrics?.activeLiveSessions ?? 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span>Active jobs</span>
+                      <span className="font-mono text-foreground/80">{runtimeMetrics?.activeJobs ?? 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span>Model categories</span>
+                      <span className="font-mono text-foreground/80">{runtimeMetrics?.categoryCount ?? 0}</span>
+                    </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </section>
 
-                <WaveformDisplay isRecording={isRecording} />
+          <section className="grid gap-5 xl:grid-cols-2">
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                    Live Monitor
+                  </div>
+                  <h2 className="mt-2 text-2xl font-semibold text-foreground">
+                    {"Mic -> suppress -> monitor"}
+                  </h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Windows-only buffered live path. Audio threads stay lightweight while the ONNX worker refreshes a gain
+                    envelope every second from the latest five-second context.
+                  </p>
+                </div>
+                <div
+                  className={`rounded-full border px-3 py-1 text-[11px] font-mono uppercase tracking-[0.18em] ${
+                    activeLiveSessionId
+                      ? "border-accent/35 bg-accent/15 text-accent"
+                      : "border-border bg-muted/35 text-muted-foreground"
+                  }`}
+                >
+                  {activeLiveSessionId ? "running" : "stopped"}
+                </div>
+              </div>
 
-                <div className="flex items-center justify-center mt-4">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setIsRecording(!isRecording)}
-                    className={`flex items-center gap-2.5 px-8 py-3 rounded-2xl font-display font-semibold text-sm transition-all shadow-sm ${
-                      isRecording
-                        ? "bg-destructive/15 text-destructive border border-destructive/40"
-                        : "bg-primary text-primary-foreground border border-primary hover:bg-primary/90"
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <div className="mb-2 text-sm font-semibold text-foreground">Input device</div>
+                  <select
+                    value={inputDeviceId}
+                    onChange={(event) => setInputDeviceId(event.target.value)}
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  >
+                    <option value="">System default</option>
+                    {inputDevices.map((device) => (
+                      <option key={device.id} value={device.id}>
+                        {device.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <div className="mb-2 text-sm font-semibold text-foreground">Monitor device</div>
+                  <select
+                    value={outputDeviceId}
+                    onChange={(event) => setOutputDeviceId(event.target.value)}
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                  >
+                    <option value="">System default</option>
+                    {outputDevices.map((device) => (
+                      <option key={device.id} value={device.id}>
+                        {device.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Record clean live session</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Optional WAV capture of the monitored clean output.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRecordEnabled(!recordEnabled)}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
+                      recordEnabled
+                        ? "border-primary/35 bg-primary/15 text-primary"
+                        : "border-border bg-card text-muted-foreground"
                     }`}
                   >
-                    {isRecording ? (
-                      <><Square className="w-4 h-4 fill-current" />Stop Processing</>
-                    ) : (
-                      <><Mic className="w-4 h-4" />Start Processing</>
-                    )}
-                  </motion.button>
+                    {recordEnabled ? "on" : "off"}
+                  </button>
                 </div>
-              </motion.div>
 
-              {/* File Import */}
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <FileImport />
-              </motion.div>
-            </div>
-
-            {/* Right: Sounds to Remove */}
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-              className="space-y-4">
-              <div className="p-5 rounded-2xl bg-card border border-border shadow-sm">
-                <div className="flex items-center gap-2 mb-4">
-                  <Volume2 className="w-4 h-4 text-primary" />
-                  <h2 className="text-sm font-semibold text-foreground font-display">Sounds to Remove</h2>
-                </div>
-                <SoundsDropdown selected={selectedSounds} onChange={setSelectedSounds} />
+                {recordEnabled && (
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={recordOutputPath}
+                      onChange={(event) => setRecordOutputPath(event.target.value)}
+                      placeholder="C:\\path\\to\\live_clean.wav"
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void browseRecordOutputPath()}
+                      className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10"
+                    >
+                      choose wav
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Noise Removal */}
-              <NoiseRemoval />
-            </motion.div>
-          </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {activeLiveSessionId ? (
+                  <button
+                    type="button"
+                    onClick={() => void stopLive()}
+                    className="rounded-2xl border border-destructive/35 bg-destructive/12 px-5 py-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/18"
+                  >
+                    Stop live monitor
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void startLive()}
+                    disabled={isStartingLive || isLoading}
+                    className="rounded-2xl border border-primary/35 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isStartingLive ? "Starting..." : "Start live monitor"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void refreshDevices()}
+                  className="rounded-2xl border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-accent/30 hover:bg-accent/10"
+                >
+                  Refresh devices
+                </button>
+              </div>
 
-          {/* ─── Bottom: Audio Comparison ─── */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            className="p-5 rounded-2xl bg-card border border-border shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Wand2 className="w-4 h-4 text-accent" />
-              <h2 className="text-sm font-semibold text-foreground font-display">Audio Comparison</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <MiniPlayer
-                label="Original"
-                color="hsl(var(--neon-orange))"
-                gradient="linear-gradient(180deg, hsl(var(--neon-orange)), hsl(var(--neon-pink)))"
-              />
-              <div className="relative">
-                <MiniPlayer
-                  label="Cleaned"
-                  color="hsl(var(--accent))"
-                  gradient="linear-gradient(180deg, hsl(var(--accent)), hsl(var(--primary)))"
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <SignalMeter
+                  title="input monitor"
+                  waveform={liveMeter?.waveformIn ?? []}
+                  peak={liveMeter?.peakIn ?? 0}
+                  rms={liveMeter?.rmsIn ?? 0}
+                  accentClass="bg-gradient-to-t from-[hsl(var(--neon-orange))] to-[hsl(var(--neon-pink))]"
                 />
-                <div className="absolute top-2 right-3">
-                  <Sparkles className="w-3.5 h-3.5 text-accent animate-float" />
+                <SignalMeter
+                  title="clean monitor"
+                  waveform={liveMeter?.waveformOut ?? []}
+                  peak={liveMeter?.peakOut ?? 0}
+                  rms={liveMeter?.rmsOut ?? 0}
+                  accentClass="bg-gradient-to-t from-[hsl(var(--accent))] to-[hsl(var(--primary))]"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                    Offline Render
+                  </div>
+                  <h2 className="mt-2 text-2xl font-semibold text-foreground">
+                    {"File -> suppress -> WAV"}
+                  </h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Symphonia decode, exact-15 ONNX separation, Wiener mask suppression, and float32 WAV export with
+                    original sample rate and channel count preserved.
+                  </p>
+                </div>
+                <div
+                  className={`rounded-full border px-3 py-1 text-[11px] font-mono uppercase tracking-[0.18em] ${
+                    activeOfflineJobId
+                      ? "border-primary/35 bg-primary/12 text-primary"
+                      : "border-border bg-muted/35 text-muted-foreground"
+                  }`}
+                >
+                  {activeOfflineJobId ? "job active" : "idle"}
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <div>
+                  <div className="mb-2 text-sm font-semibold text-foreground">Input audio path</div>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={inputPath}
+                      onChange={(event) => setInputPath(event.target.value)}
+                      placeholder="C:\\path\\to\\input.wav"
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void browseInputPath()}
+                      className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10"
+                    >
+                      browse
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-sm font-semibold text-foreground">Output WAV path</div>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={outputPath}
+                      onChange={(event) => setOutputPath(event.target.value)}
+                      placeholder="C:\\path\\to\\clean.wav"
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void browseOutputPath()}
+                      className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10"
+                    >
+                      save as
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void startOffline()}
+                  disabled={isOfflineRunning || isLoading}
+                  className="rounded-2xl border border-accent/35 bg-accent px-5 py-3 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isOfflineRunning ? "Rendering..." : "Render clean WAV"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void cancelOffline()}
+                  disabled={!activeOfflineJobId}
+                  className="rounded-2xl border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-destructive/35 hover:bg-destructive/8 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel job
+                </button>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-sm font-semibold text-foreground">
+                    {offlineProgress?.stage ?? "waiting"}
+                  </div>
+                  <div className="text-xs font-mono uppercase tracking-[0.16em] text-muted-foreground">
+                    {Math.max(0, offlineProgress?.progress ?? 0).toFixed(0)}%
+                  </div>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-border/70">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[hsl(var(--accent))] to-[hsl(var(--primary))]"
+                    style={{ width: `${Math.min(100, Math.max(0, offlineProgress?.progress ?? 0))}%` }}
+                  />
+                </div>
+                <div className="mt-3 grid gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between gap-4">
+                    <span>ETA</span>
+                    <span className="font-mono text-foreground/80">
+                      {offlineProgress?.etaSeconds != null ? `${offlineProgress.etaSeconds.toFixed(1)} s` : "--"}
+                    </span>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <span>Message</span>
+                    <span className="max-w-[65%] text-right text-foreground/80">
+                      {offlineProgress?.message ?? "Waiting for a render job."}
+                    </span>
+                  </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <span>Output</span>
+                    <span className="max-w-[65%] break-all text-right font-mono text-foreground/80">
+                      {offlineProgress?.outputPath || outputPath || "--"}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="mt-4 px-6 py-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary text-xs font-semibold font-display flex items-center gap-2 hover:bg-primary/20 transition-all mx-auto"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export Clean Audio
-            </motion.button>
-          </motion.div>
+          </section>
         </div>
       </main>
     </div>

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { DesktopRuntimeProvider } from "@/contexts/DesktopRuntimeContext";
 import { DisplayModeProvider, useDisplayMode } from "@/contexts/DisplayModeContext";
 import FlyoutShell from "@/components/FlyoutShell";
 import RealTimeMode from "@/components/RealTimeMode";
@@ -63,7 +64,9 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <DisplayModeProvider>
-            <ModeAwareApp />
+            <DesktopRuntimeProvider>
+              <ModeAwareApp />
+            </DesktopRuntimeProvider>
           </DisplayModeProvider>
         </AuthProvider>
       </BrowserRouter>
