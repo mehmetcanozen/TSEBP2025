@@ -135,3 +135,14 @@ __MACOSX/
 # Local audio assets and generated results
 ai/data/audio/Sounds/
 ai/data/audio/processed/
+
+# Desktop / Vite / Tauri
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/dist-ssr/
+*.local
+lerna-debug.log*
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
