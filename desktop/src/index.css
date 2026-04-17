@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 222 20% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 14%;
+
+    --primary: 207 90% 54%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 20% 30%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 174 72% 46%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 88%;
+    --input: 220 14% 88%;
+    --ring: 207 90% 54%;
+
+    --radius: 0.75rem;
+
+    /* Custom tokens */
+    --neon-purple: 262 83% 58%;
+    --neon-teal: 174 72% 42%;
+    --neon-pink: 330 80% 58%;
+    --neon-blue: 207 90% 54%;
+    --neon-orange: 25 95% 55%;
+    --neon-green: 142 70% 45%;
+
+    --surface-1: 220 14% 94%;
+    --surface-2: 220 14% 90%;
+    --surface-3: 220 14% 86%;
+
+    --glow-purple: 0 0% 0% / 0, 262 83% 58% / 0.1;
+    --glow-teal: 0 0% 0% / 0, 174 72% 42% / 0.1;
+
+    --sidebar-background: 220 20% 96%;
+    --sidebar-foreground: 222 20% 30%;
+    --sidebar-primary: 207 90% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 92%;
+    --sidebar-accent-foreground: 222 20% 30%;
+    --sidebar-border: 220 14% 88%;
+    --sidebar-ring: 207 90% 54%;
+
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  .dark {
+    --background: 222 20% 11%;
+    --foreground: 220 20% 92%;
+
+    --card: 222 18% 15%;
+    --card-foreground: 220 20% 92%;
+
+    --popover: 222 18% 15%;
+    --popover-foreground: 220 20% 92%;
+
+    --primary: 207 90% 54%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 14% 22%;
+    --secondary-foreground: 220 20% 85%;
+
+    --muted: 222 12% 18%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 174 72% 56%;
+    --accent-foreground: 222 18% 10%;
+
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 12% 24%;
+    --input: 222 12% 24%;
+    --ring: 207 90% 54%;
+
+    --neon-purple: 262 83% 68%;
+    --neon-teal: 174 72% 56%;
+    --neon-pink: 330 80% 65%;
+    --neon-blue: 210 90% 62%;
+    --neon-orange: 25 95% 62%;
+    --neon-green: 142 70% 55%;
+
+    --surface-1: 222 16% 16%;
+    --surface-2: 222 14% 20%;
+    --surface-3: 222 12% 24%;
+
+    --glow-purple: 0 0% 0% / 0, 262 83% 68% / 0.15;
+    --glow-teal: 0 0% 0% / 0, 174 72% 56% / 0.15;
+
+    --sidebar-background: 222 18% 9%;
+    --sidebar-foreground: 220 20% 85%;
+    --sidebar-primary: 207 90% 54%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 14% 18%;
+    --sidebar-accent-foreground: 220 20% 85%;
+    --sidebar-border: 222 12% 20%;
+    --sidebar-ring: 207 90% 54%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-display);
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50 rounded-xl;
+    box-shadow: 0 4px 24px hsl(228 18% 6% / 0.4), inset 0 1px 0 hsl(220 20% 92% / 0.04);
+  }
+
+  .glow-purple {
+    box-shadow: 0 0 20px hsl(262 83% 68% / 0.2), 0 0 60px hsl(262 83% 68% / 0.08);
+  }
+
+  .glow-teal {
+    box-shadow: 0 0 20px hsl(174 72% 56% / 0.2), 0 0 60px hsl(174 72% 56% / 0.08);
+  }
+
+  .glow-pink {
+    box-shadow: 0 0 20px hsl(330 80% 65% / 0.2), 0 0 60px hsl(330 80% 65% / 0.08);
+  }
+
+  .neon-text-purple {
+    text-shadow: 0 0 12px hsl(262 83% 68% / 0.5);
+  }
+
+  .neon-text-teal {
+    text-shadow: 0 0 12px hsl(174 72% 56% / 0.5);
+  }
+}
+
+@layer utilities {
+  @keyframes waveform-bar {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 1.5s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+}
