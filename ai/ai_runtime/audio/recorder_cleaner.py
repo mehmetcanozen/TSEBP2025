@@ -14,8 +14,10 @@ import argparse
 import logging
 import queue
 import sys
+import threading
 import time
 from pathlib import Path
+from typing import Any, Callable
 
 import numpy as np
 import sounddevice as sd
@@ -26,13 +28,197 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from ai.ai_runtime.profiles import ControlEngine, ControlMode, ProfileManager
+from ai.ai_runtime.suppression import SemanticSuppressor
+from ai.ai_runtime.utils.codecsep import (
+    add_codecsep_runtime_arguments,
+    build_codecsep_call_kwargs_from_args,
+    build_suppressor_kwargs_from_args,
+)
 from ai.ai_runtime.utils.paths import get_data_audio_path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def main() -> None:
+class BufferedRealtimeSuppressor:
+    """Background worker for buffered live suppression."""
+
+    def __init__(
+        self,
+        *,
+        suppress_fn: Callable[..., np.ndarray],
+        sample_rate: int,
+        context_duration: float,
+        hop_seconds: float,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
+        self.suppress_fn = suppress_fn
+        self.sample_rate = int(sample_rate)
+        self.context_duration = float(context_duration)
+        self.hop_seconds = max(0.05, float(hop_seconds))
+        self.context_size = int(round(self.sample_rate * self.context_duration))
+        self._clock = clock or time.monotonic
+        self._request_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1)
+        self._result_queue: queue.Queue[dict[str, np.ndarray]] = queue.Queue(maxsize=1)
+        self._stop_event = threading.Event()
+        self._worker: threading.Thread | None = None
+        self._last_submit_at = float("-inf")
+        self._inference_pending = False
+        self._latest_clean_context: np.ndarray | None = None
+        self._latest_gain_envelope: np.ndarray | None = None
+        self._latest_result_at: float | None = None
+
+    @property
+    def inference_pending(self) -> bool:
+        return self._inference_pending
+
+    @property
+    def latest_gain_envelope(self) -> np.ndarray | None:
+        if self._latest_gain_envelope is None:
+            return None
+        return np.array(self._latest_gain_envelope, copy=True)
+
+    def start(self) -> None:
+        if self._worker is not None and self._worker.is_alive():
+            return
+        self._stop_event.clear()
+        self._worker = threading.Thread(
+            target=self._worker_loop,
+            name="audiosep15-live-worker",
+            daemon=True,
+        )
+        self._worker.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._worker is not None:
+            self._worker.join(timeout=2.0)
+            self._worker = None
+        self._drain_queue(self._request_queue)
+        self._drain_queue(self._result_queue)
+        self._inference_pending = False
+
+    @staticmethod
+    def _drain_queue(target_queue: queue.Queue[Any]) -> None:
+        while True:
+            try:
+                target_queue.get_nowait()
+            except queue.Empty:
+                return
+
+    def _replace_queue_item(self, target_queue: queue.Queue[Any], item: Any) -> None:
+        try:
+            target_queue.put_nowait(item)
+        except queue.Full:
+            try:
+                target_queue.get_nowait()
+            except queue.Empty:
+                pass
+            target_queue.put_nowait(item)
+
+    def _worker_loop(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                request = self._request_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
+                clean_audio = self.suppress_fn(
+                    audio=request["audio"],
+                    sample_rate=self.sample_rate,
+                    **request["kwargs"],
+                )
+                self._replace_queue_item(
+                    self._result_queue,
+                    {
+                        "audio": request["audio"],
+                        "clean_audio": np.asarray(clean_audio, dtype=np.float32),
+                    },
+                )
+            except Exception:
+                logger.exception("Buffered realtime suppression worker failed")
+                self._replace_queue_item(
+                    self._result_queue,
+                    {
+                        "audio": request["audio"],
+                        "clean_audio": np.asarray(request["audio"], dtype=np.float32),
+                    },
+                )
+
+    def submit_if_due(
+        self,
+        rolling_buffer: np.ndarray,
+        *,
+        suppress_kwargs: dict[str, Any],
+    ) -> bool:
+        now = self._clock()
+        if self._inference_pending:
+            return False
+        if now - self._last_submit_at < self.hop_seconds:
+            return False
+
+        self._replace_queue_item(
+            self._request_queue,
+            {
+                "audio": np.asarray(rolling_buffer, dtype=np.float32).copy(),
+                "kwargs": dict(suppress_kwargs),
+            },
+        )
+        self._last_submit_at = now
+        self._inference_pending = True
+        return True
+
+    def poll_results(self) -> bool:
+        updated = False
+        while True:
+            try:
+                result = self._result_queue.get_nowait()
+            except queue.Empty:
+                break
+
+            original = np.asarray(result["audio"], dtype=np.float32)
+            clean = np.asarray(result["clean_audio"], dtype=np.float32)
+            min_len = min(len(original), len(clean))
+            original = original[:min_len]
+            clean = clean[:min_len]
+            gain = np.ones(min_len, dtype=np.float32)
+            np.divide(clean, original, out=gain, where=np.abs(original) > 1.0e-4)
+            self._latest_clean_context = clean
+            self._latest_gain_envelope = np.clip(gain, 0.0, 1.25)
+            self._latest_result_at = self._clock()
+            self._inference_pending = False
+            updated = True
+        return updated
+
+    def render_chunk(
+        self,
+        rolling_buffer: np.ndarray,
+        *,
+        chunk_len: int,
+        lookahead_seconds: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        context_size = int(rolling_buffer.shape[0])
+        lookahead_samples = max(0, int(round(lookahead_seconds * self.sample_rate)))
+        lookahead_samples = min(lookahead_samples, max(0, context_size - chunk_len))
+        end_idx = context_size - lookahead_samples
+        start_idx = max(0, end_idx - chunk_len)
+        original_chunk = np.asarray(rolling_buffer[start_idx:end_idx], dtype=np.float32)
+
+        if self._latest_gain_envelope is not None and len(self._latest_gain_envelope) >= end_idx:
+            clean_chunk = original_chunk * self._latest_gain_envelope[start_idx:end_idx]
+        elif self._latest_clean_context is not None and len(self._latest_clean_context) >= end_idx:
+            clean_chunk = self._latest_clean_context[start_idx:end_idx]
+        else:
+            clean_chunk = original_chunk.copy()
+
+        return (
+            np.clip(clean_chunk, -1.0, 1.0).astype(np.float32, copy=False),
+            np.clip(original_chunk, -1.0, 1.0).astype(np.float32, copy=False),
+        )
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Record and clean audio in real-time")
     parser.add_argument("--duration", "-d", type=int, default=10, help="Recording duration in seconds")
     parser.add_argument("--suppress", "-s", type=str, default="typing", help="Categories to suppress")
@@ -61,8 +247,18 @@ def main() -> None:
         default=0.5,
         help="Lookahead delay in seconds (0.0-1.5). Provides 'future' context to the model at the cost of processing latency.",
     )
+    add_codecsep_runtime_arguments(
+        parser,
+        default_mode="fixed_category",
+        default_query_strategy="single_pass",
+        default_multistep_steps=0,
+    )
+    return parser
 
-    args = parser.parse_args()
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
+    args = parser.parse_args(argv)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = args.output if args.output else f"recording_{timestamp}_cleaned.wav"
 
@@ -78,13 +274,24 @@ def main() -> None:
     logger.info("Initializing engine...")
     manager = ProfileManager()
     suppressions = {cat.strip(): True for cat in args.suppress.split(",")}
+    codecsep_call_kwargs = build_codecsep_call_kwargs_from_args(args)
     profile = manager.create_profile(
         name="Recorder Temp",
         description="Temp recording profile",
         suppressions=suppressions,
+        suppression_params={
+            "separator_backend": args.separator_backend,
+            "masking_method": args.masking_method,
+            "detection_threshold": args.threshold,
+            "aggressiveness": args.aggressiveness,
+            "codecsep_checkpoint_path": args.codecsep_checkpoint,
+            "codecsep_device": args.codecsep_device,
+            **codecsep_call_kwargs,
+        },
     )
 
-    engine = ControlEngine(profile_manager=manager)
+    suppressor = SemanticSuppressor(**build_suppressor_kwargs_from_args(args))
+    engine = ControlEngine(profile_manager=manager, suppressor=suppressor)
     engine.set_profile(profile)
     engine.set_mode(ControlMode.MANUAL)
 
@@ -110,9 +317,11 @@ def main() -> None:
 
     q = queue.Queue(maxsize=10)
     sample_rate = 44100
-    context_duration = 3.0
+    use_buffered_audiosep15 = args.separator_backend == "audiosep_hive15cat"
+    context_duration = 5.0 if use_buffered_audiosep15 else 3.0
     context_size = int(sample_rate * context_duration)
     rolling_buffer = np.zeros(context_size, dtype=np.float32)
+    buffered_live: BufferedRealtimeSuppressor | None = None
 
     def audio_callback(indata, frames, callback_time, status):  # noqa: ARG001
         if status:
@@ -129,6 +338,12 @@ def main() -> None:
     logger.info("Recording for %ss...", args.duration)
     logger.info("Suppressing: %s", args.suppress)
     logger.info("Press Ctrl+C to stop early")
+    if use_buffered_audiosep15:
+        logger.info(
+            "AudioSepHive15Cat live mode uses %.1fs rolling context with %.1fs async inference hops",
+            context_duration,
+            codecsep_call_kwargs.get("audiosep_hive15cat_realtime_hop_seconds", 1.0),
+        )
 
     try:
         try:
@@ -140,6 +355,16 @@ def main() -> None:
         stft_aligned_blocksize = 8192
         if args.device is not None:
             logger.info("Using specified input device ID: %s", args.device)
+        if use_buffered_audiosep15:
+            buffered_live = BufferedRealtimeSuppressor(
+                suppress_fn=engine.suppressor.suppress,
+                sample_rate=sample_rate,
+                context_duration=context_duration,
+                hop_seconds=float(
+                    codecsep_call_kwargs.get("audiosep_hive15cat_realtime_hop_seconds", 1.0)
+                ),
+            )
+            buffered_live.start()
 
         with sd.InputStream(
             samplerate=sample_rate,
@@ -164,7 +389,25 @@ def main() -> None:
                     targets = list(engine.current_profile.suppressions.keys()) if engine.current_profile else []
                     universal_targets = [p.strip() for p in args.universal.split(",")] if args.universal else []
 
-                    if targets or args.suppress_all or universal_targets:
+                    if use_buffered_audiosep15 and (targets or args.suppress_all or universal_targets):
+                        buffered_live.poll_results()
+                        buffered_live.submit_if_due(
+                            rolling_buffer,
+                            suppress_kwargs={
+                                "suppress_categories": targets,
+                                "detection_threshold": args.threshold,
+                                "aggressiveness": args.aggressiveness,
+                                "suppress_all": args.suppress_all,
+                                "universal_prompts": universal_targets,
+                                **codecsep_call_kwargs,
+                            },
+                        )
+                        clean_chunk, original_chunk = buffered_live.render_chunk(
+                            rolling_buffer,
+                            chunk_len=chunk_len,
+                            lookahead_seconds=args.lookahead,
+                        )
+                    elif targets or args.suppress_all or universal_targets:
                         clean_full_buffer = engine.suppressor.suppress(
                             audio=rolling_buffer,
                             sample_rate=sample_rate,
@@ -173,20 +416,23 @@ def main() -> None:
                             aggressiveness=args.aggressiveness,
                             suppress_all=args.suppress_all,
                             universal_prompts=universal_targets,
+                            **codecsep_call_kwargs,
                         )
+                        lookahead_delay = args.lookahead
+                        offset = int(lookahead_delay * sample_rate)
+                        end_idx = context_size - offset
+                        start_idx = end_idx - chunk_len
+                        clean_chunk = np.asarray(
+                            clean_full_buffer[start_idx:end_idx], dtype=np.float32
+                        ).copy()
+                        original_chunk = np.asarray(
+                            rolling_buffer[start_idx:end_idx], dtype=np.float32
+                        ).copy()
                     else:
-                        clean_full_buffer = rolling_buffer
-
-                    lookahead_delay = args.lookahead
-                    offset = int(lookahead_delay * sample_rate)
-                    end_idx = context_size - offset
-                    start_idx = end_idx - chunk_len
-                    clean_chunk = np.asarray(
-                        clean_full_buffer[start_idx:end_idx], dtype=np.float32
-                    ).copy()
-                    original_chunk = np.asarray(
-                        rolling_buffer[start_idx:end_idx], dtype=np.float32
-                    ).copy()
+                        clean_chunk, original_chunk = (
+                            np.asarray(mono_chunk, dtype=np.float32).copy(),
+                            np.asarray(mono_chunk, dtype=np.float32).copy(),
+                        )
 
                     # Clip to valid WAV range to prevent distortion
                     clean_chunk = np.clip(clean_chunk, -1.0, 1.0)
@@ -209,6 +455,8 @@ def main() -> None:
     except KeyboardInterrupt:
         logger.info("Stopping...")
     finally:
+        if buffered_live is not None:
+            buffered_live.stop()
         if recorded_frames:
             logger.info("Saving audio...")
             audio_data = np.concatenate(recorded_frames).astype(np.float32)

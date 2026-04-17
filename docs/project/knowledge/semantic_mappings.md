@@ -1,29 +1,80 @@
 # Semantic Mappings Knowledge Item
 
-This document details the mapping between YAMNet (Semantic Detection) and Waveformer (Signal Separation).
+This document describes how runtime suppression categories map into the active backends.
 
 ## Core Mapping Logic
-The system uses `ai/ai_runtime/config/yamnet_to_waveformer.yaml` to bridge the two models. YAMNet indices indicate *what* is present, and Waveformer targets indicate *what* can be removed.
 
-Most categories are user-controllable suppression targets. However, a category can only be suppressed if it has a corresponding Waveformer target (see the table below and `yamnet_to_waveformer.yaml`). As of now, Siren and Alarm do not have Waveformer targets and therefore cannot be directly suppressed via Waveformer.
+The runtime uses two backend-specific mapping files:
 
-### Fine-Tuned Categories
+- `ai/ai_runtime/config/yamnet_to_waveformer.yaml`
+- `ai/ai_runtime/config/category_to_codecsep.yaml`
 
-| Category | YAMNet Indices (Ref) | Waveformer Target | Special Notes |
+Waveformer and CodecSep now use those mappings differently:
+
+- Waveformer remains detector-oriented and YAMNet-aware.
+- CodecSep explicit suppression is now **AudioCaps-native and detector-free**.
+
+Waveformer remains the default backend unless a command or profile explicitly switches to CodecSep.
+
+## CodecSep AudioCaps-Native Mapping
+
+When `separator_backend=codecsep` is used explicitly:
+
+- YAMNet is bypassed
+- requested categories are compiled directly into fixed-slot CodecSep plans
+- nuisance/environmental suppression targets the `sfx` slot
+- `speech` suppression targets `speech`
+- `music` suppression targets `music`
+
+The active default mode is `codecsep_mode=audiocaps_native`.
+
+`experimental_search` still exists, but it is no longer the default contract.
+
+## Runtime Defaults
+
+- Offline batch CodecSep: `audiocaps_native`, mono-shared stereo by default
+- Realtime CodecSep: `audiocaps_native`, single-pass fixed-slot behavior
+- `codecsep_mode=experimental_search` enables the older slot-search / CLAP-rescoring / multistep path
+- `codecsep_mode=compat` forces the old stem-routing fallback
+
+## Runtime Notes
+
+| Category | Waveformer | CodecSep | Notes |
 | :--- | :--- | :--- | :--- |
-| **Siren** | 388-390 | N/A | Not currently mapped to a Waveformer target; cannot be directly suppressed until the mapping/TARGETS list is updated. |
-| **Alarm** | 387, 388, 403 | N/A | Not currently mapped to a Waveformer target; cannot be directly suppressed until the mapping/TARGETS list is updated. |
-| **Typing** | 378, 380 | Computer_keyboard, Writing | `detection_threshold: -1` (always suppress when requested). `aggressiveness_override: 1.8`. Transient category. |
-| **Pets** | 67-80 | Bark, Meow | `detection_threshold: -1`. `aggressiveness_override: 1.6`. Transient category. |
-| **Traffic** | 323-326 | Bus | Handles heavy engine drones well. |
-| **Wind** | 486-487 | N/A | Currently marked for DSP fallback (Spectral Gating). |
-| **Speech** | 0-5 | N/A | Never suppressed; used as the "Keep" signal. |
+| **Typing** | `Computer_keyboard`, `Writing` | fixed-slot `sfx` prompt profile | Explicit CodecSep suppression does not wait for YAMNet. |
+| **Pets** | `Bark`, `Meow` | fixed-slot `sfx` prompt profile | Barking stays on `sfx`; no slot search by default. |
+| **Traffic** | `Bus` | fixed-slot `sfx` prompt profile | Prompt text is more specific than the Waveformer target name. |
+| **Wind** | No direct target | fixed-slot `sfx` prompt profile | CodecSep covers open-vocabulary nuisance classes through `sfx`. |
+| **Speech** | Not suppressed by target mapping | fixed-slot `speech` profile | Clean audio is built from the normalized complement. |
+| **Music** | Not suppressed by target mapping | fixed-slot `music` profile | Clean audio is built from the normalized complement. |
 
 ## Threshold Logic
-- **Default Threshold**: 0.5 (50% confidence). Category-specific overrides in `yamnet_to_waveformer.yaml`.
-- **Always-Suppress**: `detection_threshold: -1` bypasses YAMNet for typing and pets when user explicitly requests them. Use when detection is unreliable.
-- **Per-Category Overrides**: `aggressiveness_override` (e.g. typing 1.8, pets 1.6) strengthens suppression for problematic categories.
 
-## Future Improvements
-- **Spectral Gating**: For categories like "Wind" that lack a Waveformer target, we plan to implement traditional spectral gating.
-- **Auto-Profile Switching**: Logic to automatically switch from "Office" to "Commute" based on sustained detection of traffic.
+- Default threshold is `0.5` for detector-driven Waveformer usage.
+- Category-specific detection overrides live in `yamnet_to_waveformer.yaml`.
+- CodecSep prompt/slot profiles live in `category_to_codecsep.yaml`.
+- Explicit CodecSep suppression does not depend on YAMNet thresholds or detector state.
+
+## CodecSep Default Runtime Source
+
+- Default CodecSep source: `ai/models/CodecSep/codecsep_supplementary_material/codecsep_code/model-checkpoints/CodecSep_AudioCaps_400k_Run1`
+- Checkpoint resolution order inside that run directory:
+  - `ckpt_best/pytorch_model.bin`
+  - `ckpt_best/ckpt_model_best.pth`
+  - `ckpt_final/ckpt_model_final.pth`
+
+## Why Native Fixed-Slot
+
+This redesign aligns the runtime with the AudioCaps training/eval contract found in the paper and archived code:
+
+- fixed `speech/music/sfx` slots per forward pass
+- detailed nuisance prompts live on `sfx`
+- normalized stem outputs are treated as the authoritative separation result
+- nuisance `sfx` requests subtract the extracted target from the original mix
+- `speech` and `music` requests keep the normalized complement
+
+Supporting references:
+
+- CodecSep OpenReview: <https://openreview.net/forum?id=MDHVDfUrDz>
+- AudioCaps dataset card: <https://huggingface.co/datasets/OpenSound/AudioCaps>
+- LAION-CLAP README: <https://github.com/LAION-AI/CLAP>

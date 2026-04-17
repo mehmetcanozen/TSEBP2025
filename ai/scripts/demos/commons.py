@@ -17,6 +17,7 @@ def create_custom_profile(
     manager: ProfileManager,
     suppress_categories: list[str],
     name: str = "Custom Realtime",
+    suppression_params: dict | None = None,
 ):
     """Create a custom profile with given suppression categories."""
     suppressions = {cat: True for cat in suppress_categories}
@@ -24,6 +25,7 @@ def create_custom_profile(
         name=name,
         description=f"Suppress: {', '.join(suppress_categories)}",
         suppressions=suppressions,
+        suppression_params=suppression_params,
     )
 
 

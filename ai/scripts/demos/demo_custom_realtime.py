@@ -17,11 +17,15 @@ if str(_root) not in sys.path:
 
 from ai.scripts.demos.commons import setup_demo_logging, create_custom_profile, mono_from_stereo
 from ai.ai_runtime.profiles import ControlEngine, ControlMode, ProfileManager
+from ai.ai_runtime.utils.codecsep import (
+    add_codecsep_runtime_arguments,
+    build_codecsep_call_kwargs_from_args,
+)
 
 logger = setup_demo_logging()
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Real-time mic noise suppression (custom categories)")
     parser.add_argument("--suppress", "-s", type=str, default="typing")
     parser.add_argument("--duration", "-d", type=int, default=10)
@@ -31,7 +35,18 @@ def main():
     parser.add_argument("--list-categories", action="store_true")
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--device", type=int, default=None)
-    args = parser.parse_args()
+    add_codecsep_runtime_arguments(
+        parser,
+        default_mode="fixed_category",
+        default_query_strategy="single_pass",
+        default_multistep_steps=0,
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     if args.list_categories:
         print("Example: python ai/scripts/demos/demo_custom_realtime.py --suppress typing,wind,siren")
@@ -39,12 +54,32 @@ def main():
     if args.list_devices:
         print(sd.query_devices())
         return
+    if args.separator_backend == "audiosep_hive15cat":
+        parser.error(
+            "audiosep_hive15cat is not supported in demo_custom_realtime.py because this demo "
+            "runs suppression inside the audio callback. Use ai.ai_runtime.audio.recorder_cleaner "
+            "for buffered live support."
+        )
 
     categories = [c.strip() for c in args.suppress.split(",")] if args.suppress else []
     universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
+    codecsep_call_kwargs = build_codecsep_call_kwargs_from_args(args)
+    suppression_params = {
+        "separator_backend": args.separator_backend,
+        "masking_method": args.masking_method,
+        "detection_threshold": args.threshold,
+        "codecsep_checkpoint_path": args.codecsep_checkpoint,
+        "codecsep_device": args.codecsep_device,
+        **codecsep_call_kwargs,
+    }
 
     manager = ProfileManager()
-    profile = create_custom_profile(manager, categories, name="Custom Realtime")
+    profile = create_custom_profile(
+        manager,
+        categories,
+        name="Custom Realtime",
+        suppression_params=suppression_params,
+    )
     engine = ControlEngine(profile_manager=manager)
     engine.set_profile(profile)
     engine.set_mode(ControlMode.MANUAL)
@@ -76,6 +111,11 @@ def main():
                     [],
                     suppress_all=args.suppress_all,
                     universal_prompts=universal_prompts,
+                    separator_backend=args.separator_backend,
+                    masking_method=args.masking_method,
+                    codecsep_checkpoint_path=args.codecsep_checkpoint,
+                    codecsep_device=args.codecsep_device,
+                    **codecsep_call_kwargs,
                 )
             else:
                 clean_full = engine.process_audio(rolling_buffer, 44100)

@@ -15,4 +15,5 @@ line_length = 100
 [tool.pytest.ini_options]
 testpaths = ["ai/tests", "desktop/tests"]
 python_files = "test_*.py"
+norecursedirs = ["audioset_hf_test_*", "tmp*"]
 

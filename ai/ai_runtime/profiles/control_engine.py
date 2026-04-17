@@ -148,6 +148,11 @@ class ControlEngine:
             gains=gains,
             suppressions=suppressions,
             description=description,
+            suppression_params=(
+                dict(profile.suppression_params)
+                if profile and profile.suppression_params
+                else None
+            ),
         )
 
     def set_profile_by_id(self, profile_id: str) -> bool:
@@ -214,7 +219,29 @@ class ControlEngine:
                 "suppress_categories": active_suppressions,
             }
             if profile.suppression_params:
-                allowed = {"detection_threshold", "aggressiveness"}
+                allowed = {
+                    "separator_backend",
+                    "masking_method",
+                    "detection_threshold",
+                    "aggressiveness",
+                    "audiosep_hive15cat_model_path",
+                    "audiosep_hive15cat_device",
+                    "audiosep_hive15cat_realtime_hop_seconds",
+                    "codecsep_checkpoint_path",
+                    "codecsep_device",
+                    "codecsep_prompt_overrides",
+                    "codecsep_negative_prompts",
+                    "codecsep_preserve_prompts",
+                    "codecsep_mode",
+                    "codecsep_query_strategy",
+                    "codecsep_multistep_steps",
+                    "codecsep_stereo_mode",
+                    "codecsep_fixed_merge_policy",
+                    "codecsep_product_categories",
+                    "codecsep_hive_class_ids",
+                    "universal_prompts",
+                    "suppress_all",
+                }
                 for k, v in profile.suppression_params.items():
                     if k in allowed:
                         kwargs[k] = v

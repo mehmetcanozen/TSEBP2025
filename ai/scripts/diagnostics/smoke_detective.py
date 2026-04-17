@@ -59,7 +59,7 @@ def main() -> None:
     parser.add_argument(
         "--model-handle",
         type=str,
-        help="TFHub URL or path to extracted YAMNet SavedModel directory (e.g., ai/models/checkpoints/yamnet_1).",
+        help="TFHub URL or path to extracted YAMNet SavedModel directory (e.g., ai/models/YAMNet/saved_models/yamnet_1).",
     )
     args = parser.parse_args()
 

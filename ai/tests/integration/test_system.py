@@ -19,8 +19,8 @@ def test_semantic_suppressor_minimal_path():
     assert clean_audio.shape == noisy_audio.shape
 
 
-def test_profile_manager_create_delete():
-    manager = ProfileManager()
+def test_profile_manager_create_delete(tmp_path):
+    manager = ProfileManager(profiles_dir=tmp_path / "profiles")
     profile = manager.create_profile(
         name="Test Profile",
         description="Temporary test profile",

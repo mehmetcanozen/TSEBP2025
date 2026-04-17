@@ -1,0 +1,2502 @@
+{
+  "version": "fixed_category_product_mapping_v1",
+  "identity_version": "fixed_category_v1",
+  "prompt_bank_hash": "82238c6b1e56937453ee634bd531be971cc0dbd3",
+  "prompt_bank_label_count": 273,
+  "locked_label_count": 253,
+  "deferred_label_count": 20,
+  "deferred_labels": [
+    "Bang",
+    "Bathtub (filling or washing)",
+    "Chopping (food)",
+    "Clang",
+    "Cutlery, silverware",
+    "Middle Eastern music",
+    "Motorcycle",
+    "Pump (liquid)",
+    "Railroad car, train wagon",
+    "Reggae",
+    "Scrape",
+    "Shofar",
+    "Shout",
+    "Skidding",
+    "Slap, smack",
+    "Sniff",
+    "Soul music",
+    "Squeak",
+    "Subway, metro, underground",
+    "Synthetic singing"
+  ],
+  "deferred_annex": [
+    {
+      "hive_label": "Bang",
+      "slug": "bang",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Bathtub (filling or washing)",
+      "slug": "bathtub_filling_or_washing",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Chopping (food)",
+      "slug": "chopping_food",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Clang",
+      "slug": "clang",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Cutlery, silverware",
+      "slug": "cutlery_silverware",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Middle Eastern music",
+      "slug": "middle_eastern_music",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Motorcycle",
+      "slug": "motorcycle",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Pump (liquid)",
+      "slug": "pump_liquid",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Railroad car, train wagon",
+      "slug": "railroad_car_train_wagon",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Reggae",
+      "slug": "reggae",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Scrape",
+      "slug": "scrape",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Shofar",
+      "slug": "shofar",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Shout",
+      "slug": "shout",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Skidding",
+      "slug": "skidding",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Slap, smack",
+      "slug": "slap_smack",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Sniff",
+      "slug": "sniff",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Soul music",
+      "slug": "soul_music",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Squeak",
+      "slug": "squeak",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Subway, metro, underground",
+      "slug": "subway_metro_underground",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    },
+    {
+      "hive_label": "Synthetic singing",
+      "slug": "synthetic_singing",
+      "status": "deferred",
+      "reason": "prompt_bank_only_until_full_fixed_category_regeneration"
+    }
+  ],
+  "provenance": {
+    "builder": "tools/build_fixed_category_artifacts.py",
+    "class_lock_source": "C:\\SoftwareProjects\\TSEBP2025\\ai\\models\\CodecSep\\codecsep_supplementary_material\\codecsep_code\\config\\fixed_category\\fixedset_class_lock.json",
+    "sample_index": "C:\\SoftwareProjects\\TSEBP2025\\ai\\models\\CodecSep\\codecsep_supplementary_material\\codecsep_code\\config\\fixed_category\\fixed_category_sample_index.json",
+    "prompt_bank_hash": "82238c6b1e56937453ee634bd531be971cc0dbd3",
+    "prompt_bank_path": "C:\\SoftwareProjects\\TSEBP2025\\ai\\models\\CodecSep\\codecsep_supplementary_material\\codecsep_code\\config\\prompt_bank.json",
+    "prompt_bank_label_count": 273,
+    "locked_label_count": 253,
+    "deferred_label_count": 20,
+    "deferred_annex_version": "fixed_category_deferred_annex_v1"
+  },
+  "product_categories": [
+    {
+      "product_category": "aircraft",
+      "member_class_ids": [
+        5,
+        98,
+        124
+      ],
+      "member_slugs": [
+        "aircraft_engine",
+        "fixed_wing_aircraft_airplane",
+        "helicopter"
+      ],
+      "priority_class_ids": [
+        5
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        5,
+        98,
+        124
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "alarm",
+      "member_class_ids": [
+        6,
+        36,
+        95
+      ],
+      "member_slugs": [
+        "alarm",
+        "car_alarm",
+        "fire_alarm"
+      ],
+      "priority_class_ids": [
+        6
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "alarm"
+      ],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        36,
+        95
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "alarm_clock",
+      "member_class_ids": [
+        7
+      ],
+      "member_slugs": [
+        "alarm_clock"
+      ],
+      "priority_class_ids": [
+        7
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "alarm"
+      ],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        7
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "amphibian",
+      "member_class_ids": [
+        105
+      ],
+      "member_slugs": [
+        "frog"
+      ],
+      "priority_class_ids": [
+        105
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        105
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "ball_bounce",
+      "member_class_ids": [
+        11
+      ],
+      "member_slugs": [
+        "basketball_bounce"
+      ],
+      "priority_class_ids": [
+        11
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        11
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "beatboxing",
+      "member_class_ids": [
+        12,
+        168
+      ],
+      "member_slugs": [
+        "beatboxing",
+        "rapping"
+      ],
+      "priority_class_ids": [
+        12
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        12,
+        168
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "beep_signal",
+      "member_class_ids": [
+        14
+      ],
+      "member_slugs": [
+        "beep_bleep"
+      ],
+      "priority_class_ids": [
+        14
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        14
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "bell_chime",
+      "member_class_ids": [
+        43,
+        48,
+        52,
+        63,
+        72,
+        133,
+        134,
+        158,
+        193,
+        230,
+        231
+      ],
+      "member_slugs": [
+        "change_ringing_campanology",
+        "chime",
+        "church_bell",
+        "cowbell",
+        "ding",
+        "jingle_bell",
+        "jingle_tinkle",
+        "ping",
+        "singing_bowl",
+        "tubular_bells",
+        "tuning_fork"
+      ],
+      "priority_class_ids": [
+        43
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        43,
+        48,
+        52,
+        63,
+        72,
+        133,
+        134,
+        158,
+        193,
+        230
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "bird",
+      "member_class_ids": [
+        17,
+        18,
+        49,
+        104
+      ],
+      "member_slugs": [
+        "bird",
+        "bird_vocalization_bird_call_bird_song",
+        "chirp_tweet",
+        "fowl"
+      ],
+      "priority_class_ids": [
+        17
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "pets"
+      ],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        17,
+        49,
+        104
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "body_noise",
+      "member_class_ids": [
+        89
+      ],
+      "member_slugs": [
+        "fart"
+      ],
+      "priority_class_ids": [
+        89
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        89
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "boiling_steam",
+      "member_class_ids": [
+        23,
+        211
+      ],
+      "member_slugs": [
+        "boiling",
+        "steam"
+      ],
+      "priority_class_ids": [
+        23
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        23,
+        211
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "burst_pop",
+      "member_class_ids": [
+        30
+      ],
+      "member_slugs": [
+        "burst_pop"
+      ],
+      "priority_class_ids": [
+        30
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        30
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "buzzer_signal",
+      "member_class_ids": [
+        33
+      ],
+      "member_slugs": [
+        "buzzer"
+      ],
+      "priority_class_ids": [
+        33
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        33
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "camera_shutter",
+      "member_class_ids": [
+        34
+      ],
+      "member_slugs": [
+        "camera"
+      ],
+      "priority_class_ids": [
+        34
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        34
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "canine",
+      "member_class_ids": [
+        35,
+        75
+      ],
+      "member_slugs": [
+        "canidae_dogs_wolves",
+        "dog"
+      ],
+      "priority_class_ids": [
+        35
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        35,
+        75
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "car_horn",
+      "member_class_ids": [
+        37
+      ],
+      "member_slugs": [
+        "car_horn"
+      ],
+      "priority_class_ids": [
+        37
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": false,
+      "launch_enabled_class_ids": [],
+      "launch_exclusion_reason": "no_launch_enabled_member_classes",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "clap_snap",
+      "member_class_ids": [
+        54,
+        94,
+        206,
+        243
+      ],
+      "member_slugs": [
+        "clapping",
+        "finger_snapping",
+        "snap",
+        "whip"
+      ],
+      "priority_class_ids": [
+        54
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        54,
+        94,
+        206,
+        243
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "clock_tick",
+      "member_class_ids": [
+        59
+      ],
+      "member_slugs": [
+        "clock"
+      ],
+      "priority_class_ids": [
+        59
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        59
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "cooking_sizzle",
+      "member_class_ids": [
+        106,
+        197
+      ],
+      "member_slugs": [
+        "frying_food",
+        "sizzle"
+      ],
+      "priority_class_ids": [
+        106
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        106,
+        197
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "crackle_burst",
+      "member_class_ids": [
+        65
+      ],
+      "member_slugs": [
+        "crackle"
+      ],
+      "priority_class_ids": [
+        65
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        65
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "dog_barking",
+      "member_class_ids": [
+        76
+      ],
+      "member_slugs": [
+        "dog_bark"
+      ],
+      "priority_class_ids": [
+        76
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "pets"
+      ],
+      "launch_enabled": false,
+      "launch_enabled_class_ids": [],
+      "launch_exclusion_reason": "no_launch_enabled_member_classes",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "door_knock",
+      "member_class_ids": [
+        78
+      ],
+      "member_slugs": [
+        "door_knock"
+      ],
+      "priority_class_ids": [
+        78
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": false,
+      "launch_enabled_class_ids": [],
+      "launch_exclusion_reason": "no_launch_enabled_member_classes",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "doorbell_signal",
+      "member_class_ids": [
+        79
+      ],
+      "member_slugs": [
+        "doorbell"
+      ],
+      "priority_class_ids": [
+        79
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        79
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "electronic_instrument",
+      "member_class_ids": [
+        221
+      ],
+      "member_slugs": [
+        "theremin"
+      ],
+      "priority_class_ids": [
+        221
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        221
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "engine_noise",
+      "member_class_ids": [
+        87
+      ],
+      "member_slugs": [
+        "engine"
+      ],
+      "priority_class_ids": [
+        87
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        87
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "ensemble_music",
+      "member_class_ids": [
+        153,
+        216
+      ],
+      "member_slugs": [
+        "orchestra",
+        "string_section"
+      ],
+      "priority_class_ids": [
+        153
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        153,
+        216
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "equine",
+      "member_class_ids": [
+        77,
+        127
+      ],
+      "member_slugs": [
+        "donkey_ass",
+        "horse"
+      ],
+      "priority_class_ids": [
+        77
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        127
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "explosive_burst",
+      "member_class_ids": [
+        25,
+        88,
+        97,
+        116
+      ],
+      "member_slugs": [
+        "boom",
+        "eruption",
+        "fireworks",
+        "gunshot_gunfire"
+      ],
+      "priority_class_ids": [
+        25
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        25,
+        88,
+        97,
+        116
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "fan_motor",
+      "member_class_ids": [
+        144
+      ],
+      "member_slugs": [
+        "mechanical_fan"
+      ],
+      "priority_class_ids": [
+        144
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        144
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "feline",
+      "member_class_ids": [
+        40
+      ],
+      "member_slugs": [
+        "cat"
+      ],
+      "priority_class_ids": [
+        40
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        40
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "footstep_motion",
+      "member_class_ids": [
+        179,
+        189,
+        199,
+        237
+      ],
+      "member_slugs": [
+        "run",
+        "shuffle",
+        "skateboard",
+        "walk_footsteps"
+      ],
+      "priority_class_ids": [
+        179
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        179,
+        189,
+        199,
+        237
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "glass_impact",
+      "member_class_ids": [
+        27,
+        109,
+        203
+      ],
+      "member_slugs": [
+        "breaking",
+        "glass",
+        "smash_crash"
+      ],
+      "priority_class_ids": [
+        27
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        27,
+        109,
+        203
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "heartbeat",
+      "member_class_ids": [
+        123
+      ],
+      "member_slugs": [
+        "heart_sounds_heartbeat"
+      ],
+      "priority_class_ids": [
+        123
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        123
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "household_appliance",
+      "member_class_ids": [
+        3,
+        20,
+        118,
+        145,
+        226,
+        234
+      ],
+      "member_slugs": [
+        "air_conditioning",
+        "blender",
+        "hair_dryer",
+        "microwave_oven",
+        "toothbrush",
+        "vacuum_cleaner"
+      ],
+      "priority_class_ids": [
+        3
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        3,
+        20,
+        118,
+        145,
+        234
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "human_vocal",
+      "member_class_ids": [
+        69,
+        113,
+        114,
+        128,
+        129,
+        139,
+        186,
+        245
+      ],
+      "member_slugs": [
+        "crying_sobbing",
+        "groan",
+        "grunt",
+        "hum",
+        "humming",
+        "laughter",
+        "screaming",
+        "whistling"
+      ],
+      "priority_class_ids": [
+        69
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        69,
+        113,
+        114,
+        128,
+        129,
+        139,
+        186,
+        245
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "insect",
+      "member_class_ids": [
+        13,
+        32,
+        66,
+        101,
+        146
+      ],
+      "member_slugs": [
+        "bee_wasp_etc",
+        "buzz",
+        "cricket",
+        "fly_housefly",
+        "mosquito"
+      ],
+      "priority_class_ids": [
+        13
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        13,
+        32,
+        66,
+        101
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "keyboard_instrument",
+      "member_class_ids": [
+        122,
+        154,
+        156,
+        217
+      ],
+      "member_slugs": [
+        "harpsichord",
+        "organ",
+        "piano",
+        "synthesizer"
+      ],
+      "priority_class_ids": [
+        122
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        122,
+        154,
+        156,
+        217
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "keyboard_typing",
+      "member_class_ids": [
+        136,
+        232
+      ],
+      "member_slugs": [
+        "keyboard_typing",
+        "typing"
+      ],
+      "priority_class_ids": [
+        136
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "typing"
+      ],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        232
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "liquid_movement",
+      "member_class_ids": [
+        159,
+        202,
+        208,
+        213
+      ],
+      "member_slugs": [
+        "plop",
+        "slosh",
+        "splash_splatter",
+        "stir"
+      ],
+      "priority_class_ids": [
+        159
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        159,
+        202,
+        208,
+        213
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "liquid_pour",
+      "member_class_ids": [
+        93,
+        162
+      ],
+      "member_slugs": [
+        "fill_with_liquid",
+        "pour"
+      ],
+      "priority_class_ids": [
+        93
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        93,
+        162
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "livestock",
+      "member_class_ids": [
+        41,
+        110,
+        157,
+        188
+      ],
+      "member_slugs": [
+        "cattle_bovinae",
+        "goat",
+        "pig",
+        "sheep"
+      ],
+      "priority_class_ids": [
+        41
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        41,
+        110,
+        157,
+        188
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "low_rumble",
+      "member_class_ids": [
+        178
+      ],
+      "member_slugs": [
+        "rumble"
+      ],
+      "priority_class_ids": [
+        178
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        178
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "marine_mammal",
+      "member_class_ids": [
+        242
+      ],
+      "member_slugs": [
+        "whale_vocalization"
+      ],
+      "priority_class_ids": [
+        242
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        242
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "marine_signal",
+      "member_class_ids": [
+        102
+      ],
+      "member_slugs": [
+        "foghorn"
+      ],
+      "priority_class_ids": [
+        102
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        102
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "marine_vehicle",
+      "member_class_ids": [
+        22
+      ],
+      "member_slugs": [
+        "boat_water_vehicle"
+      ],
+      "priority_class_ids": [
+        22
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        22
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "mechanical_motion",
+      "member_class_ids": [
+        81,
+        108,
+        164,
+        187,
+        201,
+        251
+      ],
+      "member_slugs": [
+        "drawer_open_or_close",
+        "gears",
+        "power_windows_electric_windows",
+        "sewing_machine",
+        "sliding_door",
+        "zipper_clothing"
+      ],
+      "priority_class_ids": [
+        81
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        108,
+        164,
+        187,
+        201,
+        251
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "metal_impact",
+      "member_class_ids": [
+        57,
+        60,
+        74,
+        137
+      ],
+      "member_slugs": [
+        "clatter",
+        "coin_dropping",
+        "dishes_pots_and_pans",
+        "keys_jangling"
+      ],
+      "priority_class_ids": [
+        57
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        57,
+        60,
+        74,
+        137
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "mouth_sound",
+      "member_class_ids": [
+        19,
+        29,
+        45,
+        61,
+        117,
+        125,
+        207
+      ],
+      "member_slugs": [
+        "biting",
+        "burping_eructation",
+        "chewing_mastication",
+        "cough",
+        "gurgling",
+        "hiccup",
+        "sneeze"
+      ],
+      "priority_class_ids": [
+        19
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        19,
+        29,
+        45,
+        61,
+        117,
+        125,
+        207
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "music_genre",
+      "member_class_ids": [
+        21,
+        56,
+        62,
+        73,
+        86,
+        103,
+        107,
+        112,
+        132,
+        147,
+        148,
+        149,
+        150,
+        151,
+        161,
+        173,
+        175,
+        198,
+        229
+      ],
+      "member_slugs": [
+        "blues",
+        "classical_music",
+        "country",
+        "disco",
+        "electronic_music",
+        "folk_music",
+        "funk",
+        "grime_music",
+        "jazz",
+        "music_for_children",
+        "music_of_africa",
+        "music_of_asia",
+        "music_of_latin_america",
+        "new_age_music",
+        "pop_music",
+        "rhythm_and_blues",
+        "rock_music",
+        "ska",
+        "trap_music"
+      ],
+      "priority_class_ids": [
+        21
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        56,
+        62,
+        73,
+        86,
+        147,
+        148,
+        149,
+        150,
+        151,
+        161,
+        173,
+        175,
+        229
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "office_machine",
+      "member_class_ids": [
+        39,
+        165
+      ],
+      "member_slugs": [
+        "cash_register",
+        "printer"
+      ],
+      "priority_class_ids": [
+        39
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        39,
+        165
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "percussion",
+      "member_class_ids": [
+        70,
+        83,
+        84,
+        111,
+        142,
+        171,
+        218,
+        248
+      ],
+      "member_slugs": [
+        "cymbal",
+        "drum",
+        "drum_kit",
+        "gong",
+        "mallet_percussion",
+        "rattle_instrument",
+        "tambourine",
+        "wood_block"
+      ],
+      "priority_class_ids": [
+        70
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        70,
+        83,
+        84,
+        111,
+        142,
+        171,
+        218,
+        248
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "phone_ringing",
+      "member_class_ids": [
+        155,
+        220
+      ],
+      "member_slugs": [
+        "phone_ringing",
+        "telephone"
+      ],
+      "priority_class_ids": [
+        155
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "phone"
+      ],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        220
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "rail_transport",
+      "member_class_ids": [
+        228
+      ],
+      "member_slugs": [
+        "train"
+      ],
+      "priority_class_ids": [
+        228
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        228
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "reed_instrument",
+      "member_class_ids": [
+        1,
+        9,
+        55,
+        120,
+        183
+      ],
+      "member_slugs": [
+        "accordion",
+        "bagpipes",
+        "clarinet",
+        "harmonica",
+        "saxophone"
+      ],
+      "priority_class_ids": [
+        1
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        1,
+        9,
+        55,
+        120,
+        183
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "reptile",
+      "member_class_ids": [
+        126,
+        205
+      ],
+      "member_slugs": [
+        "hiss",
+        "snake"
+      ],
+      "priority_class_ids": [
+        126
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        126,
+        205
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "respiration",
+      "member_class_ids": [
+        28,
+        191
+      ],
+      "member_slugs": [
+        "breathing",
+        "sigh"
+      ],
+      "priority_class_ids": [
+        28
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        28,
+        191
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "road_vehicle",
+      "member_class_ids": [
+        15,
+        31,
+        38,
+        166
+      ],
+      "member_slugs": [
+        "bicycle",
+        "bus",
+        "car_passing_by",
+        "race_car_auto_racing"
+      ],
+      "priority_class_ids": [
+        15
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        15,
+        31,
+        38,
+        166
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "rodent",
+      "member_class_ids": [
+        176
+      ],
+      "member_slugs": [
+        "rodents_rats_mice"
+      ],
+      "priority_class_ids": [
+        176
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        176
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "room_tone",
+      "member_class_ids": [
+        192
+      ],
+      "member_slugs": [
+        "silence"
+      ],
+      "priority_class_ids": [
+        192
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        192
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "scrape_friction",
+      "member_class_ids": [
+        67,
+        68,
+        177,
+        180,
+        185,
+        190,
+        249
+      ],
+      "member_slugs": [
+        "crumpling_crinkling",
+        "crunch",
+        "rub",
+        "rustle",
+        "scratch",
+        "shuffling_cards",
+        "writing"
+      ],
+      "priority_class_ids": [
+        67
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        67,
+        68,
+        177,
+        180,
+        185,
+        190,
+        249
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "siren",
+      "member_class_ids": [
+        8,
+        53,
+        96,
+        160,
+        195
+      ],
+      "member_slugs": [
+        "ambulance_siren",
+        "civil_defense_siren",
+        "fire_engine_fire_truck_siren",
+        "police_car_siren",
+        "siren"
+      ],
+      "priority_class_ids": [
+        8
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "siren"
+      ],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        8,
+        53,
+        96,
+        160
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "small_object_mechanics",
+      "member_class_ids": [
+        58,
+        169,
+        170
+      ],
+      "member_slugs": [
+        "clicking",
+        "ratchet_pawl",
+        "rattle"
+      ],
+      "priority_class_ids": [
+        58
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        58,
+        170
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "smoke_alarm",
+      "member_class_ids": [
+        204
+      ],
+      "member_slugs": [
+        "smoke_detector_smoke_alarm"
+      ],
+      "priority_class_ids": [
+        204
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": false,
+      "launch_enabled_class_ids": [],
+      "launch_exclusion_reason": "no_launch_enabled_member_classes",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "speech",
+      "member_class_ids": [
+        47,
+        91,
+        141,
+        244
+      ],
+      "member_slugs": [
+        "child_speech_kid_speaking",
+        "female_speech_woman_speaking",
+        "male_speech_man_speaking",
+        "whispering"
+      ],
+      "priority_class_ids": [
+        47
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [
+        "speech"
+      ],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        47,
+        91,
+        141,
+        244
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "spray_hiss",
+      "member_class_ids": [
+        210
+      ],
+      "member_slugs": [
+        "spray"
+      ],
+      "priority_class_ids": [
+        210
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        210
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "spring_impact",
+      "member_class_ids": [
+        24
+      ],
+      "member_slugs": [
+        "boing"
+      ],
+      "priority_class_ids": [
+        24
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        24
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "stomach_noise",
+      "member_class_ids": [
+        214
+      ],
+      "member_slugs": [
+        "stomach_rumble"
+      ],
+      "priority_class_ids": [
+        214
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        214
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "storm",
+      "member_class_ids": [
+        167,
+        223
+      ],
+      "member_slugs": [
+        "rain",
+        "thunderstorm"
+      ],
+      "priority_class_ids": [
+        167
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        167,
+        223
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "string_instrument",
+      "member_class_ids": [
+        10,
+        42,
+        80,
+        115,
+        121,
+        143,
+        196,
+        233,
+        236,
+        252
+      ],
+      "member_slugs": [
+        "banjo",
+        "cello",
+        "double_bass",
+        "guitar",
+        "harp",
+        "mandolin",
+        "sitar",
+        "ukulele",
+        "violin_fiddle",
+        "zither"
+      ],
+      "priority_class_ids": [
+        10
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        10,
+        42,
+        80,
+        115,
+        121,
+        143,
+        196,
+        233,
+        236,
+        252
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "thud_impact",
+      "member_class_ids": [
+        222
+      ],
+      "member_slugs": [
+        "thump_thud"
+      ],
+      "priority_class_ids": [
+        222
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        222
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "tire_noise",
+      "member_class_ids": [
+        224
+      ],
+      "member_slugs": [
+        "tire_squeal"
+      ],
+      "priority_class_ids": [
+        224
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        224
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "tool_impact",
+      "member_class_ids": [
+        119
+      ],
+      "member_slugs": [
+        "hammer"
+      ],
+      "priority_class_ids": [
+        119
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        119
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "tool_noise",
+      "member_class_ids": [
+        85,
+        92,
+        131,
+        163,
+        181,
+        182,
+        184
+      ],
+      "member_slugs": [
+        "electric_shaver_electric_razor",
+        "filing_rasp",
+        "jackhammer",
+        "power_tool",
+        "sanding",
+        "sawing",
+        "scissors"
+      ],
+      "priority_class_ids": [
+        85
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        85,
+        92,
+        131,
+        163,
+        181,
+        182
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "traffic_noise",
+      "member_class_ids": [
+        227
+      ],
+      "member_slugs": [
+        "traffic_noise_roadway_noise"
+      ],
+      "priority_class_ids": [
+        227
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        227
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "vehicle_brake",
+      "member_class_ids": [
+        2
+      ],
+      "member_slugs": [
+        "air_brake"
+      ],
+      "priority_class_ids": [
+        2
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        2
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "vehicle_horn",
+      "member_class_ids": [
+        4,
+        235
+      ],
+      "member_slugs": [
+        "air_horn_truck_horn",
+        "vehicle_horn_car_horn_honking"
+      ],
+      "priority_class_ids": [
+        4
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        4,
+        235
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "vehicle_signal",
+      "member_class_ids": [
+        16,
+        130,
+        172
+      ],
+      "member_slugs": [
+        "bicycle_bell",
+        "ice_cream_truck_ice_cream_van",
+        "reversing_beeps"
+      ],
+      "priority_class_ids": [
+        16
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        16,
+        130,
+        172
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "vocal_music",
+      "member_class_ids": [
+        0,
+        44,
+        46,
+        50,
+        90,
+        140,
+        250
+      ],
+      "member_slugs": [
+        "a_capella",
+        "chant",
+        "child_singing",
+        "choir",
+        "female_singing",
+        "male_singing",
+        "yodeling"
+      ],
+      "priority_class_ids": [
+        0
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        0,
+        44,
+        46,
+        50,
+        90,
+        140,
+        250
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "water_container",
+      "member_class_ids": [
+        194
+      ],
+      "member_slugs": [
+        "sink_filling_or_washing"
+      ],
+      "priority_class_ids": [
+        194
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        194
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "water_fixture",
+      "member_class_ids": [
+        225,
+        238
+      ],
+      "member_slugs": [
+        "toilet_flush",
+        "water_tap_faucet"
+      ],
+      "priority_class_ids": [
+        225
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        225,
+        238
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "water_flow",
+      "member_class_ids": [
+        82,
+        215,
+        239
+      ],
+      "member_slugs": [
+        "drip",
+        "stream",
+        "waterfall"
+      ],
+      "priority_class_ids": [
+        82
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        82,
+        215,
+        239
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "water_surface",
+      "member_class_ids": [
+        152,
+        240
+      ],
+      "member_slugs": [
+        "ocean",
+        "waves_surf"
+      ],
+      "priority_class_ids": [
+        152
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        152,
+        240
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "whistle_signal",
+      "member_class_ids": [
+        135,
+        212
+      ],
+      "member_slugs": [
+        "kettle_whistle",
+        "steam_whistle"
+      ],
+      "priority_class_ids": [
+        135
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        135,
+        212
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "wild_cat",
+      "member_class_ids": [
+        174
+      ],
+      "member_slugs": [
+        "roaring_cats_lions_tigers"
+      ],
+      "priority_class_ids": [
+        174
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        174
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "wind_instrument",
+      "member_class_ids": [
+        26,
+        71,
+        100
+      ],
+      "member_slugs": [
+        "brass_instrument",
+        "didgeridoo",
+        "flute"
+      ],
+      "priority_class_ids": [
+        26
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        26,
+        71,
+        100
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "wind_weather",
+      "member_class_ids": [
+        99,
+        246,
+        247
+      ],
+      "member_slugs": [
+        "flap",
+        "whoosh_swoosh_swish",
+        "wind"
+      ],
+      "priority_class_ids": [
+        99
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        99,
+        246,
+        247
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    },
+    {
+      "product_category": "wood_impact",
+      "member_class_ids": [
+        51,
+        64,
+        138,
+        200,
+        209,
+        219,
+        241
+      ],
+      "member_slugs": [
+        "chop",
+        "crack",
+        "knock",
+        "slam",
+        "splinter",
+        "tap",
+        "whack_thwack"
+      ],
+      "priority_class_ids": [
+        51
+      ],
+      "gate_threshold_overrides": {},
+      "mutually_exclusive_with": [],
+      "legacy_runtime_categories": [],
+      "launch_enabled": true,
+      "launch_enabled_class_ids": [
+        51,
+        64,
+        138,
+        200,
+        219,
+        241
+      ],
+      "launch_exclusion_reason": "",
+      "curated_confuser_source": "prompt_bank_explicit"
+    }
+  ],
+  "legacy_category_aliases": {
+    "alarm": [
+      "alarm",
+      "alarm_clock"
+    ],
+    "pets": [
+      "bird",
+      "dog_barking"
+    ],
+    "phone": [
+      "phone_ringing"
+    ],
+    "siren": [
+      "siren"
+    ],
+    "speech": [
+      "speech"
+    ],
+    "typing": [
+      "keyboard_typing"
+    ]
+  },
+  "fingerprint": "3a5c236d46414952ea3dc4f0228ec3d85ddc88b8"
+}
