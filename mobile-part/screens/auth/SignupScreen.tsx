@@ -39,7 +39,7 @@ export default function SignupScreen({ navigation }: { navigation: any }) {
             <ScrollView contentContainerStyle={styles.scrollContent} bounces={false} keyboardShouldPersistTaps="handled">
                 <View style={styles.headerWrapper}>
                     <LinearGradient
-                        colors={[colors.headerGradientStart || '#FF8A00', colors.headerGradientEnd || '#FF5722']}
+                        colors={[colors.headerGradientStart || '#1E3A8A', colors.headerGradientEnd || '#8B5CF6']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                         style={styles.headerBackground}
@@ -178,8 +178,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     logo: {
-        width: 80,
-        height: 80,
+        width: 60,
+        height: 60,
         marginBottom: 20,
     },
     greetingTitle: {
