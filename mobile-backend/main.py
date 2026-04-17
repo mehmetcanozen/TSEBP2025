@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
@@ -8,7 +9,7 @@ import sys
 
 from core.config import settings
 from database.db import engine, Base
-from routers import auth, model_update, history, devices
+from routers import auth, model_update, history, devices, separation
 
 
 # ──────────────────────────────────────────────
@@ -59,6 +60,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Ensure temp directory exists
+import os
+if not os.path.exists("temp_separation"):
+    os.makedirs("temp_separation")
+
+app.mount("/outputs", StaticFiles(directory="temp_separation"), name="outputs")
+
 # ──────────────────────────────────────────────
 # Router'lar
 # ──────────────────────────────────────────────
@@ -66,6 +74,7 @@ app.include_router(auth.router)
 app.include_router(model_update.router)
 app.include_router(history.router)
 app.include_router(devices.router)
+app.include_router(separation.router)
 
 
 @app.exception_handler(Exception)

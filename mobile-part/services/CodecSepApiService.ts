@@ -20,86 +20,66 @@ export class CodecSepApiService {
         try {
             console.log(`[CodecSepAPI] Pinging server at ${this.API_URL}...`);
             const response = await fetch(`${this.API_URL}/`);
-            if (!response.ok) {
-                console.warn('[CodecSepAPI] Server ping failed with status:', response.status);
-            } else {
+            if (response.ok) {
                 console.log('[CodecSepAPI] Server is reachable!');
             }
         } catch (e) {
-            console.error('[CodecSepAPI] Server ping failed. Ensure FastAPI is running.', e);
+            console.error('[CodecSepAPI] Server ping failed.', e);
         }
     }
 
     /**
-     * Sends the audio file to the backend and saves the response.
+     * Sends the audio file to the backend using FileSystem.uploadAsync
      * @param audioFileUri The local URI of the recorded audio file.
-     * @param target The target separation class (e.g., 'typing', 'speech', 'music', 'noise')
-     * @returns The local URI of the cleaned audio file downloaded from the server.
+     * @param target The target separation class
+     * @returns The local URI of the cleaned audio file.
      */
-    async suppress(audioFileUri: string, target: string = 'mix'): Promise<string> {
-        console.log(`[CodecSepAPI] Sending file ${audioFileUri} with target: ${target} to server.`);
+    async suppress(audioFileUri: string, target: string = 'speech'): Promise<string> {
+        console.log(`[CodecSepAPI] Uploading ${audioFileUri} (target: ${target}) to ${this.API_URL}/separation/separate`);
         
         try {
-            const formData = new FormData();
-            
-            // Format URI for upload
-            let uploadUri = audioFileUri;
-            if (Platform.OS === 'android' && !uploadUri.startsWith('file://')) {
-                uploadUri = 'file://' + uploadUri;
-            }
-
-            formData.append('file', {
-                uri: uploadUri,
-                name: 'audio.wav',
-                type: 'audio/wav',
-            } as any);
-
-            formData.append('target', target);
-
-            console.log(`[CodecSepAPI] Making POST request to ${this.API_URL}/separate`);
-            const response = await fetch(`${this.API_URL}/separate`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'audio/wav',
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Server returned ${response.status}: ${errorText}`);
-            }
-
-            console.log(`[CodecSepAPI] Response received. Downloading clean audio...`);
-
-            // Read the binary response as a blob and save it locally
-            const blob = await response.blob();
-            
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = async () => {
-                    try {
-                        const base64data = (reader.result as string).split(',')[1];
-                        const docDir = (FileSystem as any).documentDirectory;
-                        const outputPath = docDir + `clean_${Date.now()}.wav`;
-                        
-                        await FileSystem.writeAsStringAsync(outputPath, base64data, {
-                            encoding: FileSystem.EncodingType.Base64,
-                        });
-                        
-                        console.log(`[CodecSepAPI] Saved clean audio to: ${outputPath}`);
-                        resolve(outputPath);
-                    } catch (err) {
-                        reject(err);
+            // Using FileSystem.uploadAsync is much more robust for large files in React Native
+            const uploadResult = await FileSystem.uploadAsync(
+                `${this.API_URL}/separation/separate`,
+                audioFileUri,
+                {
+                    fieldName: 'file',
+                    httpMethod: 'POST',
+                    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+                    parameters: {
+                        target: target
                     }
-                };
-                reader.onerror = (e) => reject(e);
-                reader.readAsDataURL(blob);
-            });
+                }
+            );
+
+            if (uploadResult.status !== 200) {
+                throw new Error(`Server returned ${uploadResult.status}: ${uploadResult.body}`);
+            }
+
+            const responseJson = JSON.parse(uploadResult.body);
+            if (responseJson.status !== 'success' || !responseJson.url) {
+                throw new Error('Upload succeeded but response format is invalid');
+            }
+
+            console.log(`[CodecSepAPI] Upload success. Downloading from: ${responseJson.url}`);
+
+            const docDir = (FileSystem as any).documentDirectory;
+            const outputPath = docDir + `clean_${Date.now()}.wav`;
+            
+            const downloadResult = await FileSystem.downloadAsync(
+                `${this.API_URL}${responseJson.url}`,
+                outputPath
+            );
+
+            if (downloadResult.status !== 200) {
+                throw new Error(`Download failed with status: ${downloadResult.status}`);
+            }
+
+            console.log(`[CodecSepAPI] Clean audio downloaded to: ${outputPath}`);
+            return outputPath;
 
         } catch (e) {
-            console.error('[CodecSepAPI] Processing failed:', e);
+            console.error('[CodecSepAPI] Upload failed:', e);
             throw e;
         }
     }

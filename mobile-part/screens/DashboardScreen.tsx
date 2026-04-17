@@ -47,10 +47,21 @@ export default function DashboardScreen() {
     };
 
     const targets = [
-        { id: 'typing', label: 'Typing', icon: 'keypad-outline' },
         { id: 'speech', label: 'Speech', icon: 'mic-outline' },
         { id: 'music', label: 'Music', icon: 'musical-notes-outline' },
-        { id: 'noise', label: 'Noise', icon: 'rainy-outline' },
+        { id: 'dog barking', label: 'Dog Bark', icon: 'paw-outline' },
+        { id: 'car engine', label: 'Car Engine', icon: 'car-outline' },
+        { id: 'footsteps', label: 'Footsteps', icon: 'footsteps-outline' },
+        { id: 'rain', label: 'Rain', icon: 'rainy-outline' },
+        { id: 'wind', label: 'Wind', icon: 'leaf-outline' },
+        { id: 'keyboard typing', label: 'Keyboard', icon: 'keypad-outline' },
+        { id: 'phone ringing', label: 'Phone', icon: 'notifications-outline' },
+        { id: 'crowd noise', label: 'Crowd', icon: 'people-outline' },
+        { id: 'bird singing', label: 'Birds', icon: 'color-filter-outline' },
+        { id: 'water flowing', label: 'Water', icon: 'water-outline' },
+        { id: 'door knocking', label: 'Knocking', icon: 'log-in-outline' },
+        { id: 'alarm', label: 'Alarm', icon: 'alarm-outline' },
+        { id: 'background noise', label: 'Background', icon: 'volume-mute-outline' },
     ];
 
     return (
