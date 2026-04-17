@@ -3,8 +3,9 @@ import { Audio } from 'expo-av';
 import AudioRecord from 'react-native-audio-record';
 import { Buffer } from 'buffer';
 import { waveformerService } from '../services/WaveformerInferenceService';
+import { codecSepApiService } from '../services/CodecSepApiService';
 import { writeWavFile } from '../utils/wavUtils';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform, PermissionsAndroid } from 'react-native';
 
 interface UseSuppressionDemoResult {
@@ -73,9 +74,9 @@ export const useSuppressionDemo = (): UseSuppressionDemoResult => {
 
             await initRecorder();
 
-            // Initialize Waveformer TFLite model (on-device)
-            setStatus('Loading AI model...');
-            await waveformerService.initialize();
+            // Initialize Remote API service
+            setStatus('Connecting to server...');
+            await codecSepApiService.initialize();
 
             // Start recording
             AudioRecord.start();
@@ -99,10 +100,10 @@ export const useSuppressionDemo = (): UseSuppressionDemoResult => {
                 chunksRef.current.push(float32);
             });
 
-            // Stop automatically after exactly 5 seconds
+            // Stop automatically after exactly 15 seconds
             setTimeout(async () => {
                 await finishRecording();
-            }, 5000);
+            }, 15000);
 
         } catch (e: any) {
             console.error('Start failed', e);
@@ -152,19 +153,16 @@ export const useSuppressionDemo = (): UseSuppressionDemoResult => {
             await FileSystem.copyAsync({ from: sourcePath, to: newOrigPath });
             setOriginalUri(newOrigPath);
 
-            // 3. Run Waveformer on-device inference
-            setStatus(`Running Waveformer AI on device... (${target})`);
-            console.log('[Demo] Running Waveformer suppress...');
-            const cleanAudioData = await waveformerService.suppress(audioData, target);
+            // 3. Run Remote Separation (15-Category Model)
+            setStatus(`Sending to server... (${target})`);
+            console.log('[Demo] Running Remote high-quality separation...');
+            
+            // We pass the local URI of the original WAV file to the API service
+            const remoteCleanUri = await codecSepApiService.suppress(newOrigPath, target);
 
-            // 4. Save clean output as WAV
-            setStatus('Saving processed audio...');
-            const cleanOutputPath = docDir + 'clean_output.wav';
-            await writeWavFile(cleanOutputPath, cleanAudioData, 44100);
-
-            setCleanUri(cleanOutputPath);
+            setCleanUri(remoteCleanUri);
             setStatus('Done. Ready to Play.');
-            console.log('[Demo] Complete. Clean audio saved to:', cleanOutputPath);
+            console.log('[Demo] Complete. Clean audio received and saved to:', remoteCleanUri);
 
         } catch (e: any) {
             console.error('Finish failed', e);
