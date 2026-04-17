@@ -189,6 +189,7 @@ class ProfileManager:
         suppressions: Optional[Dict[str, bool]] = None,
         description: str = "",
         auto_triggers: Optional[List[AutoTrigger]] = None,
+        suppression_params: Optional[Dict[str, Any]] = None,
     ) -> Profile:
         """
         Create a new user profile.
@@ -214,6 +215,7 @@ class ProfileManager:
             auto_triggers=auto_triggers or [],
             is_system_profile=False,
             gains=gains,
+            suppression_params=suppression_params,
         )
 
         self.profiles[profile.id] = profile
@@ -230,6 +232,7 @@ class ProfileManager:
         description: Optional[str] = None,
         auto_triggers: Optional[List[AutoTrigger]] = None,
         gains: Optional[Dict[str, float]] = None,
+        suppression_params: Optional[Dict[str, Any]] = None,
     ) -> Profile:
         """
         Update an existing profile.
@@ -262,6 +265,8 @@ class ProfileManager:
             profile.auto_triggers = auto_triggers
         if gains is not None:
             profile.gains = gains
+        if suppression_params is not None:
+            profile.suppression_params = suppression_params
 
         profile.updated_at = datetime.utcnow().isoformat() + "Z"
 

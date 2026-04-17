@@ -1,136 +1,200 @@
 # Semantic Suppressor: Comprehensive User Manual
 
-Welcome to the **Semantic Suppressor** user manual. This document serves as the master guide for all components of the system, including batch processing, real-time recording, and interactive developer tools.
+Welcome to the **Semantic Suppressor** user manual. This document is the master guide for batch processing, real-time recording, live demos, and backend selection.
 
 ---
 
-## 🚀 Table of Contents
+## Table of Contents
 1. [Introduction](#introduction)
 2. [Key Technologies](#key-technologies)
-3. [Setup & Installation](#setup--installation)
-4. [Semantic Categories & Tuning](#semantic-categories--tuning)
+3. [Setup and Installation](#setup--installation)
+4. [Semantic Categories and Tuning](#semantic-categories--tuning)
 5. [User Guide: Tooling](#user-guide-tooling)
-    - [Batch Processing (Offline)](#batch-processing-offline)
-    - [Real-time Recorder & Cleaner](#real-time-recorder--cleaner)
-    - [Live Suppression Demo](#live-suppression-demo)
 6. [Developer Tools: Virtual Microphone](#developer-tools-virtual-microphone)
 7. [Advanced Features](#advanced-features)
-8. [Troubleshooting & FAQ](#troubleshooting--faq)
+8. [Troubleshooting and FAQ](#troubleshooting--faq)
 
 **Mobile**: See [MOBILE_DEPLOYMENT.md](MOBILE_DEPLOYMENT.md) for React Native / Expo deployment.
 
 ---
 
 ## 1. Introduction <a name="introduction"></a>
-The Semantic Suppressor is an AI-driven audio pipeline designed to intelligently remove background noises while preserving speech and critical safety sounds (like sirens). Unlike traditional noise suppressors that use static filters, this system uses **Semantic Recognition (YAMNet)** to first identify *what* the sound is, and then uses **Target Sound Extraction (Waveformer)** to surgically remove it.
+
+The Semantic Suppressor is an audio-cleaning pipeline for removing unwanted sounds while preserving useful foreground content such as speech. Two backend families are relevant:
+
+- **Waveformer** remains detector-oriented and YAMNet-aware.
+- **CodecSep** now uses an **AudioCaps-native fixed-slot runtime** for explicit suppression and open-vocabulary nuisance removal.
+
+That means when you explicitly choose `--separator-backend codecsep`, the runtime no longer waits for YAMNet detections before acting. It directly compiles your request into an AudioCaps-style `speech/music/sfx` separation pass.
 
 ## 2. Key Technologies <a name="key-technologies"></a>
-- **YAMNet**: Analyzes 521 categories of sounds.
-- **Waveformer**: Extracts specific audio targets from a mixture.
-- **DeepFilterNet**: High-performance "Suppress All" mode for pure voice extraction.
-- **Spectral Masking (Ratio Masking)**: Used for Phase-accurate noise removal to prevent artifacts.
 
-## 3. Setup & Installation <a name="setup--installation"></a>
-- **Virtual Environment**: Use `.\shared\scripts\setup_env.ps1` on Windows to create a single `.venv` at project root (shared for AI and desktop).
-- **Base Models**: Run `python ai\scripts\setup\download_models.py` to fetch pretrained Waveformer/YAMNet weights.
-- **AudioSep (Phase 3)**: Run `python ai\scripts\setup\install_audiosep.py` to clone the foundation model and download its heavy weights (~2GB).
-- **VB-Audio Cable (Optional but Recommended)**: Required for the [Virtual Microphone Simulation](#developer-tools-virtual-microphone).
+- **YAMNet**: Sound classifier used for detector-driven Waveformer flows.
+- **Waveformer**: Target separator for detector-oriented suppression.
+- **CodecSep**: AudioCaps-native prompt-conditioned separator with fixed `speech/music/sfx` slots.
+- **DeepFilterNet**: High-performance `--suppress-all` voice-cleaning mode.
+- **Spectral Masking**: Phase-aware cleanup used where appropriate to reduce artifacts.
 
-### Pre-requisites (Dependency Nightmare Prevention)
-The foundation models (AudioSep, DeepFilterNet) require a modern Python stack. Run `.\shared\scripts\setup_env.ps1` to create the shared `.venv`, or manually:
+## 3. Setup and Installation <a name="setup--installation"></a>
+
+- **Virtual Environment**: Use `.\shared\scripts\setup_env.ps1` on Windows to create the shared project `.venv`.
+- **Base Models**: Run `python ai\scripts\setup\download_models.py` to fetch pretrained Waveformer and YAMNet assets.
+- **AudioSep**: Run `python ai\scripts\setup\install_audiosep.py` to install the open-vocabulary foundation model and its large weights.
+- **VB-Audio Cable**: Optional, but useful for virtual microphone testing.
+
+### Pre-requisites
+
+Run the shared setup script, or install dependencies manually:
+
 ```bash
 pip install -r desktop/requirements.txt
 pip install -r ai/training/requirements.txt
 ```
-If you encounter `ImportError` related to `lightning`, `transformers`, or `torchlibrosa`, these are provided by the setup script.
+
+If you hit `ImportError` issues involving `lightning`, `transformers`, or `torchlibrosa`, rerun the setup flow and verify the shared environment is active.
 
 ---
 
-## 4. Semantic Categories & Tuning <a name="semantic-categories--tuning"></a>
-The system groups 500+ YAMNet classes into actionable categories. You can control these via the `--suppress` flag.
+## 4. Semantic Categories and Tuning <a name="semantic-categories--tuning"></a>
+
+The system groups many low-level sound classes into practical suppression categories.
 
 | Category | Typical Sounds |
 | :--- | :--- |
-| `speech` | Human voices, narration, conversation. |
-| `typing` | Mechanical and laptop keyboard clicks. |
-| `pets` | Dog barks, cat meows, bird chirps. |
-| `phone` | Ringtones, dial tones, digital notifications. |
-| `music` | 16+ instruments, singing, background tracks. |
-| `nature` | Wind, rain, thunder, water. |
-| `explosions` | Gunshots, fireworks, loud booms. |
-| `glass_impact` | Shattering, smashing, impacts. |
-| `bodily_functions` | Burping, hiccuping, etc. |
-| `misc` | Coughing, laughter, sneezing, keys jangling. |
+| `speech` | Human voices, narration, conversation |
+| `typing` | Mechanical and laptop keyboard clicks |
+| `pets` | Dog barks, cat meows, bird chirps |
+| `phone` | Ringtones, dial tones, digital notifications |
+| `music` | Singing, instruments, background tracks |
+| `nature` | Wind, rain, thunder, water |
+| `explosions` | Fireworks, gunshots, loud booms |
+| `glass_impact` | Shattering, smashing, impacts |
+| `bodily_functions` | Coughing, sneezing, throat noises |
+| `misc` | Knocks, laughter, keys jangling, everyday sounds |
 
 ### Tuning Parameters
-- **`--threshold [0.0-1.0]`**: Detection sensitivity. Lower values make the detector more aggressive. Categories like typing and pets use `-1` (always suppress when requested).
-- **`--aggressiveness [1.0-2.0]`**: Suppression strength. Default `1.5`. Higher values strip noise more deeply; typing and pets use per-category overrides (1.8, 1.6).
+
+- **`--threshold [0.0-1.0]`**: Detection sensitivity for detector-driven Waveformer usage. Explicit CodecSep suppression does not depend on YAMNet thresholds or detector confidence.
+- **`--aggressiveness [1.0-2.5+]`**: Suppression strength. Default `1.5`. Higher values remove more target content. CodecSep category profiles may also raise effective strength internally for categories like `typing` and `pets`.
 
 ---
 
 ## 5. User Guide: Tooling <a name="user-guide-tooling"></a>
 
 ### A. Batch Processing (Offline) <a name="batch-processing-offline"></a>
-Process existing audio files with maximum accuracy.
+
+Process existing files with maximum offline quality.
+
 - **Script**: `python -m ai.ai_runtime.batch.batch_processor`
-- **Flag `--output-noise`**: Saves an extra file containing *exactly* what was removed.
+- **Flag `--output-noise`**: Saves an extra file containing what was removed. In native CodecSep mode, this is the extracted target stem.
 
 ```bash
-# Example: Clean a keyboard recording and save the noise stem
+# Clean a keyboard recording and save the removed target
 python -m ai.ai_runtime.batch.batch_processor --input mysample.wav --output clean.wav --suppress typing --output-noise
 
-# With custom aggressiveness (default 1.5)
+# Stronger multi-category suppression
 python -m ai.ai_runtime.batch.batch_processor --input noisy.wav --output clean.wav --suppress typing,pets --aggressiveness 1.8
+
+# AudioCaps-native CodecSep batch suppression
+python -m ai.ai_runtime.batch.batch_processor --input noisy.wav --output clean.wav --output-noise --suppress typing --separator-backend codecsep --codecsep-device cpu --codecsep-sfx-prompt "keyboard typing sounds, key clicks from a computer keyboard"
 ```
 
-### B. Real-time Recorder & Cleaner <a name="real-time-recorder--cleaner"></a>
-Record directly from your mic and get a cleaned version instantly.
+#### CodecSep offline defaults
+
+When `--separator-backend codecsep` is used in batch mode, the runtime defaults to:
+
+- `codecsep_mode=audiocaps_native`
+- fixed-slot AudioCaps-native execution
+- `codecsep_stereo_mode=mono_shared`
+- no external CLAP rescoring
+- no slot search
+- no multistep refinement
+
+In practice:
+
+- nuisance and environmental categories target the `sfx` slot
+- `speech` suppression targets `speech`
+- `music` suppression targets `music`
+- the runtime first applies AudioCaps-style input conditioning to the mix before separation
+- target prompting now uses richer caption-like phrasing internally instead of only terse keyword bags
+- nuisance `sfx` requests remove the extracted target from the original mix
+- `speech` and `music` requests keep the normalized complement
+- `--output-noise` saves the extracted target stem itself
+
+### B. Real-time Recorder and Cleaner <a name="real-time-recorder--cleaner"></a>
+
+Record from a microphone and get cleaned output immediately.
+
 - **Script**: `python -m ai.ai_runtime.audio.recorder_cleaner`
-- **Flag `--device [ID]`**: Use this to select a specific microphone.
+- **Flag `--device [ID]`**: Select a specific microphone or virtual cable input.
 
 ```bash
 # Record for 15 seconds, suppressing pets and phone sounds
 python -m ai.ai_runtime.audio.recorder_cleaner --duration 15 --suppress pets,phone --device 0
 
-# Stronger suppression (default aggressiveness 1.5)
+# Stronger suppression
 python -m ai.ai_runtime.audio.recorder_cleaner --duration 15 --suppress typing,pets --aggressiveness 1.8 --device 0
+
+# Realtime CodecSep with AudioCaps-native fixed-slot suppression
+python -m ai.ai_runtime.audio.recorder_cleaner --duration 15 --suppress typing --separator-backend codecsep --codecsep-device cpu --codecsep-sfx-prompt "keyboard typing sounds, key clicks from a computer keyboard" --device 0
 ```
 
 ### C. Live Suppression Demo <a name="live-suppression-demo"></a>
-A "monitor" mode where you can hear the suppression in real-time through your speakers/headphones.
+
+Monitor live suppression through speakers or headphones.
+
 - **Script**: `ai/scripts/demos/demo_custom_realtime.py`
 
 ```bash
-# Live Voice Extraction (DeepFilterNet Mode)
+# Live voice extraction with DeepFilterNet
 python ai/scripts/demos/demo_custom_realtime.py --suppress-all --device 1
 ```
 
 ---
 
 ## 6. Developer Tools: Virtual Microphone <a name="developer-tools-virtual-microphone"></a>
-To test the suppressor without physically making noise, you can "stream" a WAV file into the system as if it were a microphone.
+
+Use VB-Audio Virtual Cable to stream a WAV file into the suppressor as if it were a microphone.
 
 1. Install **VB-Cable**.
-2. Run the streamer:
-   ```bash
-   python ai/scripts/demos/virtual_mic_streamer.py --input ai/data/audio/raw/barking.wav
-   ```
-3. Find your "CABLE Output" ID:
-   ```bash
-   python ai/scripts/demos/demo_custom_realtime.py --list-devices
-   ```
-4. Run your test scripts using that `--device` ID.
+2. Start the streamer:
+
+```bash
+python ai/scripts/demos/virtual_mic_streamer.py --input ai/data/audio/raw/barking.wav
+```
+
+3. Find the `CABLE Output` device ID:
+
+```bash
+python ai/scripts/demos/demo_custom_realtime.py --list-devices
+```
+
+4. Use that `--device` ID in the recorder or live demo commands.
 
 ---
 
 ## 7. Advanced Features <a name="advanced-features"></a>
-- **Universal Prompts**: Users of Phase 3 can specify a text prompt for *any* sound.
-  `--universal "heavy breathing, mechanical fan"`
-- **Safety Bypass**: `siren` and `alarm` categories are hard-coded to NEVER be suppressed in the `ControlEngine` to ensure user awareness of emergencies.
 
-## 8. Troubleshooting & FAQ <a name="troubleshooting--faq"></a>
-- **"Empty Files"**: Ensure you have selected the correct `--device` ID. Use `--list-devices` to verify.
-- **"Clicks and Pops"**: This usually indicates the CPU is struggling. Try closing other apps or lowering the `--aggressiveness`.
-- **"Missing Detection"**: Check `ai/ai_runtime/config/yamnet_to_waveformer.yaml` to ensure the sound you want is mapped to a category.
-- **"ImportError: No module named..."**: This usually means a foundational dependency (like `lightning`) is missing. Re-run `pip install -r desktop/requirements.txt`.
-- **"AudioSep Path Errors"**: Ensure you have run the `install_audiosep.py` script and that `ai/models/AudioSep/pipeline.py` exists.
+- **Universal Prompts**: Use `--universal "heavy breathing, mechanical fan"` for prompt-based removal.
+- **Selectable Backends**: `waveformer` is still the default backend. `codecsep` can be enabled explicitly for AudioCaps-native prompt-conditioned suppression.
+- **CodecSep Runtime Controls**:
+  - `--codecsep-mode audiocaps_native|experimental_search|compat|auto`
+  - `--codecsep-stereo-mode mono_shared|per_channel`
+  - `--codecsep-speech-prompt "..."`, `--codecsep-music-prompt "..."`, `--codecsep-sfx-prompt "..."`
+  - `--codecsep-query-strategy single_pass|slot_search` for `experimental_search` only
+  - `--codecsep-multistep-steps N` for `experimental_search` only
+  - `--codecsep-negative-prompt "..."` for `experimental_search` only
+  - `--codecsep-preserve-prompt "..."` for `experimental_search` only
+- **Compatibility Escape Hatch**: `--codecsep-mode compat` forces the older routed-stem fallback for debugging or regression checks.
+
+---
+
+## 8. Troubleshooting and FAQ <a name="troubleshooting--faq"></a>
+
+- **"Empty Files"**: Verify the correct `--device` ID with `--list-devices`.
+- **"Clicks and Pops"**: The CPU may be overloaded. Close other apps or reduce aggressiveness.
+- **"Missing Detection"**: For Waveformer, check `ai/ai_runtime/config/yamnet_to_waveformer.yaml`. For explicit CodecSep suppression, check `ai/ai_runtime/config/category_to_codecsep.yaml` to confirm the category's fixed-slot prompt profile.
+- **"CodecSep sounds like plain 3-stem extraction"**: That is partly expected. The active runtime intentionally uses the AudioCaps-native fixed-slot contract, so `speech/music/sfx` remain the model's internal slots and nuisance suppression usually targets `sfx` directly.
+- **"Why does CodecSep ignore my negative/preserve prompts?"**: In default `audiocaps_native` mode, those controls are intentionally ignored. Use `--codecsep-mode experimental_search` only if you are deliberately testing the heavier research path.
+- **"ImportError: No module named..."**: Reinstall the project dependencies and verify the intended environment is active.
+- **"AudioSep Path Errors"**: Ensure `install_audiosep.py` has been run and `ai/models/AudioSep/pipeline.py` exists.

@@ -23,9 +23,17 @@ For the purpose of comparing the Waveformer architecture with other non-causal s
     conda activate waveformer
     pip install -r requirements.txt
 
+## Local Layout
+
+Runtime assets in this vendored copy are organized under `assets/`:
+
+- `assets/config/default_config.json` - default inference config used by the runtime wrapper and `Waveformer.py`
+- `assets/checkpoints/default_ckpt.pt` - default pretrained checkpoint
+- `assets/archives/waveformer_experiments.zip` - archived pretrained experiment bundle
+
 ## Bring Your Own Audio
 
-You could run the model on your audio files using the `Waveformer.py` script. Example commands below use the sample audio mixture provided at `data/Sample.wav`. If running for the first time, the script downloads the default configuration file and checkpoint to the current directory.
+You could run the model on your audio files using the `Waveformer.py` script. Example commands below use the sample audio mixture provided at `data/Sample.wav`. If running for the first time, the script downloads the default configuration file and checkpoint into `assets/config/` and `assets/checkpoints/`.
 
     # Usage: python Waveformer.py [-h] [--targets TARGETS [TARGETS ...]] input output
     
@@ -75,10 +83,10 @@ We use [Scaper](https://github.com/justinsalamon/scaper) toolkit to syntheticall
 
 ### Evaluation
 
-Pretrained checkpoints are available at [experiments.zip](https://targetsound.cs.washington.edu/files/experiments.zip). These can be downloaded and uncompressed to appropriate locations using:
+Pretrained checkpoints are available at [experiments.zip](https://targetsound.cs.washington.edu/files/experiments.zip). In this repo, the downloaded archive is stored at `assets/archives/waveformer_experiments.zip`. To refresh it manually:
 
-    wget https://targetsound.cs.washington.edu/files/experiments.zip
-    unzip -o experiments.zip -d experiments
+    wget https://targetsound.cs.washington.edu/files/experiments.zip -O assets/archives/waveformer_experiments.zip
+    unzip -o assets/archives/waveformer_experiments.zip -d experiments
 
 Run evaluation script:
 

@@ -22,7 +22,7 @@ import torch
 import torchaudio
 import yaml
 
-from ai.ai_runtime.utils.paths import get_config_path, get_models_checkpoints_path
+from ai.ai_runtime.utils.paths import get_config_path, get_yamnet_saved_model_path
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ class SemanticDetective:
         self.model_handle = model_handle
         self.enable_median = enable_median
 
-        local_yamnet = get_models_checkpoints_path() / "yamnet_1"
+        local_yamnet = get_yamnet_saved_model_path()
         if local_yamnet.exists() and (local_yamnet / "saved_model.pb").exists():
             logger.info("Loading YAMNet from local directory: %s", local_yamnet)
             self.model = hub.load(str(local_yamnet))

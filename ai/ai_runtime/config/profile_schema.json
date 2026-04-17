@@ -86,7 +86,124 @@
     },
     "suppression_params": {
       "type": "object",
-      "description": "Optional overrides for suppressor (mask_floor, max_suppression_ratio, speech_dominance_threshold, detection_threshold, aggressiveness)",
+      "description": "Optional overrides for suppressor behaviour",
+      "properties": {
+        "separator_backend": {
+          "type": "string",
+          "enum": ["waveformer", "codecsep", "audiosep_hive15cat"],
+          "default": "waveformer",
+          "description": "Which separation model to use (waveformer = 41-class target extractor, codecsep = 3-stem text-guided separator, audiosep_hive15cat = exact-15 ONNX separator)"
+        },
+        "masking_method": {
+          "type": "string",
+          "enum": ["wiener_dd", "cirm"],
+          "default": "wiener_dd",
+          "description": "Spectral masking strategy (wiener_dd = Decision-Directed Wiener, cirm = complex Ideal Ratio Mask)"
+        },
+        "audiosep_hive15cat_model_path": {
+          "type": "string",
+          "description": "Optional AudioSepHive15Cat ONNX path or model directory override"
+        },
+        "audiosep_hive15cat_device": {
+          "type": "string",
+          "description": "Optional AudioSepHive15Cat execution hint, e.g. cpu or cuda"
+        },
+        "audiosep_hive15cat_realtime_hop_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Buffered realtime inference hop for AudioSepHive15Cat live mode"
+        },
+        "codecsep_checkpoint_path": {
+          "type": "string",
+          "description": "Optional CodecSep run directory or checkpoint file override"
+        },
+        "codecsep_device": {
+          "type": "string",
+          "description": "Optional CodecSep device override, e.g. cpu, cuda, cuda:0"
+        },
+        "codecsep_prompt_overrides": {
+          "type": "object",
+          "description": "Optional stem-specific CodecSep prompt overrides",
+          "properties": {
+            "speech": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "music": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "sfx": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "codecsep_negative_prompts": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Optional negative prompts for CodecSep experimental-search mode"
+        },
+        "codecsep_preserve_prompts": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Optional preserve prompts for CodecSep experimental-search mode"
+        },
+        "codecsep_mode": {
+          "type": "string",
+          "enum": ["fixed_category", "compat", "audiocaps_native", "experimental_search", "auto", "query_first"],
+          "default": "fixed_category",
+          "description": "CodecSep runtime mode selection. V5 defaults to fixed_category."
+        },
+        "codecsep_query_strategy": {
+          "type": "string",
+          "enum": ["single_pass", "slot_search"],
+          "default": "single_pass",
+          "description": "CodecSep experimental-search slot selection strategy"
+        },
+        "codecsep_multistep_steps": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Offline multistep refinement count for CodecSep experimental-search mode"
+        },
+        "codecsep_stereo_mode": {
+          "type": "string",
+          "enum": ["mono_shared", "per_channel"],
+          "default": "mono_shared",
+          "description": "Batch-only CodecSep stereo policy"
+        },
+        "codecsep_fixed_merge_policy": {
+          "type": "string",
+          "enum": ["wiener_mask", "sum"],
+          "default": "wiener_mask",
+          "description": "CodecSep fixed-category clean-audio reconstruction policy"
+        },
+        "codecsep_product_categories": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Optional fixed-category product categories for CodecSep runtime"
+        },
+        "codecsep_hive_class_ids": {
+          "type": "array",
+          "items": {
+            "type": ["integer", "string"]
+          },
+          "description": "Optional direct fixed-category Hive class ids for CodecSep runtime"
+        },
+        "detection_threshold": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "aggressiveness": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
       "additionalProperties": true
     }
   },

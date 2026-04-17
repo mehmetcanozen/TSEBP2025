@@ -1,5 +1,5 @@
 import argparse
-import os
+from pathlib import Path
 
 import torch
 import torchaudio
@@ -12,6 +12,11 @@ if not hasattr(torchaudio, "list_audio_backends"):
 
 from src.helpers import utils
 from src.training.dcc_tf import Net as Waveformer
+
+MODEL_ROOT = Path(__file__).resolve().parent
+ASSETS_DIR = MODEL_ROOT / "assets"
+CONFIG_PATH = ASSETS_DIR / "config" / "default_config.json"
+CHECKPOINT_PATH = ASSETS_DIR / "checkpoints" / "default_ckpt.pt"
 
 TARGETS = [
     "Acoustic_guitar",
@@ -77,18 +82,21 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if not os.path.exists("default_config.json"):
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CHECKPOINT_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    if not CONFIG_PATH.exists():
         config_url = "https://targetsound.cs.washington.edu/files/default_config.json"
         print("Downloading model configuration from %s:" % config_url)
-        wget.download(config_url)
+        wget.download(config_url, out=str(CONFIG_PATH))
 
-    if not os.path.exists("default_ckpt.pt"):
+    if not CHECKPOINT_PATH.exists():
         ckpt_url = "https://targetsound.cs.washington.edu/files/default_ckpt.pt"
         print("\nDownloading the checkpoint from %s:" % ckpt_url)
-        wget.download(ckpt_url)
+        wget.download(ckpt_url, out=str(CHECKPOINT_PATH))
 
     # Instantiate model
-    params = utils.Params("default_config.json")
+    params = utils.Params(str(CONFIG_PATH))
     model = Waveformer(**params.model_params)
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -96,7 +104,7 @@ if __name__ == "__main__":
         device = torch.device("cpu")
     model.load_state_dict(
         torch.load(
-            "default_ckpt.pt", map_location=device, weights_only=False
+            str(CHECKPOINT_PATH), map_location=device, weights_only=False
         )["model_state_dict"]
     )
     model.to(device).eval()
@@ -123,5 +131,5 @@ if __name__ == "__main__":
         output = torchaudio.functional.resample(output, orig_freq=44100, new_freq=fs)
     print("Inference done. Saving output audio to %s" % args.output)
 
-    assert not os.path.exists(args.output), "Output file already exists."
+    assert not Path(args.output).exists(), "Output file already exists."
     sf.write(args.output, output.transpose(0, 1).numpy(), fs)

@@ -1,15 +1,12 @@
-from pathlib import Path
-
 import numpy as np
 import pytest
 import torch
 
 from ai.ai_runtime.separation import TARGETS, WaveformerSeparator
+from ai.ai_runtime.utils.paths import get_waveformer_checkpoint_path, get_waveformer_config_path
 
-
-ASSETS_ROOT = Path(__file__).resolve().parents[2] / "models" / "Waveformer"
-CONFIG = ASSETS_ROOT / "default_config.json"
-CKPT = ASSETS_ROOT / "default_ckpt.pt"
+CONFIG = get_waveformer_config_path()
+CKPT = get_waveformer_checkpoint_path()
 
 
 def test_missing_assets_error(monkeypatch):

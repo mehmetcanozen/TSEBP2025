@@ -22,7 +22,9 @@ from scipy import signal
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = ROOT / "ai" / "tests" / "manual"
 WAVEFORMER_DIR = ROOT / "ai" / "models" / "Waveformer"
-CHECKPOINTS_DIR = ROOT / "ai" / "models" / "checkpoints"
+YAMNET_DIR = ROOT / "ai" / "models" / "YAMNet"
+YAMNET_MODEL_DIR = YAMNET_DIR / "saved_models" / "yamnet_1"
+YAMNET_CLASS_MAP_PATH = YAMNET_DIR / "metadata" / "yamnet_class_map.csv"
 
 
 def generate_test_audio(path: Path, sample_rate: int = 44100, seconds: float = 1.0) -> None:
@@ -45,9 +47,13 @@ def run_waveformer_test() -> None:
 
 
 def run_yamnet_test() -> None:
-    yamnet_path = CHECKPOINTS_DIR / "yamnet_1.tar.gz"
-    class_map_path = CHECKPOINTS_DIR / "yamnet_class_map.csv"
+    yamnet_path = YAMNET_MODEL_DIR
+    class_map_path = YAMNET_CLASS_MAP_PATH
+    fallback_class_map = yamnet_path / "assets" / "yamnet_class_map.csv"
+    if not class_map_path.exists() and fallback_class_map.exists():
+        class_map_path = fallback_class_map
     if not class_map_path.exists():
+        class_map_path.parent.mkdir(parents=True, exist_ok=True)
         with class_map_path.open("w", newline="") as f:
             f.write("index,display_name\n0,silence\n")
     input_wav = SCRIPTS_DIR / "sample_noise.wav"

@@ -53,7 +53,7 @@ categories:
     priority: "low"
     detection_threshold: -1  # Always suppress when user requests (bypass YAMNet gate)
     transient: true  # Short impulsive sounds; shorter STFT for better time resolution
-    aggressiveness_override: 1.8
+    aggressiveness_override: 2.2
 
   # NATURE SOUNDS
   nature:
@@ -68,7 +68,7 @@ categories:
     priority: "low"
     detection_threshold: -1  # Always suppress when user requests (bypass YAMNet gate)
     transient: true  # Sharp impulsive sounds - use shorter STFT window
-    aggressiveness_override: 1.6
+    aggressiveness_override: 2.0
 
   # PHONE / NOTIFICATIONS
   phone:

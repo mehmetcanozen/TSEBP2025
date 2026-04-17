@@ -1,117 +1,178 @@
-## Semantic Noise Mixer
+# Semantic Noise Mixer
 
-Context-aware adaptive noise suppression with semantic control.
+Semantic Noise Mixer is a desktop-first audio suppression project built around
+semantic detection, source separation, spectral masking, and profile-driven
+control. The repository contains the active AI runtime, a Python desktop UI,
+setup scripts, tests, and local model layouts for multiple separator backends.
 
-This project provides a real-time audio pipeline that:
-- **Separates** incoming audio into meaningful components using a pretrained Waveformer separator.
-- **Understands** the scene using YAMNet-style semantic classification.
-- **Suppresses** user-selected sound categories (typing, wind, traffic, and more) while preserving speech. See the Master User Manual for the currently supported categories.
+For detailed operator guidance, see the
+[Master User Manual](docs/project/usage/USER_MANUAL.md).
 
-The current focus is a **desktop-first** implementation with a validated **React Native / Expo test app** proving the on-device TFLite pipeline.
+## Current Scope
 
----
+- Real-time and offline audio suppression tooling
+- Multiple separator backends behind one runtime interface
+- Profile-based control and backend-specific suppression settings
+- Local model asset management under `ai/models/`
+- Desktop UI, command-line tools, tests, and research documentation
 
-> [!IMPORTANT]
-> **New to the project?** Start with the [Master User Manual](docs/project/usage/USER_MANUAL.md) for a comprehensive guide to all tools and features.
+## Main Components
 
----
+### YAMNet
 
-## Features
+YAMNet is the semantic detector used by the legacy detector-driven runtime. It
+maps AudioSet classes into the higher-level categories defined under
+`ai/ai_runtime/config/`.
 
-- **Real-time desktop suppression**
-  - Sub-100 ms end-to-end latency with a rolling 1 second context buffer.
-  - Tunable aggressiveness (for example 1.0 = normal, 1.5 = aggressive).
-  - Mono/stereo handling and compatibility with “smart” headsets that pre-filter noise.
-  - **🚀 Phase 1: Spectral Masking**: High-fidelity noise removal using frequency-domain ratio masking to prevent phase artifacts.
-  - **🎙️ Phase 2: Suppress All**: Integrated **DeepFilterNet** for universal voice extraction (removes all non-speech audio).
-- **🚀 Phase 3: Universal Extraction**: Integrated **AudioSep** foundation model for open-vocabulary sound extraction using natural language text prompts (e.g., "dog barking," "typing").
-- **🎯 Per-Category Separation**: Each suppression category receives its own dedicated Waveformer query, preventing loud sources from masking quiet targets. Batched into a single GPU forward pass via `separate_multi_query()` for real-time performance.
-- **🔊 Adaptive Stem Boosting**: Under-extracted quiet sounds are automatically amplified (up to 4×) to compensate for Waveformer's limitations in low target-to-interference ratio environments.
-- **Semantic control**
-  - YAMNet-based detection over 521 classes, mapped into actionable groups (typing, pets, phone, wind, traffic, speech, music, etc.).
-  - Profiles describing which categories to suppress or pass through.
-- **Tooling and diagnostics**
-  - Batch and real-time record/clean tools that save:
-    - Original mic input.
-    - Cleaned signal.
-    - Extracted noise stem (`*_noise.wav`).
-  - **🧪 Phase 6: Virtual Mic Sim**: Stream WAV files directly into the system via VB-Cable to simulate live microphone input for repeatable testing.
-  - Performance profiler with per-operation timing (mean, p95, p99, min, max) and JSON export.
-- **Mobile testbed**
-  - `mobile-test/` Expo project with:
-    - On-device TFLite UNet-style model (`waveformer.tflite`).
-    - Record → process → play pipeline at 44.1 kHz using `react-native-fast-tflite`, `react-native-audio-record`, `expo-av`, and `expo-file-system`.
-- **🚀 Phase 8: Final Verification**: 100% production-ready validation complete across batch and real-time paths (Virtual Mic verified).
+### Waveformer
 
----
+Waveformer is the default target-separation backend. In the current runtime it
+works together with YAMNet and the legacy semantic category surface such as
+`typing`, `traffic`, `wind`, `pets`, `alarm`, and `siren`.
 
-## Quick start (desktop)
+### CodecSep
 
-### 1. Create and activate the virtual environment
+CodecSep is an optional separator backend for broader nuisance-removal and
+research workflows. The current runtime supports fixed-category execution as the
+main path, while retaining compatibility and legacy prompt-based modes for
+debugging and comparison.
 
-From the repo root:
+### AudioSepHive15Cat
+
+AudioSepHive15Cat is an ONNX-based exact-15 backend with a smaller, explicit
+category surface. It is intended for deterministic fixed-category suppression
+such as `keyboard typing`, `alarm`, `wind`, `rain`, `music`, and
+`background noise`.
+
+### AudioSep
+
+AudioSep is the optional open-vocabulary backend used by the `--universal`
+workflow. It is intended for prompt-based extraction when a fixed category is
+not sufficient.
+
+### DeepFilterNet
+
+DeepFilterNet provides the `--suppress-all` path for speech-focused cleanup
+without category selection.
+
+## Backend Summary
+
+| Backend | Control surface | Typical use | Asset notes |
+| --- | --- | --- | --- |
+| `waveformer` | Legacy semantic categories plus YAMNet gating | Default desktop suppression | Uses local `Waveformer` and `YAMNet` assets |
+| `codecsep` | Fixed product categories, Hive class IDs, or legacy prompt modes | Broader nuisance removal and research runtime | Expects local `ai/models/CodecSep/` assets |
+| `audiosep_hive15cat` | Exact-15 fixed categories | Deterministic ONNX inference | Expects local `ai/models/AudioSepHive15Cat/` assets |
+| `--universal` | Free-text prompts | Open-vocabulary extraction | Uses local `ai/models/AudioSep/` assets |
+| `--suppress-all` | No category selection | Speech-focused cleanup | Uses the enhancement path rather than a separator backend |
+
+## Repository Layout
+
+```text
+TSEBP2025/
+|-- ai/
+|   |-- ai_runtime/     # Active runtime: detection, suppression, separation, config
+|   |-- data/           # Raw and processed audio
+|   |-- export/         # ONNX and TFLite export helpers
+|   |-- models/         # Local model trees and downloaded assets
+|   |-- scripts/        # Setup, demos, diagnostics
+|   |-- tests/          # Runtime and integration tests
+|   `-- training/       # Training-side dependencies and related code
+|-- desktop/
+|   |-- src/            # Desktop UI and settings layer
+|   `-- tests/          # Desktop-side tests
+|-- docs/               # Project documentation and research notes
+|-- shared/
+|   `-- scripts/        # Shared environment setup
+|-- pyproject.toml
+`-- README.md
+```
+
+## Configuration Surfaces
+
+The runtime now has multiple category surfaces. The most important config files
+are:
+
+- `ai/ai_runtime/config/yamnet_to_waveformer.yaml`
+  Legacy semantic categories for detector-driven Waveformer suppression
+- `ai/ai_runtime/config/audiosep_hive15cat_categories.yaml`
+  Exact-15 categories for the AudioSepHive15Cat backend
+- `ai/ai_runtime/config/product_to_hive_fixedset.json`
+  Fixed-category product catalog for the current CodecSep runtime
+- `ai/ai_runtime/config/category_to_codecsep.yaml`
+  Legacy CodecSep prompt and slot compatibility mapping
+- `ai/ai_runtime/config/default_profiles.json`
+  Built-in profiles for default desktop usage
+- `ai/ai_runtime/config/profile_schema.json`
+  Schema for profile validation and backend-specific overrides
+
+## Setup
+
+### Recommended environment setup
+
+From the repository root:
 
 ```powershell
-# Option A: Use the shared setup script (AI + desktop stack)
 .\shared\scripts\setup_env.ps1
 .\.venv\Scripts\Activate.ps1
+```
 
-# Option B: Manual venv + requirements
+### Manual environment setup
+
+```powershell
 python -m venv .\.venv
 .\.venv\Scripts\Activate.ps1
 pip install -r desktop\requirements.txt
 pip install -r ai\training\requirements.txt
+```
+
+If you need export tooling as well:
+
+```powershell
 pip install -r ai\export\requirements.txt
 ```
 
-### 2. Download models & Foundational Weights
+## Model Assets
+
+Model directories under `ai/models/` are local assets and large checkpoints are
+generally not intended to be committed to Git.
+
+### Standard asset download
 
 ```powershell
-# Basic models (YAMNet, Waveformer, DeepFilterNet)
 python ai\scripts\setup\download_models.py
+```
 
-# Foundational models (AudioSep weights & CLAP)
-# Note: This requires ~2GB of space and additional ML dependencies
+This downloader stores the standard Waveformer archive and YAMNet packages
+under `ai/models/`.
+
+### Optional AudioSep installation
+
+```powershell
 python ai\scripts\setup\install_audiosep.py
 ```
 
-### 3. Record and clean audio (recommended path)
+This clones the AudioSep repository into `ai/models/AudioSep/` and downloads the
+required checkpoints.
 
-Record from your microphone, apply semantic suppression, and save stems:
+### Current local model layout
 
-```powershell
-# 10 seconds, suppress typing only
-python -m ai.ai_runtime.audio.recorder_cleaner `
-  --duration 10 `
-  --suppress typing `
-  --output ai\data\audio\processed\session_clean.wav
+- `ai/models/Waveformer/`
+  Vendored Waveformer code plus `assets/config/`, `assets/checkpoints/`, and
+  `assets/archives/`
+- `ai/models/YAMNet/`
+  Local SavedModel, metadata CSV, archives, and TFLite copy
+- `ai/models/AudioSep/`
+  Optional open-vocabulary AudioSep checkout and weights
+- `ai/models/AudioSepHive15Cat/`
+  Local exact-15 ONNX assets
+- `ai/models/ClapSepHive15Cat/`
+  Local companion assets for fixed-category experiments
+- `ai/models/CodecSep/`
+  Optional local CodecSep runtime tree when that backend is used
 
-# Suppress multiple categories
-python -m ai.ai_runtime.audio.recorder_cleaner `
-  --duration 10 `
-  --suppress typing,wind `
-  --output ai\data\audio\processed\session_clean.wav
-```
+## Common Commands
 
-Outputs (filenames may vary based on `--output`):
-- `*_clean.wav` – cleaned audio after suppression.
-- `*_original.wav` – raw microphone input.
-- `*_noise.wav` – extracted noise stem.
-
-### 4. Live real-time demo (monitoring your mic)
-
-```powershell
-# Default focus-style behavior (suppress typing)
-python ai\scripts\demos\demo_custom_realtime.py --suppress typing
-
-# If your mic or headset heavily pre-filters noise, lower the threshold:
-python ai\scripts\demos\demo_custom_realtime.py --suppress typing --threshold 0.03
-
-# List available categories and options
-python ai\scripts\demos\demo_custom_realtime.py --help
-```
-
-### 5. Process existing WAV files
+### Batch processing with the default backend
 
 ```powershell
 python -m ai.ai_runtime.batch.batch_processor `
@@ -121,162 +182,83 @@ python -m ai.ai_runtime.batch.batch_processor `
   --threshold 0.3
 ```
 
----
+### Record from microphone and clean in real time
 
-## Semantic categories
-
-Internally, YAMNet’s 521 classes are grouped into higher-level categories to simplify control and profiles:
-
-| Category       | Priority  | Example sounds                          |
-|----------------|-----------|------------------------------------------|
-| **siren**      | Medium    | Ambulance, fire truck, police siren     |
-| **alarm**      | Medium    | Smoke alarm, fire alarm                  |
-| **speech**     | Medium    | Conversation, narration                  |
-| **traffic**    | Medium    | Cars, engines, road noise               |
-| **music**      | Medium    | Singing, instruments                     |
-| **wind**       | Low       | Wind, microphone wind noise              |
-| **typing**     | Low       | Keyboard clicks                          |
-| **nature**     | Low       | Rain, birds, dogs                        |
-| **pets**       | Low       | Dog barking, cat meowing                 |
-| **appliances** | Low       | Microwave, blender, fan                  |
-| **misc**       | Low       | Cough, snaps, key jangling              |
-
-All categories are fully suppressible via profiles and command-line options (for example `--suppress typing,wind,siren`).
-
----
-
-## Project layout
-
-```text
-TSEBP2025/
-├── desktop/
-│   ├── src/
-│   │   └── profiles/     # Profile manager, control engine, safety logic
-│   └── requirements.txt  # Desktop runtime stack
-├── ai/
-│   ├── ai_runtime/       # Canonical AI runtime (detection/separation/suppression, config/)
-│   ├── training/         # Training configs and training dependency set
-│   ├── export/           # PyTorch → ONNX/TFLite export factory
-│   ├── scripts/          # AI scripts (setup/, demos/, diagnostics/)
-│   └── tests/            # AI tests (runtime/, integration/, manual/)
-├── ai/models/            # Downloaded checkpoints and exports
-├── ai/data/audio/        # Raw and processed audio datasets
-├── mobile/               # Main React Native app (future integration target)
-├── mobile-test/          # Self-contained Expo testbed for TFLite pipeline
-├── docs/                 # Additional documentation and test notes
-└── shared/
-    └── scripts/         # Shared setup (e.g. setup_env.ps1 for .venv)
+```powershell
+python -m ai.ai_runtime.audio.recorder_cleaner `
+  --duration 10 `
+  --suppress typing,wind `
+  --output ai\data\audio\processed\session_clean.wav
 ```
 
----
+### Live real-time demo
 
-## Folder-level guide
+```powershell
+python ai\scripts\demos\demo_custom_realtime.py --suppress typing
+python ai\scripts\demos\demo_custom_realtime.py --list-categories
+python ai\scripts\demos\demo_custom_realtime.py --list-devices
+```
 
-### `desktop`
+### Fixed-category CodecSep example
 
-- **Purpose**: Desktop runtime, demos, and tests for the real-time suppression engine.
-- **Key modules**:
-  - `ai/ai_runtime/suppression/semantic_suppressor.py` – core semantic suppression engine. Glues together semantic detection and Waveformer separation, implements per-category separation with adaptive stem boosting and two-stage spectral masking, and loads the YAMNet → Waveformer mapping.
-  - `ai/ai_runtime/audio/recorder_cleaner.py` – record-from-mic + suppress + write stems (original/clean/noise) with CLI options for duration, categories, and aggressiveness.
-  - `ai/ai_runtime/audio/latency_profiler.py`, `ai/ai_runtime/profiles/profiler.py`, `ai/scripts/diagnostics/profile_performance.py` – operation-level timing and JSON export for throughput/latency analysis.
-  - `ai/ai_runtime/audio/ring_buffer.py`, `ai/ai_runtime/detection/detection_thread.py`, `ai/ai_runtime/audio/audio_io.py` – low-level pieces that keep streaming audio stable and decoupled from heavier model inference.
-  - `ai/ai_runtime/profiles/profile_manager.py` – loads/stores profiles from JSON, including custom user profiles.
-  - `src/profiles/control_engine.py` – central logic for auto/manual modes, applying profiles, and enforcing safety rules.
-  - `ai/ai_runtime/batch/batch_processor.py` – offline processor for existing WAV files; uses the same suppression logic as the live path.
-  - `ai/scripts/demos/demo_custom_realtime.py` – primary realtime demo with `--suppress`, `--threshold`, and helper flags.
-  - `ai/scripts/demos/demo_realtime.py`, `ai/scripts/demos/demo_debug_realtime.py`, `ai/scripts/diagnostics/show_yamnet_detections.py` – debugging/visualization helpers.
-  - `tests/` + `test_*` scripts – pytest tests and script-level smoke tests for end-to-end behavior.
+```powershell
+python -m ai.ai_runtime.batch.batch_processor `
+  --input ai\data\audio\raw\speech_siren.wav `
+  --output ai\data\audio\processed\speech_siren_codecsep.wav `
+  --separator-backend codecsep `
+  --codecsep-product-category keyboard_typing `
+  --codecsep-product-category siren `
+  --output-noise
+```
 
-### `ai/training`
+### Exact-15 AudioSepHive15Cat example
 
-- **Purpose**: Training, fine-tuning, and evaluation for the models used by the mixer.
-- **Key modules**:
-  - `ai/ai_runtime/separation/waveformer_separator.py` – defines `WaveformerSeparator`, the inference wrapper that:
-    - Loads Waveformer configs and checkpoints.
-    - Resamples audio to the model’s sample rate.
-    - Produces separated stems in a shape that the desktop code expects.
-  - `ai/ai_runtime/detection/semantic_detective.py` – YAMNet-based detector that:
-    - Runs classification on windows of audio.
-    - Aggregates/confidence-smooths predictions.
-    - Produces semantic labels used by the control engine.
-  - `ai/models/Waveformer/` – upstream Waveformer project (configs, data loaders, training scripts, experiments).
-  - `ai/ai_runtime/config/yamnet_class_map.yaml` – canonical mapping from raw YAMNet indices to semantic categories.
-  - `requirements.txt` – full training + metrics + visualization stack.
+```powershell
+python -m ai.ai_runtime.batch.batch_processor `
+  --input ai\data\audio\raw\speech_alarm.wav `
+  --output ai\data\audio\processed\speech_alarm_hive15.wav `
+  --separator-backend audiosep_hive15cat `
+  --suppress "keyboard typing,alarm"
+```
 
-### `ai/export`
+### Open-vocabulary AudioSep example
 
-- **Purpose**: Model export “factory” for desktop and mobile formats.
-- **Key modules**:
-  - `export_onnx.py` – `ONNXExporter`:
-    - Wraps an instantiated `WaveformerSeparator`.
-    - Exports a static-shape ONNX graph (3 seconds at 44.1 kHz) suitable for downstream conversion.
-    - Can apply FP16 quantization for desktop GPU acceleration.
-  - `export_tflite.py` – `TFLiteExporter`:
-    - Runs the ONNX exporter.
-    - Calls `onnx2tf` via `subprocess.run(...)`.
-    - Moves the generated `model_float32.tflite` into the configured output location (for example the mobile assets directory).
-  - `requirements.txt` – dependencies for export only. **Use a separate venv** for full ONNX/TFLite export (TF 2.15, numpy<2 conflict with desktop/training). See `ai/export/requirements.txt` header.
+```powershell
+python -m ai.ai_runtime.batch.batch_processor `
+  --input ai\data\audio\raw\speech_boat.wav `
+  --output ai\data\audio\processed\speech_boat_universal.wav `
+  --universal "boat engine, water noise"
+```
 
-### `ai/ai_runtime/config`
+### Desktop UI
 
-- **Purpose**: Canonical config (YAMNet mappings, profile defaults, schemas).
-- **Key files**:
-  - `yamnet_class_map.yaml`, `yamnet_to_waveformer.yaml` – YAMNet category mappings.
-  - `default_profiles.json` – pre-defined profiles (focus/office/commute) specifying suppressions and gains.
-  - `profile_schema.json` – JSON schema for profile validation.
+```powershell
+python desktop\src\ui\app.py
+```
 
-### `shared/scripts`
+## Tests
 
-- **Purpose**: Shared tooling used by AI and desktop.
-- **Key scripts**:
-  - `setup_env.ps1` – creates and populates `.venv` at project root with the full stack (AI + desktop) on Windows (CUDA-enabled PyTorch, audio libs, TensorFlow, ONNX/TFLite tooling, etc.).
+Run the automated test suites with:
 
-### `ai/scripts`
+```powershell
+python -m pytest ai\tests\runtime desktop\tests
+```
 
-- **Purpose**: AI utility scripts for downloads and smoke checks.
-- **Key scripts**:
-  - `setup/download_models.py` – pulls pretrained checkpoints and unpacks them into `ai/models/` (including `ai/models/Waveformer/experiments/`).
+Additional diagnostics and manual smoke tools live under `ai/scripts/diagnostics/`
+and `ai/tests/manual/`.
 
-### `ai/tests`
+## Notes
 
-- **Purpose**: AI-owned automated tests and smoke-style validation modules.
-- **Key modules**:
-  - `test_audio.py`, `test_detection_thread.py`, `test_waveformer_separator.py`, `test_suppression_quality.py` – core AI runtime behavior tests.
-  - `test_inference.py`, `test_df.py`, `test_system.py` – validation-focused smoke helpers kept under test ownership.
+- Waveformer is detector-driven and uses the YAMNet-based semantic mapping.
+- AudioSepHive15Cat is manual-first and uses its own exact-15 category surface.
+- CodecSep fixed-category mode uses `product_to_hive_fixedset.json` rather than
+  the older prompt-routing file.
+- Some backends require local model trees that are not provisioned by the base
+  downloader.
 
-### `mobile` and `mobile-test`
+## Documentation
 
-- **`mobile/`**:
-  - Primary React Native app (long-term target). The idea is to migrate the working logic from `mobile-test/` into this app once the desktop stack is fully finalized.
-- **`mobile-test/`**:
-  - Self-contained Expo testbed that:
-    - Records audio via `react-native-audio-record`.
-    - Converts WAV data to `Float32Array` buffers with helpers in `utils/wavUtils.ts`.
-    - Runs chunks through a TFLite UNet-style model using `react-native-fast-tflite`.
-    - Reassembles and plays original vs. cleaned audio via `expo-av`.
-  - Important files:
-    - `hooks/useSuppressionDemo.ts` – coordinates recording, processing, and playback in React-land.
-    - `services/WaveformerInferenceService.ts` – low-level TFLite integration and buffer management.
-    - `utils/wavUtils.ts` – WAV parsing and writing utilities.
-
-## Development notes and next steps
-
-- **What is done**
-  - Desktop real-time suppression pipeline, including:
-    - SemanticSuppressor with per-category separation and adaptive stem boosting.
-    - Rolling 1 second context buffer.
-    - Two-stage masking pipeline with adaptive floor and Wiener post-filter.
-    - Batched multi-query Waveformer inference via `separate_multi_query()`.
-    - Performance optimization: torch.compile, ONNX Runtime, STFT window caching.
-  - Batch and recorder tooling.
-  - A working on-device TFLite pipeline in the `mobile-test` app.
-
-- **What is partially done**
-  - ONNX/TFLite export scripts for the UNet-style TFLite model.
-  - Early mobile integration patterns (service/hook design, chunked 3 second inference).
-
-- **Potential future work**
-  - Desktop GUI (CustomTkinter or Electron) over the existing engine.
-  - Migration of `mobile-test` logic into the main `mobile` app.
-  - More automated and generalized export pipeline (Core ML, TFLite Micro, CI jobs).
-  - Performance tuning and quantization for lower-end hardware. 
+- [Master User Manual](docs/project/usage/USER_MANUAL.md)
+- [Model Details](docs/project/knowledge/model_details.md)
+- [Semantic Mappings](docs/project/knowledge/semantic_mappings.md)
+- [Architecture Overview](docs/project/architecture/overview.md)

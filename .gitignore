@@ -18,9 +18,16 @@ env/
 *.pth
 
 # Models (large files - use Git LFS / Checkpoints)
-ai/models/checkpoints/
 ai/models/exports/
 ai/models/AudioSep/
+ai/models/AudioSepHive15Cat/
+ai/models/ClapSepHive15Cat/
+ai/models/Waveformer/assets/archives/
+ai/models/Waveformer/assets/checkpoints/
+ai/models/YAMNet/archives/
+ai/models/YAMNet/saved_models/
+ai/models/YAMNet/tflite/
+ai/models/YAMNet/metadata/
 
 
 # Waveformer local artifacts
@@ -96,6 +103,10 @@ CursorMD/
 
 # Logs
 logs
+DistillationDocs/Logs/
+
+# Distillation generated artifacts
+distillation/Code/outputs/
 
 # Build outputs
 desktop/dist/
@@ -116,3 +127,11 @@ mobile/android/
 
 # Other
 mobile-test/
+
+# macOS archive metadata
+__MACOSX/
+._*
+
+# Local audio assets and generated results
+ai/data/audio/Sounds/
+ai/data/audio/processed/

@@ -13,10 +13,16 @@ import numpy as np
 import torch
 import torchaudio
 
+from ai.ai_runtime.utils.paths import (
+    get_waveformer_checkpoint_path,
+    get_waveformer_config_path,
+    get_waveformer_model_path,
+)
+
 logger = logging.getLogger(__name__)
 
 # Add Waveformer package to import path (vendored under ai/models/)
-WAVEFORMER_DIR = Path(__file__).resolve().parents[2] / "models" / "Waveformer"
+WAVEFORMER_DIR = get_waveformer_model_path()
 if str(WAVEFORMER_DIR) not in sys.path:
     sys.path.append(str(WAVEFORMER_DIR))
 
@@ -80,8 +86,8 @@ class WaveformerSeparator:
         use_onnx: bool = False,
         onnx_path: Optional[Path] = None,
     ) -> None:
-        self.config_path = config_path or WAVEFORMER_DIR / "default_config.json"
-        self.checkpoint_path = checkpoint_path or WAVEFORMER_DIR / "default_ckpt.pt"
+        self.config_path = config_path or get_waveformer_config_path()
+        self.checkpoint_path = checkpoint_path or get_waveformer_checkpoint_path()
         self.device = torch.device(device) if device else self._auto_device()
         self._use_onnx = use_onnx
         self._ort_session = None

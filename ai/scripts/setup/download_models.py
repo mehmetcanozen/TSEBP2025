@@ -7,9 +7,15 @@ _root = Path(__file__).resolve().parents[3]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from ai.ai_runtime.utils.paths import get_models_checkpoints_path
+from ai.ai_runtime.utils.paths import (
+    get_waveformer_archive_path,
+    get_yamnet_archive_path,
+    get_yamnet_class_map_csv_path,
+)
 
-CHECKPOINTS = get_models_checkpoints_path()
+WAVEFORMER_ARCHIVE = get_waveformer_archive_path()
+YAMNET_ARCHIVE = get_yamnet_archive_path()
+YAMNET_CLASS_MAP = get_yamnet_class_map_csv_path()
 
 WAVEFORMER_URL = "https://targetsound.cs.washington.edu/files/experiments.zip"
 YAMNET_URL = "https://tfhub.dev/google/yamnet/1?tf-hub-format=compressed"
@@ -27,9 +33,9 @@ def download(url: str, dest: Path) -> None:
 
 
 def main() -> None:
-    download(WAVEFORMER_URL, CHECKPOINTS / "waveformer_experiments.zip")
-    download(YAMNET_URL, CHECKPOINTS / "yamnet_1.tar.gz")
-    download(YAMNET_CLASS_MAP_URL, CHECKPOINTS / "yamnet_class_map.csv")
+    download(WAVEFORMER_URL, WAVEFORMER_ARCHIVE)
+    download(YAMNET_URL, YAMNET_ARCHIVE)
+    download(YAMNET_CLASS_MAP_URL, YAMNET_CLASS_MAP)
     print("Downloads completed.")
 
 

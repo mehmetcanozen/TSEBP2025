@@ -91,5 +91,84 @@
             }
         ],
         "isSystemProfile": true
+    },
+    {
+        "id": "audiosep15-office",
+        "name": "Hive15 Office",
+        "description": "Exact-15 suppression for office distractions and alert sounds",
+        "schemaVersion": "1.0.0",
+        "created_at": "2026-04-17T00:00:00Z",
+        "updated_at": "2026-04-17T00:00:00Z",
+        "suppressions": {
+            "keyboard typing": true,
+            "phone ringing": true,
+            "door knocking": true,
+            "alarm": true,
+            "background noise": true
+        },
+        "gains": {
+            "speech": 1.0,
+            "noise": 1.0,
+            "events": 1.0
+        },
+        "isSystemProfile": true,
+        "suppression_params": {
+            "separator_backend": "audiosep_hive15cat",
+            "masking_method": "wiener_dd",
+            "audiosep_hive15cat_realtime_hop_seconds": 1.0
+        }
+    },
+    {
+        "id": "audiosep15-outdoors",
+        "name": "Hive15 Outdoors",
+        "description": "Exact-15 suppression for wind, weather, animals, and environmental wash",
+        "schemaVersion": "1.0.0",
+        "created_at": "2026-04-17T00:00:00Z",
+        "updated_at": "2026-04-17T00:00:00Z",
+        "suppressions": {
+            "dog barking": true,
+            "rain": true,
+            "wind": true,
+            "bird singing": true,
+            "water flowing": true,
+            "background noise": true
+        },
+        "gains": {
+            "speech": 1.0,
+            "noise": 1.0,
+            "events": 1.0
+        },
+        "isSystemProfile": true,
+        "suppression_params": {
+            "separator_backend": "audiosep_hive15cat",
+            "masking_method": "wiener_dd",
+            "audiosep_hive15cat_realtime_hop_seconds": 1.0
+        }
+    },
+    {
+        "id": "audiosep15-transit",
+        "name": "Hive15 Transit",
+        "description": "Exact-15 suppression for engines, crowd wash, and background ambience",
+        "schemaVersion": "1.0.0",
+        "created_at": "2026-04-17T00:00:00Z",
+        "updated_at": "2026-04-17T00:00:00Z",
+        "suppressions": {
+            "music": true,
+            "car engine": true,
+            "footsteps": true,
+            "crowd noise": true,
+            "background noise": true
+        },
+        "gains": {
+            "speech": 1.0,
+            "noise": 1.0,
+            "events": 1.0
+        },
+        "isSystemProfile": true,
+        "suppression_params": {
+            "separator_backend": "audiosep_hive15cat",
+            "masking_method": "wiener_dd",
+            "audiosep_hive15cat_realtime_hop_seconds": 1.0
+        }
     }
 ]

@@ -1,0 +1,234 @@
+# Runtime Category to CodecSep Prompt/Slot Mapping
+#
+# Runtime mapping for CodecSep.
+#
+# This file now exists only for legacy prompt compatibility:
+# - V5 fixed-category runtime uses `product_to_hive_fixedset.json` plus the
+#   fixed-category identity catalog
+# - fixed slots remain `speech`, `music`, `sfx` only for legacy prompt modes
+# - nuisance/environmental suppression targets the `sfx` slot in those legacy paths
+# - `queries` defines the prompt profile for the chosen fixed slot
+# - `stems` and `prompts` remain compatibility fallbacks
+#
+# Experimental search mode can still read the richer `queries` fields
+# such as `negative_prompts`, `preserve_prompts`, and `alternate_slots`,
+# but the V5 default runtime does not depend on them.
+
+stems:
+  speech: ["speech"]
+  music: ["music"]
+  typing: ["sfx"]
+  pets: ["sfx"]
+  traffic: ["sfx"]
+  phone: ["sfx"]
+  chimes: ["music"]
+  explosions: ["sfx"]
+  glass_impact: ["sfx"]
+  bodily_functions: ["sfx"]
+  appliances: ["sfx"]
+  misc: ["sfx"]
+  nature: ["sfx"]
+  wind: ["sfx"]
+  siren: ["sfx"]
+  alarm: ["sfx"]
+
+prompts:
+  speech: "speech, talking, voice"
+  music: "music, musical instruments"
+  typing: "keyboard typing sounds, key clicks from a computer keyboard"
+  pets: "a dog barking, an animal sound"
+  traffic: "traffic noise, a car passing, engine rumble, road ambience"
+  phone: "a telephone ringing, a phone notification, an alert tone"
+  chimes: "bell chimes, ringing bells, bell tones"
+  explosions: "an explosion, fireworks, a gunshot, a loud blast"
+  glass_impact: "glass breaking, glass shattering, impact sounds"
+  bodily_functions: "coughing, sneezing, throat clearing, burping"
+  appliances: "a microwave beep, a household appliance, a kitchen machine"
+  misc: "knocking, clapping, an object drop, everyday sounds"
+  nature: "rain, thunder, water flow, natural ambience"
+  wind: "gusting wind noise, blowing air outdoors"
+  siren: "an ambulance siren, an emergency vehicle siren"
+  alarm: "a fire alarm, a smoke alarm, warning beeps"
+
+queries:
+  speech:
+    positive_prompts: ["speech, talking, voice"]
+    preserve_prompts: ["music, musical instruments", "sound effects, environmental sounds, noise"]
+    preferred_slot: "speech"
+    alternate_slots: ["sfx"]
+    reconstruction_policy: "keep_complement"
+    default_aggressiveness: 1.2
+    use_multistep: false
+  music:
+    positive_prompts: ["music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "sound effects, environmental sounds, noise"]
+    preferred_slot: "music"
+    alternate_slots: ["sfx"]
+    reconstruction_policy: "keep_complement"
+    default_aggressiveness: 1.2
+    use_multistep: false
+  typing:
+    positive_prompts:
+      - "keyboard typing sounds, key clicks"
+      - "mechanical keyboard typing, keystroke sounds"
+      - "computer keyboard input, typing noise"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["speech", "music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 2.2
+    use_multistep: true
+  pets:
+    positive_prompts:
+      - "a dog barking loudly"
+      - "a dog barking in the distance"
+      - "canine vocalization, an animal sound"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["speech", "music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 2.0
+    use_multistep: true
+  traffic:
+    positive_prompts:
+      - "traffic noise and road ambience"
+      - "a car passing with engine rumble"
+      - "street traffic in the background"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.8
+    use_multistep: true
+  phone:
+    positive_prompts:
+      - "a telephone ringing"
+      - "phone notification sounds"
+      - "an alert tone from a mobile phone"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.8
+    use_multistep: true
+  chimes:
+    positive_prompts: ["bell chimes, ringing bells, bell tones"]
+    negative_prompts: ["speech, talking, voice"]
+    preserve_prompts: ["speech, talking, voice"]
+    preferred_slot: "music"
+    alternate_slots: ["sfx"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.7
+    use_multistep: false
+  explosions:
+    positive_prompts:
+      - "an explosion or a loud blast"
+      - "fireworks exploding"
+      - "a gunshot or impact blast"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 2.0
+    use_multistep: true
+  glass_impact:
+    positive_prompts:
+      - "glass breaking and shattering"
+      - "a sharp glass impact"
+      - "glass shards crashing down"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.9
+    use_multistep: true
+  bodily_functions:
+    positive_prompts:
+      - "someone coughing or sneezing"
+      - "throat clearing sounds"
+      - "burping and other bodily noises"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["speech"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.8
+    use_multistep: true
+  appliances:
+    positive_prompts:
+      - "a microwave beeping"
+      - "a household appliance running"
+      - "a kitchen machine making noise"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.7
+    use_multistep: true
+  misc:
+    positive_prompts:
+      - "knocking and clapping sounds"
+      - "an object dropping onto the floor"
+      - "everyday household sounds"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.6
+    use_multistep: true
+  nature:
+    positive_prompts:
+      - "rain and thunder in the background"
+      - "water flowing outdoors"
+      - "natural ambience with weather sounds"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.6
+    use_multistep: true
+  wind:
+    positive_prompts:
+      - "gusting wind noise"
+      - "strong wind blowing outdoors"
+      - "air rushing in the background"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 1.8
+    use_multistep: true
+  siren:
+    positive_prompts:
+      - "an ambulance siren in the distance"
+      - "a loud emergency vehicle siren"
+      - "wailing siren sounds"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 2.0
+    use_multistep: true
+  alarm:
+    positive_prompts:
+      - "a fire alarm beeping"
+      - "a smoke alarm sounding"
+      - "repeating warning beeps"
+    negative_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preserve_prompts: ["speech, talking, voice", "music, musical instruments"]
+    preferred_slot: "sfx"
+    alternate_slots: ["music"]
+    reconstruction_policy: "wiener_mask"
+    default_aggressiveness: 2.0
+    use_multistep: true
