@@ -164,7 +164,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
         setOutputDeviceId(defaultOutput?.id || firstOutput?.id || "");
 
         if (!hydratedDefaults.current) {
-          const defaultPreset = loadedPresets.find((preset) => preset.id === "audiosep15-office") ?? loadedPresets[0];
+          const defaultPreset = loadedPresets[0];
           if (defaultPreset) {
             setSelectedCategories(defaultPreset.categories);
           } else {
@@ -238,7 +238,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       return;
     }
     if (selectedCategories.length === 0) {
-      setError("Select at least one exact-15 category to suppress.");
+      setError("Select at least one model category to suppress.");
       return;
     }
 
@@ -298,7 +298,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
 
   const startLive = async () => {
     if (selectedCategories.length === 0) {
-      setError("Select at least one exact-15 category before starting live monitoring.");
+      setError("Select at least one model category before starting live monitoring.");
       return;
     }
     if (recordEnabled && !recordOutputPath.trim()) {

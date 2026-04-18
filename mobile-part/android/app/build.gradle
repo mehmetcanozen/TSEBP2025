@@ -2,7 +2,157 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def workspaceRoot = new File(projectRoot).getParentFile()
+def sharedModelsRoot = new File(workspaceRoot, "ai/models")
+def generatedSuppressionAssetsRoot = new File(buildDir, "generated/suppression-assets")
+def generatedSuppressionBundleDir = new File(generatedSuppressionAssetsRoot, "suppression-model-bundle")
+
+def computeSha256 = { File file ->
+    MessageDigest digest = MessageDigest.getInstance("SHA-256")
+    file.withInputStream { input ->
+        byte[] buffer = new byte[8192]
+        int read = 0
+        while ((read = input.read(buffer)) > 0) {
+            digest.update(buffer, 0, read)
+        }
+    }
+    digest.digest().collect { String.format("%02x", it) }.join("")
+}
+
+def resolveBundledSuppressionModelContext = {
+    def selectionFile = new File(sharedModelsRoot, "model_selection.json")
+    def selectionManifest = new JsonSlurper().parse(selectionFile)
+    def activeModelId = (
+        project.findProperty("tsebpActiveSuppressionModel")
+            ?: System.getenv("TSEBP_ACTIVE_SUPPRESSION_MODEL")
+            ?: selectionManifest.default_model_id
+    ).toString()
+    def packageRelativePath = selectionManifest.models[activeModelId]
+    if (!packageRelativePath) {
+        throw new GradleException("Unknown shared suppression model '${activeModelId}'")
+    }
+
+    def packageFile = new File(sharedModelsRoot, packageRelativePath.toString())
+    def packageManifest = new JsonSlurper().parse(packageFile)
+    def androidPlatform = packageManifest.platforms.android
+    if (!androidPlatform) {
+        throw new GradleException("Shared model '${activeModelId}' does not define an android platform")
+    }
+
+    def trackedFiles = [selectionFile, packageFile]
+    def assetFiles = [new File(packageFile.parentFile, androidPlatform.artifact.toString())]
+    (androidPlatform.metadata_artifacts ?: []).each { relativePath ->
+        assetFiles << new File(packageFile.parentFile, relativePath.toString())
+    }
+    trackedFiles.addAll(assetFiles)
+
+    return [
+        activeModelId: activeModelId,
+        packageFile: packageFile,
+        packageManifest: packageManifest,
+        androidPlatform: androidPlatform,
+        assetFiles: assetFiles,
+        trackedFiles: trackedFiles,
+    ]
+}
+
+tasks.register("prepareBundledSuppressionModel") {
+    def bundledContext = resolveBundledSuppressionModelContext()
+    inputs.property("activeModelId", bundledContext.activeModelId)
+    inputs.files(bundledContext.trackedFiles)
+    outputs.dir(generatedSuppressionAssetsRoot)
+
+    doLast {
+        def bundledContext = resolveBundledSuppressionModelContext()
+        def activeModelId = bundledContext.activeModelId
+        def packageFile = bundledContext.packageFile
+        def packageManifest = bundledContext.packageManifest
+        def androidPlatform = bundledContext.androidPlatform
+
+        delete(generatedSuppressionAssetsRoot)
+        generatedSuppressionBundleDir.mkdirs()
+
+        def bundledFiles = bundledContext.assetFiles
+
+        bundledFiles.each { sourceFile ->
+            if (!sourceFile.exists()) {
+                throw new GradleException("Bundled suppression asset is missing: ${sourceFile}")
+            }
+            copy {
+                from(sourceFile)
+                into(generatedSuppressionBundleDir)
+            }
+        }
+
+        def artifacts = bundledFiles.collect { file ->
+            def filename = file.name
+            def lower = filename.toLowerCase()
+            def format = lower.endsWith(".onnx")
+                ? "onnx"
+                : lower.endsWith(".ort")
+                    ? "ort"
+                    : lower.endsWith(".pte")
+                        ? "executorch"
+                        : lower.endsWith(".json")
+                            ? "json"
+                            : lower.endsWith(".txt")
+                                ? "text"
+                                : lower.endsWith(".yaml")
+                                    ? "yaml"
+                                    : "binary"
+            def role = filename == new File(androidPlatform.artifact.toString()).name ? "model" : "metadata"
+            def provider = format == "executorch"
+                ? "executorch"
+                : (format in ["onnx", "ort"] ? "cpu" : "metadata")
+            [
+                filename: filename,
+                format: format,
+                provider: provider,
+                role: role,
+                sha256: computeSha256(file),
+                bytes: file.length(),
+            ]
+        }
+
+        def manifest = [
+            schema_version: 2,
+            bundle_kind: androidPlatform.bundle_kind ?: "suppression_model_bundle",
+            model_id: packageManifest.model_id,
+            package_version: packageManifest.package_version ?: packageManifest.model_id,
+            model_family: packageManifest.family,
+            display_name: packageManifest.display_name,
+            suppression_strategy: packageManifest.suppression_strategy.kind,
+            runtime_kind: androidPlatform.runtime_kind,
+            version: packageManifest.package_version ?: packageManifest.model_id,
+            platform: "android",
+            sample_rate: androidPlatform.sample_rate,
+            preferred_live_hop_ms: androidPlatform.preferred_live_hop_ms,
+            mix_channels: androidPlatform.mix_channels ?: 1,
+            categories: packageManifest.categories,
+            artifacts: artifacts,
+        ]
+        if (androidPlatform.segment_seconds != null) {
+            manifest.segment_seconds = androidPlatform.segment_seconds
+        }
+        if (androidPlatform.overlap_seconds != null) {
+            manifest.overlap_seconds = androidPlatform.overlap_seconds
+        }
+        if (androidPlatform.chunk_samples != null) {
+            manifest.chunk_samples = androidPlatform.chunk_samples
+        }
+        if (androidPlatform.state_tensors != null) {
+            manifest.state_tensors = androidPlatform.state_tensors
+        }
+
+        new File(generatedSuppressionBundleDir, "manifest.json").text =
+            JsonOutput.prettyPrint(JsonOutput.toJson(manifest))
+    }
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -130,6 +280,11 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+    sourceSets {
+        main {
+            assets.srcDirs += generatedSuppressionAssetsRoot
+        }
+    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
@@ -155,6 +310,9 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
+    implementation("org.pytorch:executorch-android:1.2.0")
+    implementation("com.github.wendykierp:JTransforms:3.1")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
@@ -180,3 +338,5 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+preBuild.dependsOn("prepareBundledSuppressionModel")

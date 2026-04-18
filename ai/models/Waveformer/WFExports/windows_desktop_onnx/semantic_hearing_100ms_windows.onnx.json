@@ -1,0 +1,103 @@
+{
+  "format": "onnx",
+  "checkpoint": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\39.pt",
+  "config": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\config.json",
+  "output": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\windows_desktop_onnx\\semantic_hearing_100ms_windows.onnx",
+  "sample_rate": 44100,
+  "chunk_samples": 4416,
+  "chunk_ms": 100.1360544217687,
+  "opset_version": 20,
+  "checkpoint_target_mode": "extract",
+  "labels": [
+    "alarm_clock",
+    "baby_cry",
+    "birds_chirping",
+    "cat",
+    "car_horn",
+    "cock_a_doodle_doo",
+    "cricket",
+    "computer_typing",
+    "dog",
+    "glass_breaking",
+    "gunshot",
+    "hammer",
+    "music",
+    "ocean",
+    "door_knock",
+    "singing",
+    "siren",
+    "speech",
+    "thunderstorm",
+    "toilet_flush"
+  ],
+  "notes": {
+    "runtime_task": "extract target chunk",
+    "suppression_recipe": "subtract target_chunk from mixture in the desktop runtime",
+    "desktop_runtime": "Use ONNX Runtime on Windows desktop now; use Windows ML later if you wrap this in a Windows App SDK app.",
+    "resampling": "capture 48 kHz if needed, resample to 44.1 kHz for inference, then resample output back"
+  },
+  "inputs": [
+    {
+      "name": "mixture",
+      "shape": [
+        1,
+        2,
+        4416
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "label_vector",
+      "shape": [
+        1,
+        20
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "enc_buf",
+      "shape": [
+        1,
+        256,
+        2046
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "dec_buf",
+      "shape": [
+        1,
+        2,
+        13,
+        256
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "out_buf",
+      "shape": [
+        1,
+        256,
+        4
+      ],
+      "dtype": "torch.float32"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "target_chunk"
+    },
+    {
+      "name": "enc_buf_out"
+    },
+    {
+      "name": "dec_buf_out"
+    },
+    {
+      "name": "out_buf_out"
+    }
+  ],
+  "check": {
+    "ok": true
+  }
+}

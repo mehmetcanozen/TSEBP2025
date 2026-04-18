@@ -35,9 +35,11 @@
       }
     },
     "resources": {
-      "../../ai/models/AudioSepHive15Cat/": "audiosep_hive15cat/",
-      "../../ai/ai_runtime/config/audiosep_hive15cat_categories.yaml": "config/audiosep_hive15cat_categories.yaml",
-      "../../ai/ai_runtime/config/default_profiles.json": "config/default_profiles.json",
+      "../../ai/models/model_selection.json": "models/model_selection.json",
+      "../../ai/models/AudioSepHive15Cat/": "models/AudioSepHive15Cat/",
+      "../../ai/models/Waveformer/model_package.json": "models/Waveformer/model_package.json",
+      "../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx": "models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
+      "../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json": "models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json",
       "./runtime/": "runtime/"
     }
   }

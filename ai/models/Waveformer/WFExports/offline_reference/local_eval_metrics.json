@@ -1,0 +1,38 @@
+[
+  {
+    "name": "speech_keyboard_to_speech",
+    "input": "audio\\raw\\speech_keyboard.wav",
+    "reference": "audio\\raw\\speech.wav",
+    "target": "computer_typing",
+    "task": "suppress",
+    "suppress_via": "residual",
+    "raw": {
+      "snr": 4.9819183349609375,
+      "si_snr": 5.697072982788086
+    },
+    "output": {
+      "snr": 5.563364028930664,
+      "si_snr": 12.017499923706055,
+      "snr_improvement": 0.5814456939697266,
+      "si_snr_improvement": 6.320426940917969
+    }
+  },
+  {
+    "name": "speech_barking_to_speech",
+    "input": "audio\\raw\\speech_barking.wav",
+    "reference": "audio\\raw\\speech.wav",
+    "target": "dog",
+    "task": "suppress",
+    "suppress_via": "residual",
+    "raw": {
+      "snr": -1.9554824829101562,
+      "si_snr": -7.196219444274902
+    },
+    "output": {
+      "snr": 2.9736781120300293,
+      "si_snr": 2.067087173461914,
+      "snr_improvement": 4.9291605949401855,
+      "si_snr_improvement": 9.263306617736816
+    }
+  }
+]

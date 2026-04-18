@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "default_model_id": "waveformer_edge_100ms",
+  "models": {
+    "audiosep_hive15cat": "AudioSepHive15Cat/model_package.json",
+    "waveformer_edge_100ms": "Waveformer/model_package.json"
+  }
+}

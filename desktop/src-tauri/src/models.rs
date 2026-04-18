@@ -1,15 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCategory {
     pub id: String,
     pub label: String,
     pub transient: bool,
+    #[serde(alias = "default_aggressiveness")]
     pub default_aggressiveness: f32,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Hive15Preset {
     pub id: String,
@@ -152,4 +153,25 @@ pub struct LiveMeterEvent {
     pub captured_frames: u64,
     pub rendered_frames: u64,
     pub timestamp_ms: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ModelCategory;
+
+    #[test]
+    fn model_category_deserializes_packaged_snake_case_fields() {
+        let category: ModelCategory = serde_json::from_str(
+            r#"{
+                "id": "speech",
+                "label": "speech",
+                "transient": false,
+                "default_aggressiveness": 1.4
+            }"#,
+        )
+        .expect("packaged model categories should deserialize");
+
+        assert_eq!(category.id, "speech");
+        assert_eq!(category.default_aggressiveness, 1.4);
+    }
 }

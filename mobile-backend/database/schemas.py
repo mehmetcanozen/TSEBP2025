@@ -103,6 +103,8 @@ class LatestModelResponse(BaseModel):
     download_url: Optional[str]
     file_size_mb: Optional[float]
     checksum: Optional[str]
+    bundle_kind: Optional[str] = None
+    filename: Optional[str] = None
 
 
 # ══════════════════════════════════════════════

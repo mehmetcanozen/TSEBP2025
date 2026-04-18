@@ -265,10 +265,10 @@ fn run_live_worker(
         .send(Ok(()))
         .map_err(|error| AppError::message(error.to_string()))?;
 
-    let hop_samples = input_rate as usize;
-    let context_samples = input_rate as usize * 5;
+    let preferred_hop_ms = engine.preferred_live_hop_ms().max(1);
+    let hop_samples = ((input_rate as usize * preferred_hop_ms as usize) / 1000).max(1);
     let prebuffer_frames = output_rate as usize * lookahead_ms as usize / 1000;
-    let mut rolling_input = Vec::<f32>::with_capacity(context_samples + hop_samples * 2);
+    let mut pending_input = Vec::<f32>::with_capacity(hop_samples * 4);
     let mut scratch = vec![0.0f32; hop_samples.max(1024)];
     let mut buffered_since_inference = 0usize;
     let mut last_output_chunk = Vec::<f32>::new();
@@ -294,39 +294,33 @@ fn run_live_worker(
         if available > 0 {
             let (read, _) = capture_consumer.pop_partial_slice(&mut scratch[..available]);
             if !read.is_empty() {
-                rolling_input.extend_from_slice(read);
+                pending_input.extend_from_slice(read);
                 buffered_since_inference += read.len();
                 last_input_chunk.clear();
                 last_input_chunk.extend_from_slice(read);
-
-                let keep = context_samples + hop_samples * 2;
-                if rolling_input.len() > keep {
-                    let overflow = rolling_input.len() - keep;
-                    rolling_input.drain(0..overflow);
-                }
             }
         }
 
         while buffered_since_inference >= hop_samples {
-            let context = latest_context(&rolling_input, context_samples);
+            let chunk = pending_input.drain(0..hop_samples).collect::<Vec<_>>();
             let infer_started = Instant::now();
-            let cleaned = processor.suppress_live_mono(
-                &context,
+            let mut cleaned = processor.suppress_live_chunk(
+                &chunk,
                 input_rate,
                 &request.categories,
                 request.aggressiveness,
                 &stop_flag,
             )?;
             let inference_ms = infer_started.elapsed().as_secs_f32() * 1000.0;
+            let record_chunk = cleaned.clone();
 
-            let mut clean_hop = cleaned[cleaned.len().saturating_sub(hop_samples)..].to_vec();
             if output_rate != input_rate {
-                clean_hop = linear_resample(&clean_hop, input_rate, output_rate);
+                cleaned = linear_resample(&cleaned, input_rate, output_rate);
             }
-            last_output_chunk = clean_hop.clone();
+            last_output_chunk = cleaned.clone();
 
-            let (written, _) = render_producer.push_partial_slice(&clean_hop);
-            if written.len() < clean_hop.len() {
+            let (written, _) = render_producer.push_partial_slice(&cleaned);
+            if written.len() < cleaned.len() {
                 xruns.fetch_add(1, Ordering::Relaxed);
             }
             if !render_ready.load(Ordering::Relaxed)
@@ -336,7 +330,7 @@ fn run_live_worker(
             }
 
             if let Some(writer) = record_writer.as_mut() {
-                for sample in &cleaned[cleaned.len().saturating_sub(hop_samples)..] {
+                for sample in &record_chunk {
                     writer
                         .write_sample(*sample)
                         .map_err(|error| AppError::message(error.to_string()))?;
@@ -425,17 +419,6 @@ fn create_record_writer(path: Option<&str>, sample_rate: u32) -> AppResult<Optio
     };
     let writer = WavWriter::create(path, spec).map_err(|error| AppError::message(error.to_string()))?;
     Ok(Some(writer))
-}
-
-fn latest_context(rolling_input: &[f32], context_samples: usize) -> Vec<f32> {
-    if rolling_input.len() >= context_samples {
-        return rolling_input[rolling_input.len() - context_samples..].to_vec();
-    }
-
-    let mut context = vec![0.0f32; context_samples];
-    let offset = context_samples - rolling_input.len();
-    context[offset..].copy_from_slice(rolling_input);
-    context
 }
 
 struct ExitGuard {
