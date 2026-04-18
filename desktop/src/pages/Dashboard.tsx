@@ -111,7 +111,7 @@ const Dashboard = () => {
                 {selectedCategories.length}
               </div>
               <div className="mt-2 text-sm text-muted-foreground">
-                exact-15 categories selected
+                active model categories selected
               </div>
             </div>
           </section>
@@ -136,14 +136,14 @@ const Dashboard = () => {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-                    Exact-15 Target Surface
+                    Model Target Surface
                   </div>
                   <h2 className="mt-2 text-2xl font-semibold text-foreground">
                     Live suppression profile
                   </h2>
                   <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                    The desktop app now uses the model-backed 15-category surface directly. Presets come from the
-                    Hive15 desktop profiles, and the same selection drives both offline and live processing.
+                    The desktop app now reads its target surface and presets from the packaged model definition, and
+                    the same selection drives both offline and live processing.
                   </p>
                 </div>
                 <button
@@ -252,8 +252,8 @@ const Dashboard = () => {
                     {"Mic -> suppress -> monitor"}
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Windows-only buffered live path. Audio threads stay lightweight while the ONNX worker refreshes a gain
-                    envelope every second from the latest five-second context.
+                    Windows-only buffered live path. Audio threads stay lightweight while the active model runtime
+                    handles suppression on the latest captured audio blocks.
                   </p>
                 </div>
                 <div
@@ -397,8 +397,8 @@ const Dashboard = () => {
                     {"File -> suppress -> WAV"}
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Symphonia decode, exact-15 ONNX separation, Wiener mask suppression, and float32 WAV export with
-                    original sample rate and channel count preserved.
+                    Symphonia decode, packaged-model suppression, and float32 WAV export with original sample rate and
+                    channel count preserved.
                   </p>
                 </div>
                 <div

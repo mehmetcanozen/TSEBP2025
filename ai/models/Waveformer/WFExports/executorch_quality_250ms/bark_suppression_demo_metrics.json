@@ -1,0 +1,39 @@
+{
+  "pte": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\semantic_hearing_portable_11008.pte",
+  "checkpoint": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\39.pt",
+  "input": "C:\\SoftwareProjects\\SemanticHearing-main\\audio\\raw\\speech_barking.wav",
+  "target": "bark",
+  "sample_rate_model": 44100,
+  "sample_rate_input": 48000,
+  "chunk_samples": 11008,
+  "chunk_samples_source": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\semantic_hearing_portable_11008.pte.json",
+  "exported_vs_eager": {
+    "target_chunk_max_abs_diff": 8.344650268554688e-07,
+    "target_chunk_mean_abs_diff": 1.0610681222544827e-08,
+    "suppressed_max_abs_diff": 8.344650268554688e-07,
+    "suppressed_mean_abs_diff": 1.061073007235791e-08
+  },
+  "outputs": {
+    "exported_suppressed": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\speech_barking_executorch_11008_suppressed.wav",
+    "eager_suppressed": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\speech_barking_eager_11008_suppressed.wav"
+  },
+  "reference": "C:\\SoftwareProjects\\SemanticHearing-main\\audio\\raw\\speech.wav",
+  "quality": {
+    "raw": {
+      "snr": -1.9559348821640015,
+      "si_snr": -7.197078704833984
+    },
+    "exported_suppressed": {
+      "snr": 2.9676406383514404,
+      "si_snr": 2.0044493675231934,
+      "snr_improvement": 4.923575520515442,
+      "si_snr_improvement": 9.201528072357178
+    },
+    "eager_suppressed": {
+      "snr": 2.9676403999328613,
+      "si_snr": 2.0044493675231934,
+      "snr_improvement": 4.923575282096863,
+      "si_snr_improvement": 9.201528072357178
+    }
+  }
+}

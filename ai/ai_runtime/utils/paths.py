@@ -130,6 +130,11 @@ def get_codecsep_model_path() -> Path:
     return get_models_path() / "CodecSep"
 
 
+def get_codecsep_bundle_path() -> Path:
+    """Return the cleaned DNR CodecSep bundle root."""
+    return get_codecsep_model_path() / "Runs" / "CodecSep_DNR_USS_ModelBundle"
+
+
 def get_audiosep_hive15cat_model_path() -> Path:
     """Return the AudioSepHive15Cat model directory (ai/models/AudioSepHive15Cat/)."""
     return get_models_path() / "AudioSepHive15Cat"
@@ -146,22 +151,30 @@ def get_audiosep_hive15cat_categories_path() -> Path:
 
 
 def get_codecsep_code_path() -> Path:
-    """Return the vendored CodecSep code directory."""
-    return (
-        get_codecsep_model_path()
-        / "codecsep_supplementary_material"
-        / "codecsep_code"
-    )
+    """Return the archived CodecSep source snapshot shipped with the clean bundle."""
+    return get_codecsep_bundle_path() / "source_snapshot" / "backup_src"
+
+
+def get_codecsep_runtime_assets_path() -> Path:
+    """Return the CodecSep runtime asset directory shipped with the clean bundle."""
+    return get_codecsep_bundle_path() / "runtime_assets"
+
+
+def get_codecsep_clap_checkpoint_path(
+    name: str = "630k-audioset-best.pt",
+) -> Path:
+    """Return the default CLAP checkpoint path for CodecSep runtime use."""
+    return get_codecsep_runtime_assets_path() / "CLAP_weights" / name
 
 
 def get_codecsep_default_run_dir() -> Path:
     """Return the default CodecSep runtime run directory."""
-    return get_codecsep_code_path() / "model-checkpoints" / "CodecSep_Hive_V5_50K_Pilot_Run1"
+    return get_codecsep_bundle_path()
 
 
 def get_codecsep_fixed_category_config_dir() -> Path:
-    """Return the fixed-category artifact directory inside the CodecSep codebase."""
-    return get_codecsep_code_path() / "config" / "fixed_category"
+    """Return the fixed-category artifact directory for optional runtime assets."""
+    return get_codecsep_model_path() / "config" / "fixed_category"
 
 
 def get_codecsep_fixed_category_identity_path() -> Path:
@@ -209,7 +222,15 @@ def get_codecsep_checkpoint_candidates(
         )
     if source.name == "ckpt_final":
         return (source / "ckpt_model_final.pth",)
+    if source.name == "best_accelerate_resume_state":
+        return (source / "pytorch_model.bin",)
+    if source.name == "final_weights":
+        return (source / "ckpt_model_final.pth",)
     return (
+        source / "checkpoints" / "best_accelerate_resume_state" / "pytorch_model.bin",
+        source / "checkpoints" / "final_weights" / "ckpt_model_final.pth",
+        source / "best_accelerate_resume_state" / "pytorch_model.bin",
+        source / "final_weights" / "ckpt_model_final.pth",
         source / "ckpt_best_stable" / "pytorch_model.bin",
         source / "ckpt_gate_pass" / "pytorch_model.bin",
         source / "ckpt_best_screen" / "pytorch_model.bin",

@@ -1,0 +1,148 @@
+{
+  "format": "executorch",
+  "backend": "portable",
+  "requested_backend": "auto",
+  "checkpoint": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\39.pt",
+  "config": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\config.json",
+  "output": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\semantic_hearing_portable_11008.pte",
+  "sample_rate": 44100,
+  "chunk_samples": 11008,
+  "chunk_ms": 249.61451247165533,
+  "checkpoint_target_mode": "extract",
+  "labels": [
+    "alarm_clock",
+    "baby_cry",
+    "birds_chirping",
+    "cat",
+    "car_horn",
+    "cock_a_doodle_doo",
+    "cricket",
+    "computer_typing",
+    "dog",
+    "glass_breaking",
+    "gunshot",
+    "hammer",
+    "music",
+    "ocean",
+    "door_knock",
+    "singing",
+    "siren",
+    "speech",
+    "thunderstorm",
+    "toilet_flush"
+  ],
+  "notes": {
+    "runtime_task": "extract target chunk",
+    "suppression_recipe": "subtract exported target chunk from the input chunk in the app",
+    "resampling": "capture 48 kHz if needed, resample to 44.1 kHz for inference, then resample output back"
+  },
+  "inputs": [
+    {
+      "name": "mixture",
+      "shape": [
+        1,
+        2,
+        11008
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "label_vector",
+      "shape": [
+        1,
+        20
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "enc_buf",
+      "shape": [
+        1,
+        256,
+        2046
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "dec_buf",
+      "shape": [
+        1,
+        2,
+        13,
+        256
+      ],
+      "dtype": "torch.float32"
+    },
+    {
+      "name": "out_buf",
+      "shape": [
+        1,
+        256,
+        4
+      ],
+      "dtype": "torch.float32"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "target_chunk"
+    },
+    {
+      "name": "enc_buf"
+    },
+    {
+      "name": "dec_buf"
+    },
+    {
+      "name": "out_buf"
+    }
+  ],
+  "verification": {
+    "step1_target_chunk": {
+      "shape": [
+        1,
+        2,
+        11008
+      ],
+      "max_abs_diff": 0.08934857696294785,
+      "mean_abs_diff": 0.0022193354088813066,
+      "allclose": false,
+      "acceptable_for_streaming": false
+    },
+    "step1_out_buf": {
+      "shape": [
+        1,
+        256,
+        4
+      ],
+      "max_abs_diff": 0.009371079504489899,
+      "mean_abs_diff": 0.0004195920773781836,
+      "allclose": false,
+      "acceptable_for_streaming": true
+    },
+    "step2_target_chunk": {
+      "shape": [
+        1,
+        2,
+        11008
+      ],
+      "max_abs_diff": 0.12151199579238892,
+      "mean_abs_diff": 0.005692490376532078,
+      "allclose": false,
+      "acceptable_for_streaming": false
+    },
+    "step2_out_buf": {
+      "shape": [
+        1,
+        256,
+        4
+      ],
+      "max_abs_diff": 0.04666060209274292,
+      "mean_abs_diff": 0.0019838411826640368,
+      "allclose": false,
+      "acceptable_for_streaming": false
+    },
+    "note": "Verification tracks audio chunk and output buffer agreement across two streaming steps."
+  },
+  "warning": "XNNPACK lowering failed on this machine; falling back to portable ExecuTorch. Details: FileNotFoundError: [WinError 2] The system cannot find the file specified"
+}

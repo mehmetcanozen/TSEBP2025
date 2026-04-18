@@ -1,0 +1,50 @@
+{
+  "onnx": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\windows_desktop_onnx\\semantic_hearing_100ms_windows.onnx",
+  "checkpoint": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\39.pt",
+  "input": "C:\\SoftwareProjects\\SemanticHearing-main\\audio\\raw\\speech_barking.wav",
+  "target": "bark",
+  "sample_rate_model": 44100,
+  "sample_rate_input": 48000,
+  "chunk_samples": 4416,
+  "chunk_samples_source": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\windows_desktop_onnx\\semantic_hearing_100ms_windows.onnx.json",
+  "provider_request": "cuda",
+  "provider_active": [
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "provider_available": [
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "optimized_model_output": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\windows_desktop_onnx\\semantic_hearing_100ms_windows.cuda_optimized.onnx",
+  "exported_vs_eager": {
+    "target_chunk_max_abs_diff": 0.0003650300204753876,
+    "target_chunk_mean_abs_diff": 3.800592139668879e-06,
+    "suppressed_max_abs_diff": 0.0003650300204753876,
+    "suppressed_mean_abs_diff": 3.800592139668879e-06
+  },
+  "outputs": {
+    "onnx_suppressed": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\windows_desktop_onnx\\bark_suppression_demo_onnx_cuda.wav",
+    "eager_suppressed": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\windows_desktop_onnx\\bark_suppression_eager_reference.wav"
+  },
+  "reference": "C:\\SoftwareProjects\\SemanticHearing-main\\audio\\raw\\speech.wav",
+  "quality": {
+    "raw": {
+      "snr": -1.9559348821640015,
+      "si_snr": -7.197078704833984
+    },
+    "onnx_suppressed": {
+      "snr": 2.953967332839966,
+      "si_snr": 1.8812133073806763,
+      "snr_improvement": 4.909902215003967,
+      "si_snr_improvement": 9.07829201221466
+    },
+    "eager_suppressed": {
+      "snr": 2.953681707382202,
+      "si_snr": 1.8805965185165405,
+      "snr_improvement": 4.909616589546204,
+      "si_snr_improvement": 9.077675223350525
+    }
+  }
+}

@@ -7,10 +7,10 @@ energy to assess whether the CLAP prompt actually steers separation.
 
 Example:
     python ai/scripts/diagnostics/test_codecsep_selectivity.py ^
-        --clip-dir ai/models/CodecSep/codecsep_supplementary_material/codecsep_code/datasets/dnr_v2/tt/10020
+        --clip-dir datasets/dnr_v2/tt/10020
 
     python ai/scripts/diagnostics/test_codecsep_selectivity.py ^
-        --clip-dir ai/models/CodecSep/codecsep_supplementary_material/codecsep_code/datasets/dnr_v2/tt/10285 ^
+        --clip-dir datasets/dnr_v2/tt/10285 ^
         --matching-prompt "tape ripping, packing tape sounds" ^
         --non-matching-prompt "dog barking, animal"
 """

@@ -34,7 +34,7 @@ from ai.ai_runtime.utils.codecsep import (
     normalize_codecsep_prompt_value,
 )
 from ai.ai_runtime.utils.paths import (
-    get_codecsep_code_path,
+    get_codecsep_clap_checkpoint_path,
     get_codecsep_default_run_dir,
     resolve_codecsep_checkpoint_path,
 )
@@ -243,6 +243,8 @@ class CodecSepSeparator:
         self._resample_out: dict = {}
         self._clap_scorer: _ClapSimilarityScorer | None = None
         self._clap_scorer_cfg: dict[str, object] = {}
+        self._clap_scorer_disabled = False
+        self._clap_scorer_error: str | None = None
         self._input_volume_norm = None
         self._mix_lufs_target_db: float | None = None
         self._peak_norm_db: float | None = None
@@ -284,10 +286,10 @@ class CodecSepSeparator:
             raise FileNotFoundError(
                 f"CodecSep checkpoint not found for source {self.checkpoint_path}. "
                 f"Resolved candidate path: {resolved_checkpoint}. "
-                "Expected a CodecSep run directory with V5 families such as ckpt_gate_pass / ckpt_best_screen "
-                "or legacy ckpt_best / ckpt_final under "
-                "ai/models/CodecSep/codecsep_supplementary_material/codecsep_code/"
-                "model-checkpoints/CodecSep_Hive_V5_50K_Pilot_Run1/."
+                "Expected a cleaned CodecSep bundle under "
+                "ai/models/CodecSep/Runs/CodecSep_DNR_USS_ModelBundle "
+                "or a direct checkpoint family such as checkpoints/best_accelerate_resume_state "
+                "or checkpoints/final_weights."
             )
 
         self._ensure_accelerate_logging_state()
@@ -415,9 +417,31 @@ class CodecSepSeparator:
         return [], []
 
     @staticmethod
-    def _is_ignorable_state_dict_key(key: str) -> bool:
+    def _is_legacy_additive_film_checkpoint(state_dict: Mapping[str, object]) -> bool:
+        has_beta = False
+        has_gamma = False
+        for raw_key in state_dict.keys():
+            key = str(raw_key).strip()
+            if not key.startswith("film."):
+                continue
+            if "beta" in key:
+                has_beta = True
+            if "gamma" in key:
+                has_gamma = True
+            if has_beta and has_gamma:
+                return False
+        return has_beta and not has_gamma
+
+    @staticmethod
+    def _is_ignorable_state_dict_key(
+        key: str,
+        *,
+        legacy_additive_film: bool = False,
+    ) -> bool:
         normalized = str(key).strip()
         if normalized.endswith("position_ids") or normalized.endswith("token_type_ids"):
+            return True
+        if legacy_additive_film and normalized.startswith("film.") and "gamma" in normalized:
             return True
         return normalized in {
             "film.gate1.weight",
@@ -430,8 +454,23 @@ class CodecSepSeparator:
     def _load_model_state_dict(cls, model, state_dict: Mapping[str, object]) -> None:
         result = model.load_state_dict(state_dict, strict=False)
         missing_keys, unexpected_keys = cls._normalize_load_state_dict_result(result)
-        ignored_missing = [key for key in missing_keys if cls._is_ignorable_state_dict_key(key)]
-        ignored_unexpected = [key for key in unexpected_keys if cls._is_ignorable_state_dict_key(key)]
+        legacy_additive_film = cls._is_legacy_additive_film_checkpoint(state_dict)
+        ignored_missing = [
+            key
+            for key in missing_keys
+            if cls._is_ignorable_state_dict_key(
+                key,
+                legacy_additive_film=legacy_additive_film,
+            )
+        ]
+        ignored_unexpected = [
+            key
+            for key in unexpected_keys
+            if cls._is_ignorable_state_dict_key(
+                key,
+                legacy_additive_film=legacy_additive_film,
+            )
+        ]
         blocking_missing = [key for key in missing_keys if key not in ignored_missing]
         blocking_unexpected = [key for key in unexpected_keys if key not in ignored_unexpected]
 
@@ -439,6 +478,11 @@ class CodecSepSeparator:
             logger.debug("Ignoring benign missing CodecSep checkpoint keys: %s", ignored_missing)
         if ignored_unexpected:
             logger.debug("Ignoring benign unexpected CodecSep checkpoint keys: %s", ignored_unexpected)
+        if legacy_additive_film and ignored_missing:
+            logger.info(
+                "Detected legacy additive-FiLM CodecSep checkpoint; runtime gamma FiLM layers "
+                "will stay at zero-init identity."
+            )
 
         if not blocking_missing and not blocking_unexpected:
             return
@@ -510,9 +554,7 @@ class CodecSepSeparator:
         if needs_update:
             clap_cfg["amodel"] = detected_amodel
             if not clap_cfg.get("pretrained_ckpt_path"):
-                default_clap_path = (
-                    get_codecsep_code_path() / "CLAP_weights" / "630k-audioset-best.pt"
-                )
+                default_clap_path = get_codecsep_clap_checkpoint_path()
                 if default_clap_path.exists():
                     clap_cfg["pretrained_ckpt_path"] = str(default_clap_path)
                     logger.info(
@@ -527,6 +569,10 @@ class CodecSepSeparator:
             return checkpoint_source
         if resolved_checkpoint.parent.name in {"ckpt_best", "ckpt_final"}:
             return resolved_checkpoint.parents[1]
+        if resolved_checkpoint.parent.name in {"best_accelerate_resume_state", "final_weights"}:
+            if resolved_checkpoint.parent.parent.name == "checkpoints":
+                return resolved_checkpoint.parents[2]
+            return resolved_checkpoint.parent.parent
         return None
 
     def _load_model_config(self, resolved_checkpoint: Path) -> tuple[int, dict[str, object], dict[str, object]]:
@@ -534,8 +580,13 @@ class CodecSepSeparator:
         if run_dir is None:
             return TARGET_SAMPLE_RATE, {}, {}
 
-        config_path = run_dir / ".hydra" / "config.yaml"
-        if not config_path.exists():
+        config_candidates = (
+            run_dir / ".hydra" / "config.yaml",
+            run_dir / "config" / "hydra_snapshot" / "config.yaml",
+            run_dir.parent / "config" / "hydra_snapshot" / "config.yaml",
+        )
+        config_path = next((candidate for candidate in config_candidates if candidate.exists()), None)
+        if config_path is None:
             return TARGET_SAMPLE_RATE, {}, {}
 
         with config_path.open("r", encoding="utf-8") as f:
@@ -600,109 +651,87 @@ class CodecSepSeparator:
 
     @staticmethod
     def _resolve_model_class():
-        try:
-            from ai.ai_runtime.separation.codecsep import CodecSep
+        from ai.ai_runtime.separation.codecsep import CodecSep
 
-            return CodecSep
-        except ImportError:
-            from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-                CodecSep,
-            )
-
-            return CodecSep
+        return CodecSep
 
     @staticmethod
     def _resolve_wavsep_mag_norm_class():
-        try:
-            from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.utils import (
-                WavSepMagNorm,
-            )
+        class _FallbackWavSepMagNorm:
+            """Minimal vendored-equivalent fallback used for the clean runtime bundle."""
 
-            return WavSepMagNorm
-        except ImportError:
-            class _FallbackWavSepMagNorm:
-                """Minimal vendored-equivalent fallback used only if imports fail."""
+            def __call__(self, mix: torch.Tensor, signal_sep: torch.Tensor) -> torch.Tensor:
+                eps = 1e-8
+                bs, num_stems, channels, _ = signal_sep.shape
+                mix_flat = mix.reshape(bs * mix.shape[1] * channels, -1)
+                sep_flat = signal_sep.reshape(bs * num_stems * channels, -1)
+                window = torch.hann_window(1024, device=mix.device)
 
-                def __call__(self, mix: torch.Tensor, signal_sep: torch.Tensor) -> torch.Tensor:
-                    eps = 1e-8
-                    bs, num_stems, channels, _ = signal_sep.shape
-                    mix_flat = mix.reshape(bs * mix.shape[1] * channels, -1)
-                    sep_flat = signal_sep.reshape(bs * num_stems * channels, -1)
-                    window = torch.hann_window(1024, device=mix.device)
+                mix_spec = torch.stft(
+                    mix_flat,
+                    n_fft=1024,
+                    hop_length=256,
+                    win_length=1024,
+                    window=window,
+                    pad_mode="reflect",
+                    center=True,
+                    onesided=True,
+                    return_complex=True,
+                )
+                sep_spec = torch.stft(
+                    sep_flat,
+                    n_fft=1024,
+                    hop_length=256,
+                    win_length=1024,
+                    window=window,
+                    pad_mode="reflect",
+                    center=True,
+                    onesided=True,
+                    return_complex=True,
+                )
+                mix_spec = mix_spec.reshape(bs, 1, channels, *mix_spec.shape[-2:])
+                sep_spec = sep_spec.reshape(bs, num_stems, channels, *sep_spec.shape[-2:])
 
-                    mix_spec = torch.stft(
-                        mix_flat,
-                        n_fft=1024,
-                        hop_length=256,
-                        win_length=1024,
-                        window=window,
-                        pad_mode="reflect",
-                        center=True,
-                        onesided=True,
-                        return_complex=True,
-                    )
-                    sep_spec = torch.stft(
-                        sep_flat,
-                        n_fft=1024,
-                        hop_length=256,
-                        win_length=1024,
-                        window=window,
-                        pad_mode="reflect",
-                        center=True,
-                        onesided=True,
-                        return_complex=True,
-                    )
-                    mix_spec = mix_spec.reshape(bs, 1, channels, *mix_spec.shape[-2:])
-                    sep_spec = sep_spec.reshape(bs, num_stems, channels, *sep_spec.shape[-2:])
+                sep_mag = sep_spec.abs()
+                ratio = sep_mag / sep_mag.sum(dim=1, keepdim=True).clamp_min(eps)
+                ret_spec = torch.polar(mix_spec.abs() * ratio, mix_spec.angle())
+                ret_spec = ret_spec.reshape(bs * num_stems * channels, *ret_spec.shape[-2:])
+                ret = torch.istft(
+                    ret_spec,
+                    n_fft=1024,
+                    hop_length=256,
+                    win_length=1024,
+                    window=window,
+                    center=True,
+                )
+                return ret.reshape(bs, num_stems, channels, -1)
 
-                    sep_mag = sep_spec.abs()
-                    ratio = sep_mag / sep_mag.sum(dim=1, keepdim=True).clamp_min(eps)
-                    ret_spec = torch.polar(mix_spec.abs() * ratio, mix_spec.angle())
-                    ret_spec = ret_spec.reshape(bs * num_stems * channels, *ret_spec.shape[-2:])
-                    ret = torch.istft(
-                        ret_spec,
-                        n_fft=1024,
-                        hop_length=256,
-                        win_length=1024,
-                        window=window,
-                        center=True,
-                    )
-                    return ret.reshape(bs, num_stems, channels, -1)
-
-            return _FallbackWavSepMagNorm
+        return _FallbackWavSepMagNorm
 
     @staticmethod
     def _resolve_volume_norm_helpers():
-        try:
-            from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.utils import (
-                VolumeNorm,
-                db_to_gain,
-            )
+        class _FallbackVolumeNorm:
+            def __init__(self, sample_rate: int = TARGET_SAMPLE_RATE):
+                self.sample_rate = sample_rate
+                self._meter = torchaudio.transforms.Loudness(sample_rate)
 
-            return VolumeNorm, db_to_gain
-        except ImportError:
-            class _FallbackVolumeNorm:
-                def __init__(self, sample_rate: int = TARGET_SAMPLE_RATE):
-                    self.sample_rate = sample_rate
-                    self._meter = torchaudio.transforms.Loudness(sample_rate)
+            def __call__(self, signal, target_loudness=-30, var=0, return_gain=False):
+                if signal.ndim != 3:
+                    raise ValueError("Expected [B, C, T] tensor for loudness normalization.")
+                bs = signal.shape[0]
+                lufs_ref = self._meter(signal)
+                lufs_target = torch.full_like(lufs_ref, float(target_loudness))
+                gain = torch.exp((lufs_target - lufs_ref) * np.log(10.0) / 20.0)
+                gain[gain.isnan()] = 0.0
+                signal = signal * gain[:, None, None]
+                if return_gain:
+                    return signal, gain
+                return signal
 
-                def __call__(self, signal, target_loudness=-30, var=0, return_gain=False):
-                    if signal.ndim != 3:
-                        raise ValueError("Expected [B, C, T] tensor for loudness normalization.")
-                    bs = signal.shape[0]
-                    lufs_ref = self._meter(signal)
-                    lufs_target = torch.full_like(lufs_ref, float(target_loudness))
-                    gain = torch.exp((lufs_target - lufs_ref) * np.log(10.0) / 20.0)
-                    gain[gain.isnan()] = 0.0
-                    signal = signal * gain[:, None, None]
-                    if return_gain:
-                        return signal, gain
-                    return signal
+        def _db_to_gain(db: float) -> float:
+            return float(np.power(10.0, float(db) / 20.0))
 
-            def _db_to_gain(db: float) -> float:
-                return float(np.power(10.0, float(db) / 20.0))
-
-            return _FallbackVolumeNorm, _db_to_gain
+        return _FallbackVolumeNorm, _db_to_gain
 
     def _get_mag_normalizer(self):
         if self._mag_normalizer is None:
@@ -1238,18 +1267,25 @@ class CodecSepSeparator:
     def _get_clap_scorer(self) -> _ClapSimilarityScorer:
         if self._clap_scorer is not None:
             return self._clap_scorer
+        if self._clap_scorer_disabled:
+            raise RuntimeError(self._clap_scorer_error or "CodecSep CLAP scorer disabled.")
         clap_cfg = dict(self._clap_scorer_cfg or {})
         ckpt_value = clap_cfg.get("pretrained_ckpt_path")
         if not ckpt_value:
             raise RuntimeError("CodecSep CLAP scorer requires clap.pretrained_ckpt_path in the run config.")
         scorer_device = self.device
-        self._clap_scorer = _ClapSimilarityScorer(
-            checkpoint_path=Path(str(ckpt_value)).expanduser().resolve(),
-            amodel=str(clap_cfg.get("amodel", "HTSAT-tiny")),
-            tmodel=str(clap_cfg.get("tmodel", "roberta")),
-            enable_fusion=bool(clap_cfg.get("enable_fusion", False)),
-            device=scorer_device,
-        )
+        try:
+            self._clap_scorer = _ClapSimilarityScorer(
+                checkpoint_path=Path(str(ckpt_value)).expanduser().resolve(),
+                amodel=str(clap_cfg.get("amodel", "HTSAT-tiny")),
+                tmodel=str(clap_cfg.get("tmodel", "roberta")),
+                enable_fusion=bool(clap_cfg.get("enable_fusion", False)),
+                device=scorer_device,
+            )
+        except Exception as exc:
+            self._clap_scorer_disabled = True
+            self._clap_scorer_error = f"CodecSep CLAP scorer disabled after initialization failure: {exc}"
+            raise RuntimeError(self._clap_scorer_error) from exc
         return self._clap_scorer
 
     def _build_target_embedding(self, plan: CodecSepQueryPlan) -> torch.Tensor:

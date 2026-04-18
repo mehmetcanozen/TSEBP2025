@@ -145,7 +145,7 @@ class TestCodecSepSeparatorInit:
     def test_stems_tuple(self):
         assert STEMS == ("speech", "music", "sfx")
 
-    def test_default_checkpoint_source_is_v5_pilot_run_dir(self):
+    def test_default_checkpoint_source_is_clean_dnr_bundle(self):
         sep = CodecSepSeparator()
         assert sep.checkpoint_path == get_codecsep_default_run_dir()
 
@@ -342,7 +342,7 @@ class TestCodecSepSeparatorInit:
 
             def load_state_dict(self, state_dict, strict=False):
                 del state_dict, strict
-                return (["film.gate1.weight"], [])
+                return (["separator.masker.weight"], [])
 
             def to(self, device):
                 self.device = device
@@ -357,36 +357,93 @@ class TestCodecSepSeparatorInit:
                 with pytest.raises(RuntimeError, match="missing core conditioning/separator weights"):
                     sep._lazy_load_model()
 
+    def test_lazy_load_accepts_legacy_additive_film_checkpoint(self, tmp_path):
+        run_dir = tmp_path / "CodecSep_DNR_USS_Weights"
+        hydra_dir = run_dir / ".hydra"
+        best_dir = run_dir / "ckpt_best"
+        hydra_dir.mkdir(parents=True)
+        best_dir.mkdir(parents=True)
+        checkpoint_file = best_dir / "pytorch_model.bin"
+        checkpoint_file.write_bytes(b"dummy")
+        with (hydra_dir / "config.yaml").open("w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "sampling_rate": 16000,
+                    "model": {
+                        "codecsep_params": {
+                            "name": "CodecSep",
+                            "tracks": ["speech", "music", "sfx"],
+                            "enc_params": {"d_model": 32, "strides": [2, 4, 5, 8]},
+                            "dec_params": {"d_model": 512, "strides": [8, 5, 4, 2]},
+                            "transformer_params": {
+                                "d_model": 128,
+                                "nhead": 4,
+                                "dim_feedforward": 256,
+                                "num_layers": 2,
+                                "batch_first": True,
+                            },
+                            "separator_params": {"channels": 256, "block_channels": 64},
+                        },
+                    },
+                },
+                f,
+            )
+
+        class DummyCodecSep:
+            conditioning_mode = "prompt"
+            num_classes = 0
+
+            def __init__(self, sample_rate, tracks=None, conditioning=None, **kwargs):
+                self.sample_rate = sample_rate
+                self.tracks = list(tracks or ["target"])
+                self.conditioning = conditioning
+                self.kwargs = kwargs
+
+            def load_state_dict(self, state_dict, strict=False):
+                del state_dict, strict
+                return (
+                    [
+                        "film.gamma1.weight",
+                        "film.gamma1.bias",
+                        "film.block->layers->0->gamma1.weight",
+                        "film.block->layers->0->gamma1.bias",
+                        "film.block->layers->0->gamma2.weight",
+                        "film.block->layers->0->gamma2.bias",
+                    ],
+                    [],
+                )
+
+            def to(self, device):
+                self.device = device
+                return self
+
+            def eval(self):
+                return self
+
+        legacy_state_dict = {
+            "film.beta1.weight": torch.zeros(1),
+            "film.beta1.bias": torch.zeros(1),
+            "film.beta2.weight": torch.zeros(1),
+            "film.beta2.bias": torch.zeros(1),
+        }
+
+        with patch.object(CodecSepSeparator, "_resolve_model_class", return_value=DummyCodecSep):
+            with patch("torch.load", return_value={"state_dict": legacy_state_dict}):
+                sep = CodecSepSeparator(checkpoint_path=run_dir, device="cpu")
+                sep._lazy_load_model()
+                assert isinstance(sep._model, DummyCodecSep)
+
 
 class TestCodecSepRuntimeParity:
 
-    def test_runtime_model_matches_authoritative_fixed_category_surface(self):
-        from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-            CodecSep as AuthoritativeCodecSep,
-        )
-
+    def test_runtime_model_exposes_expected_fixed_category_surface(self):
         runtime_model = CodecSep(**_tiny_codecsep_kwargs())
-        authoritative_model = AuthoritativeCodecSep(**_tiny_codecsep_kwargs())
-
-        assert set(runtime_model.state_dict().keys()) == set(authoritative_model.state_dict().keys())
-        assert type(runtime_model.transformer_encoder.layers[0].ffn[1]).__name__ == "GELU"
-        assert type(authoritative_model.transformer_encoder.layers[0].ffn[1]).__name__ == "GELU"
-        assert runtime_model.separator.film_supports_gates is True
-        assert authoritative_model.separator.film_supports_gates is True
-        assert any(key.startswith("film.gate1.") for key in runtime_model.state_dict().keys())
-        assert runtime_model.film.film_clip == pytest.approx(5.0)
-        assert runtime_model.film.normalize_condition is True
-        assert runtime_model.film.norm_eps == pytest.approx(1.0e-6)
+        assert runtime_model.conditioning_mode == "class_id"
+        assert runtime_model.mode == "single_target"
         assert runtime_model.conditioning_zero_for_absent is True
         assert runtime_model.conditioning_zero_for_null is True
-
-        film_dict = runtime_model.film(torch.randn(1, runtime_model.condition_size))
-        mask = runtime_model.separator(
-            torch.randn(1, runtime_model.separator.channels, 12),
-            film_dict=film_dict,
-        ).squeeze(0).detach()
-        assert float(mask.min()) >= 0.0
-        assert float(mask.max()) <= 1.0
+        assert any(key.startswith("film.") for key in runtime_model.state_dict().keys())
+        assert runtime_model.class_embedding is not None
 
     def test_runtime_model_distinguishes_null_and_absent_zeroing(self):
         model = CodecSep(
@@ -425,37 +482,19 @@ class TestCodecSepRuntimeParity:
         assert torch.count_nonzero(embeddings[0]).item() == 8
         assert torch.count_nonzero(embeddings[1]).item() == 0
 
-    def test_runtime_prompt_model_uses_explicit_clap_checkpoint_path(self, tmp_path):
-        ckpt_path = tmp_path / "clap.pt"
-        ckpt_path.write_bytes(b"stub")
+    def test_runtime_prompt_model_uses_embedding_overrides(self):
+        class DummyTextEncoder:
+            def __init__(self):
+                self.calls = 0
 
-        class TinyBackbone(torch.nn.Module):
-            def __init__(self, *args, **kwargs):
-                del args, kwargs
-                super().__init__()
-                self.text_branch = torch.nn.Linear(2, 2)
-                self.text_projection = torch.nn.Linear(2, 2)
-                self.logit_scale_t = torch.nn.Parameter(torch.ones(()))
-                self.logit_scale_a = torch.nn.Parameter(torch.ones(()))
+            def parameters(self):
+                return []
 
-            def get_text_embedding(self, data):
-                del data
-                return torch.zeros(1, 2)
+            def get_text_embedding(self, texts, use_tensor=True):
+                del texts
+                self.calls += 1
+                return torch.zeros((1, 8), dtype=torch.float32) if use_tensor else np.zeros((1, 8), dtype=np.float32)
 
-        class DummyTokenizer:
-            def __call__(self, texts, **kwargs):
-                del kwargs
-                batch = len(texts)
-                return {
-                    "input_ids": torch.zeros(batch, 2, dtype=torch.long),
-                    "attention_mask": torch.ones(batch, 2, dtype=torch.long),
-                }
-
-        clap_cfg = {
-            "pretrained_ckpt_path": str(ckpt_path),
-            "tmodel": "roberta",
-            "amodel": "HTSAT-tiny",
-        }
         kwargs = _tiny_codecsep_kwargs(
             conditioning={
                 "mode": "prompt",
@@ -466,28 +505,28 @@ class TestCodecSepRuntimeParity:
                 "dropout_prob": 0.0,
                 "adaln_gate_bias": 0.001,
             },
-            clap=clap_cfg,
+            clap={},
         )
         kwargs.pop("num_classes", None)
+        dummy_text_encoder = DummyTextEncoder()
 
-        with patch(
-            "ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep._LocalTextClapBackbone",
-            TinyBackbone,
-        ):
-            with patch(
-                "transformers.RobertaTokenizer.from_pretrained",
-                return_value=DummyTokenizer(),
-            ):
-                with patch.object(
-                    CodecSep,
-                    "_load_clap_checkpoint_state_dict",
-                    side_effect=RuntimeError("sentinel clap load"),
-                ) as mocked_loader:
-                    with pytest.raises(RuntimeError, match="sentinel clap load"):
-                        CodecSep(**kwargs)
+        with patch.object(CodecSep, "_build_text_encoder", return_value=dummy_text_encoder):
+            model = CodecSep(**kwargs)
 
-        mocked_loader.assert_called_once()
-        assert Path(str(mocked_loader.call_args.args[0])).resolve() == ckpt_path.resolve()
+        embeddings = model._build_track_embeddings(
+            prompt={
+                "target": ["sound effects"],
+            },
+            batch_size=1,
+            embedding_overrides={
+                "target": torch.full((8,), 3.0),
+            },
+        )
+
+        assert dummy_text_encoder.calls == 0
+        assert set(embeddings.keys()) == {"target"}
+        assert embeddings["target"].shape == (1, 8)
+        assert float(embeddings["target"][0, 0]) == pytest.approx(3.0)
 
     def test_fixed_category_threshold_path_uses_v2(self):
         assert get_codecsep_fixed_category_gate_thresholds_path().name == "gate_thresholds_v2.json"

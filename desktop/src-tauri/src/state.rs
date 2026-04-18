@@ -84,6 +84,7 @@ impl AppState {
         );
 
         let engine = Arc::clone(&self.engine);
+        let engine_name = self.engine.display_name().to_string();
         let offline_jobs = Arc::clone(&self.offline_jobs);
         let request_clone = request.clone();
         let job_id_clone = job_id.clone();
@@ -117,7 +118,7 @@ impl AppState {
                     OfflineProgressStage::Warming,
                     3.0,
                     None,
-                    Some("Warming AudioSep ONNX runtime".to_string()),
+                    Some(format!("Warming {} runtime", engine_name)),
                     None,
                 );
                 let mut processor = engine.make_processor()?;
@@ -140,7 +141,7 @@ impl AppState {
                     OfflineProgressStage::Processing,
                     10.0,
                     None,
-                    Some("Running exact-15 separation and Wiener masking".to_string()),
+                    Some("Running model-guided suppression".to_string()),
                     None,
                 );
                 let mut progress_callback = |fraction: f32| {

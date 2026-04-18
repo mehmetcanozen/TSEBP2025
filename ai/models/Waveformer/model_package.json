@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "model_id": "waveformer_edge_100ms",
+  "package_version": "waveformer_edge_100ms_20260418",
+  "family": "waveformer",
+  "display_name": "Waveformer Edge 100ms",
+  "description": "Streaming Waveformer target extractor using the exported 100 ms edge deployments for desktop ONNX and mobile ExecuTorch.",
+  "suppression_strategy": {
+    "kind": "streaming_target_subtraction"
+  },
+  "categories": [
+    {
+      "id": "alarm_clock",
+      "label": "alarm clock",
+      "default_aggressiveness": 1.1,
+      "transient": true
+    },
+    {
+      "id": "baby_cry",
+      "label": "baby cry",
+      "default_aggressiveness": 1.1,
+      "transient": false
+    },
+    {
+      "id": "birds_chirping",
+      "label": "birds chirping",
+      "default_aggressiveness": 1.05,
+      "transient": false
+    },
+    {
+      "id": "cat",
+      "label": "cat",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "car_horn",
+      "label": "car horn",
+      "default_aggressiveness": 1.2,
+      "transient": true
+    },
+    {
+      "id": "cock_a_doodle_doo",
+      "label": "cock-a-doodle-doo",
+      "default_aggressiveness": 1.1,
+      "transient": true
+    },
+    {
+      "id": "cricket",
+      "label": "cricket",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "computer_typing",
+      "label": "computer typing",
+      "default_aggressiveness": 1.25,
+      "transient": true
+    },
+    {
+      "id": "dog",
+      "label": "dog",
+      "default_aggressiveness": 1.1,
+      "transient": false
+    },
+    {
+      "id": "glass_breaking",
+      "label": "glass breaking",
+      "default_aggressiveness": 1.25,
+      "transient": true
+    },
+    {
+      "id": "gunshot",
+      "label": "gunshot",
+      "default_aggressiveness": 1.25,
+      "transient": true
+    },
+    {
+      "id": "hammer",
+      "label": "hammer",
+      "default_aggressiveness": 1.2,
+      "transient": true
+    },
+    {
+      "id": "music",
+      "label": "music",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "ocean",
+      "label": "ocean",
+      "default_aggressiveness": 0.95,
+      "transient": false
+    },
+    {
+      "id": "door_knock",
+      "label": "door knock",
+      "default_aggressiveness": 1.2,
+      "transient": true
+    },
+    {
+      "id": "singing",
+      "label": "singing",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "siren",
+      "label": "siren",
+      "default_aggressiveness": 1.15,
+      "transient": true
+    },
+    {
+      "id": "speech",
+      "label": "speech",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "thunderstorm",
+      "label": "thunderstorm",
+      "default_aggressiveness": 1.05,
+      "transient": false
+    },
+    {
+      "id": "toilet_flush",
+      "label": "toilet flush",
+      "default_aggressiveness": 1.0,
+      "transient": true
+    }
+  ],
+  "presets": [
+    {
+      "id": "waveformer-focus",
+      "name": "Waveformer Focus",
+      "description": "Suppress conversational and office-like distractions with the streaming target extractor.",
+      "categories": [
+        "speech",
+        "singing",
+        "computer_typing",
+        "door_knock",
+        "alarm_clock"
+      ]
+    },
+    {
+      "id": "waveformer-alerts",
+      "name": "Waveformer Alerts",
+      "description": "Suppress prominent alert-like events and sharp alarms.",
+      "categories": [
+        "alarm_clock",
+        "car_horn",
+        "glass_breaking",
+        "gunshot",
+        "siren"
+      ]
+    },
+    {
+      "id": "waveformer-outdoors",
+      "name": "Waveformer Outdoors",
+      "description": "Suppress common outdoor ambience and animal distractions.",
+      "categories": [
+        "birds_chirping",
+        "dog",
+        "ocean",
+        "thunderstorm",
+        "cricket"
+      ]
+    }
+  ],
+  "platforms": {
+    "desktop": {
+      "runtime_kind": "onnx_streaming_target_extractor",
+      "artifact": "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
+      "metadata_artifacts": [
+        "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json"
+      ],
+      "sample_rate": 44100,
+      "chunk_samples": 4416,
+      "preferred_live_hop_ms": 100,
+      "mix_channels": 2,
+      "state_tensors": {
+        "enc_buf": [
+          1,
+          256,
+          2046
+        ],
+        "dec_buf": [
+          1,
+          2,
+          13,
+          256
+        ],
+        "out_buf": [
+          1,
+          256,
+          4
+        ]
+      }
+    },
+    "android": {
+      "runtime_kind": "executorch_streaming_target_extractor",
+      "artifact": "WFExports/executorch_recommended_100ms/semantic_hearing_100ms_portable.pte",
+      "metadata_artifacts": [
+        "WFExports/executorch_recommended_100ms/semantic_hearing_100ms_portable.pte.json"
+      ],
+      "sample_rate": 44100,
+      "chunk_samples": 4416,
+      "preferred_live_hop_ms": 100,
+      "mix_channels": 2,
+      "bundle_kind": "suppression_model_bundle",
+      "state_tensors": {
+        "enc_buf": [
+          1,
+          256,
+          2046
+        ],
+        "dec_buf": [
+          1,
+          2,
+          13,
+          256
+        ],
+        "out_buf": [
+          1,
+          256,
+          4
+        ]
+      }
+    }
+  }
+}

@@ -170,6 +170,61 @@ required checkpoints.
 - `ai/models/CodecSep/`
   Optional local CodecSep runtime tree when that backend is used
 
+## Packaged Model Selection
+
+Desktop, mobile backend, and the mobile app now resolve their suppression model
+from shared manifests under `ai/models/`. There is no user-facing model picker:
+we switch the active separator centrally so one model can be swapped for another
+without rewriting each client.
+
+- `ai/models/model_selection.json`
+  Source of truth for packaged suppression models. `default_model_id` selects
+  the repo-wide default and `models` maps model IDs to their package manifests.
+- `ai/models/Waveformer/model_package.json`
+  Declares the `waveformer_edge_100ms` package, including categories, presets,
+  suppression strategy, and per-platform artifacts for desktop ONNX and Android
+  ExecuTorch.
+- `ai/models/AudioSepHive15Cat/model_package.json`
+  Declares the `audiosep_hive15cat` package, including the exact-15 category
+  surface and ONNX artifacts for desktop and Android.
+
+Current packaged model IDs:
+
+- `waveformer_edge_100ms`
+  Default packaged model for the current edge-deployed suppression path
+- `audiosep_hive15cat`
+  Alternative packaged ONNX separator with the exact-15 category surface
+
+The package manifests preserve model-specific capabilities instead of forcing
+every backend into one inference shape. Each manifest declares its own runtime
+kind, suppression strategy, timing, categories, presets, and platform-specific
+artifacts, so Waveformer can stay a streaming target extractor while
+AudioSepHive15Cat stays a category-based separator.
+
+This shared selection layer is used in three places:
+
+- Desktop
+  Tauri bundles the shared selection manifest and the active model package from
+  `ai/models/`
+- Mobile app
+  Android pre-packages the active model inside the app bundle so the edge model
+  is available immediately on device
+- Mobile backend
+  The backend serves the same packaged model metadata and artifacts so mobile
+  updates stay aligned with the app/runtime contract
+
+### Switching the active packaged model
+
+1. Add or update a model package manifest under `ai/models/<Model>/model_package.json`
+1. Register that manifest in `ai/models/model_selection.json`
+1. Change `default_model_id` to the model you want active across the project
+1. For local development or CI overrides, set `TSEBP_ACTIVE_SUPPRESSION_MODEL`
+   to one of the registered model IDs
+
+Changing the active model here updates desktop, mobile packaging, and backend
+bundle resolution together. There is still no end-user model chooser in the
+product UI.
+
 ## Common Commands
 
 ### Batch processing with the default backend

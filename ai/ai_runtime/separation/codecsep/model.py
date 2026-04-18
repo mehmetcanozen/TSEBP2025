@@ -299,13 +299,20 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
         sample_rate: int = 16000,
         latent_dim: int | None = None,
         tracks: List[str] | None = None,
+        mode: str = "legacy_3slot",
+        residual_mode: str = "latent_complement",
         enc_params: dict | None = None,
         dec_params: dict | None = None,
         transformer_params: dict | None = None,
         separator_params: dict | None = None,
+        film_clip: float | None = None,
+        normalize_prompt_embeddings: bool = False,
+        prompt_embed_eps: float = 1.0e-6,
+        enable_semantic_finite_checks: bool = False,
         conditioning: dict | None = None,
         num_classes: int | None = None,
         clap: dict | None = None,
+        pretrain: dict | None = None,
     ):
         super().__init__()
 
@@ -319,6 +326,15 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
         self.condition_size = int(self.conditioning_cfg.get("condition_size", 512))
         self.num_classes = _resolve_conditioning_num_classes(num_classes, self.conditioning_cfg)
         self.conditioning_zero_for_absent = bool(self.conditioning_cfg.get("zero_for_absent", True))
+        self.conditioning_zero_for_null = bool(self.conditioning_cfg.get("use_zero_for_null", False))
+        self.mode = str(mode or "legacy_3slot")
+        self.residual_mode = str(residual_mode or "latent_complement")
+        self.film_clip = film_clip
+        self.normalize_prompt_embeddings = bool(normalize_prompt_embeddings)
+        self.prompt_embed_eps = float(prompt_embed_eps)
+        self.enable_semantic_finite_checks = bool(enable_semantic_finite_checks)
+        self.pretrain = dict(pretrain or {})
+        self._text_embedding_cache: dict[str, torch.Tensor] = {}
 
         enc_p = dict(enc_params) if enc_params else {"d_model": 64, "strides": [2, 4, 5, 8]}
         dec_p = dict(dec_params) if dec_params else {"d_model": 1536, "strides": [8, 5, 4, 2]}
@@ -474,6 +490,58 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
             tuple(matrix.shape),
         )
 
+    @staticmethod
+    def _coerce_embedding_override(
+        embedding,
+        *,
+        batch_size: int,
+        device: torch.device,
+    ) -> torch.Tensor:
+        if not torch.is_tensor(embedding):
+            embedding = torch.as_tensor(embedding, dtype=torch.float32)
+        embedding = embedding.detach().float()
+        if embedding.ndim == 1:
+            embedding = embedding.unsqueeze(0)
+        if embedding.ndim != 2:
+            raise ValueError(
+                f"Embedding override must be 1-D or 2-D, got shape {tuple(embedding.shape)}."
+            )
+        if embedding.shape[0] == 1 and batch_size > 1:
+            embedding = embedding.expand(batch_size, -1)
+        elif embedding.shape[0] != batch_size:
+            raise ValueError(
+                "Embedding override batch dimension must be 1 or match the audio batch size "
+                f"(got {embedding.shape[0]} vs {batch_size})."
+            )
+        return embedding.to(device=device)
+
+    @staticmethod
+    def _normalize_prompt_batch(prompt_input, batch_size: int | None = None) -> list[str]:
+        if isinstance(prompt_input, str):
+            if batch_size is None:
+                return [prompt_input]
+            return [prompt_input] * batch_size
+        return [str(item) for item in prompt_input]
+
+    @staticmethod
+    def _prepare_prompt_embedding(embedding: torch.Tensor) -> torch.Tensor:
+        return torch.nan_to_num(
+            embedding.float(),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+
+    def _encode_prompt_batch(self, prompt_input, batch_size: int | None = None) -> torch.Tensor:
+        prompts = self._normalize_prompt_batch(prompt_input, batch_size=batch_size)
+        missing = [prompt for prompt in dict.fromkeys(prompts) if prompt not in self._text_embedding_cache]
+        if missing:
+            encoded = self.text_encoder.get_text_embedding(missing, use_tensor=True).detach().float().cpu()
+            for prompt, embedding in zip(missing, encoded):
+                self._text_embedding_cache[prompt] = self._prepare_prompt_embedding(embedding)
+        stacked = torch.stack([self._text_embedding_cache[prompt] for prompt in prompts], dim=0)
+        return self._prepare_prompt_embedding(stacked).to(self.device)
+
     def preprocess(self, audio_data: torch.Tensor,
                    sample_rate: int | None = None) -> torch.Tensor:
         if sample_rate is not None:
@@ -515,15 +583,23 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
         if self.conditioning_mode == "class_id":
             if isinstance(prompt, dict):
                 class_ids = prompt["target_class_id"]
+                target_present = prompt.get("target_present")
+                query_mode = prompt.get("query_mode")
             else:
                 class_ids = prompt
+                target_present = None
+                query_mode = None
             return self.evaluate_with_class_ids(
                 input_audio,
                 torch.as_tensor(class_ids, dtype=torch.long, device=self.device),
+                target_present=target_present,
+                query_mode=query_mode,
                 sample_rate=sample_rate,
             )
+        batch_size = int(input_audio.shape[0])
         text_embed = self._build_track_embeddings(
             prompt=prompt,
+            batch_size=batch_size,
             embedding_overrides=embedding_overrides,
         )
         return self.evaluate_with_embeddings(
@@ -537,20 +613,27 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
         self,
         *,
         prompt,
+        batch_size: int,
         embedding_overrides: Mapping[str, torch.Tensor] | None = None,
     ) -> dict[str, torch.Tensor]:
         track_embeddings: dict[str, torch.Tensor] = {}
         overrides = dict(embedding_overrides or {})
         for track in self.tracks:
             if track in overrides and overrides[track] is not None:
-                embedding = overrides[track]
-                if embedding.ndim == 1:
-                    embedding = embedding.unsqueeze(0)
-                track_embeddings[track] = embedding.detach().to(self.device)
+                track_embeddings[track] = self._coerce_embedding_override(
+                    overrides[track],
+                    batch_size=batch_size,
+                    device=self.device,
+                )
                 continue
-            track_embeddings[track] = self.text_encoder.get_text_embedding(
-                prompt[self.track2idx[track]], use_tensor=True,
-            ).detach().to(self.device)
+            if isinstance(prompt, Mapping):
+                prompt_value = prompt.get(track, track)
+            else:
+                prompt_value = prompt[self.track2idx[track]]
+            track_embeddings[track] = self._encode_prompt_batch(
+                prompt_value,
+                batch_size=batch_size,
+            )
         return track_embeddings
 
     def _encode_class_ids(
@@ -564,18 +647,42 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
             raise RuntimeError("Class-id conditioning requested but no class embedding table is available.")
         class_ids = class_ids.long().to(self.device)
         embeddings = self.class_embedding(class_ids.clamp(min=0, max=self.num_classes - 1))
-        if self.conditioning_zero_for_absent:
-            zero_mask = torch.zeros(class_ids.shape[0], dtype=torch.bool, device=self.device)
-            if target_present is not None:
-                zero_mask |= ~target_present.bool().to(self.device)
-            if query_mode is not None:
-                for index, mode in enumerate(query_mode):
-                    if str(mode).strip().lower() != "present":
+        zero_mask = torch.zeros(class_ids.shape[0], dtype=torch.bool, device=self.device)
+        if self.conditioning_zero_for_absent and target_present is not None:
+            zero_mask |= ~target_present.bool().to(self.device)
+        if query_mode is not None:
+            for index, mode in enumerate(query_mode):
+                normalized_mode = str(mode).strip().lower()
+                if normalized_mode == "null":
+                    if self.conditioning_zero_for_null:
                         zero_mask[index] = True
-            if bool(zero_mask.any().item()):
-                embeddings = embeddings.clone()
-                embeddings[zero_mask] = 0.0
+                elif normalized_mode != "present" and self.conditioning_zero_for_absent:
+                    zero_mask[index] = True
+        if bool(zero_mask.any().item()):
+            embeddings = embeddings.clone()
+            embeddings[zero_mask] = 0.0
         return embeddings
+
+    def _encode_class_id_batch(
+        self,
+        class_ids: torch.Tensor,
+        *,
+        target_present: torch.Tensor | None = None,
+        query_mode=None,
+    ) -> torch.Tensor:
+        query_modes = None
+        if query_mode is not None:
+            if isinstance(query_mode, str):
+                query_modes = [str(query_mode)] * int(class_ids.numel())
+            elif torch.is_tensor(query_mode):
+                query_modes = [str(item) for item in query_mode.detach().cpu().tolist()]
+            else:
+                query_modes = [str(item) for item in list(query_mode)]
+        return self._encode_class_ids(
+            class_ids,
+            target_present=target_present,
+            query_mode=query_modes,
+        )
 
     @torch.inference_mode()
     def evaluate_with_embeddings(
@@ -660,347 +767,18 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
         input_audio: torch.Tensor,
         class_ids: torch.Tensor,
         *,
+        target_present: torch.Tensor | None = None,
+        query_mode: list[str] | None = None,
         sample_rate: int | None = None,
     ) -> torch.Tensor:
         targets = self.separate_class_ids(
             input_audio,
             class_ids,
+            target_present=target_present,
+            query_mode=query_mode,
             sample_rate=sample_rate,
         )
         return targets
 
 
-from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-    CodecSep as _AuthoritativeCodecSep,
-)
-from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-    TransformerEncoderLayerFiLM as TransformerEncoderLayerFiLM,
-)
-from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-    _LocalTextClapBackbone as _LocalTextClapBackbone,
-)
-from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-    _NullTextEncoder as _NullTextEncoder,
-)
-from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-    _TextOnlyClapEncoder as _TextOnlyClapEncoder,
-)
-from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-    _resolve_conditioning_num_classes as _resolve_conditioning_num_classes,
-)
-from ai.models.CodecSep.codecsep_supplementary_material.codecsep_code.src.models.codecsep import (
-    simpleSeparator2 as SimpleSeparator,
-)
-
-
-class CodecSep(_AuthoritativeCodecSep):
-    """Runtime wrapper that reuses the authoritative training model implementation."""
-
-    def _load_class_conditioning_init(self, conditioning_cfg=None) -> None:
-        super()._load_class_conditioning_init(
-            self.conditioning_cfg if conditioning_cfg is None else conditioning_cfg,
-        )
-
-    @staticmethod
-    def _coerce_embedding_override(
-        embedding,
-        *,
-        batch_size: int,
-        device: torch.device,
-    ) -> torch.Tensor:
-        if not torch.is_tensor(embedding):
-            embedding = torch.as_tensor(embedding, dtype=torch.float32)
-        embedding = embedding.detach().float()
-        if embedding.ndim == 1:
-            embedding = embedding.unsqueeze(0)
-        if embedding.ndim != 2:
-            raise ValueError(
-                f"Embedding override must be 1-D or 2-D, got shape {tuple(embedding.shape)}."
-            )
-        if embedding.shape[0] == 1 and batch_size > 1:
-            embedding = embedding.expand(batch_size, -1)
-        elif embedding.shape[0] != batch_size:
-            raise ValueError(
-                "Embedding override batch dimension must be 1 or match the audio batch size "
-                f"(got {embedding.shape[0]} vs {batch_size})."
-            )
-        return embedding.to(device=device)
-
-    def _build_track_embeddings(
-        self,
-        *,
-        prompt,
-        batch_size: int,
-        embedding_overrides: Mapping[str, torch.Tensor] | None = None,
-    ) -> dict[str, torch.Tensor]:
-        overrides = dict(embedding_overrides or {})
-        track_embeddings: dict[str, torch.Tensor] = {}
-        for track in self.tracks:
-            override = overrides.get(track)
-            if override is not None:
-                track_embeddings[track] = self._coerce_embedding_override(
-                    override,
-                    batch_size=batch_size,
-                    device=self.device,
-                )
-                continue
-            if isinstance(prompt, Mapping):
-                prompt_value = prompt.get(track, track)
-            else:
-                prompt_value = prompt[self.track2idx[track]]
-            track_embeddings[track] = self._encode_prompt_batch(
-                prompt_value,
-                batch_size=batch_size,
-            )
-        return track_embeddings
-
-    def _resolve_single_target_prompt_value(self, prompt):
-        if isinstance(prompt, Mapping):
-            for key in (getattr(self, "primary_track", "target"), "target", "target_prompt"):
-                if key in prompt and prompt[key] is not None:
-                    return prompt[key]
-            if prompt:
-                return next(iter(prompt.values()))
-            return getattr(self, "primary_track", "target")
-        return prompt
-
-    def _resolve_single_target_embedding(
-        self,
-        *,
-        prompt,
-        batch_size: int,
-        embedding_overrides: Mapping[str, torch.Tensor] | None = None,
-    ) -> torch.Tensor:
-        overrides = dict(embedding_overrides or {})
-        primary_track = str(getattr(self, "primary_track", "target"))
-        override = overrides.get(primary_track)
-        if override is None:
-            override = overrides.get("target")
-        if override is None and len(overrides) == 1:
-            override = next(iter(overrides.values()))
-        if override is not None:
-            return self._coerce_embedding_override(
-                override,
-                batch_size=batch_size,
-                device=self.device,
-            )
-        return self._encode_prompt_batch(
-            self._resolve_single_target_prompt_value(prompt),
-            batch_size=batch_size,
-        )
-
-    @torch.inference_mode()
-    def _evaluate_single_target_with_embedding(
-        self,
-        input_audio: torch.Tensor,
-        condition_embed: torch.Tensor,
-        *,
-        sample_rate: int | None = None,
-        output_tracks: list[str] | None = None,
-    ) -> torch.Tensor:
-        primary_track = str(getattr(self, "primary_track", "target"))
-        if output_tracks is None:
-            output_tracks = ["mix", primary_track]
-        valid_outputs = {primary_track, "target", "residual", "mix"}
-        invalid = [track for track in output_tracks if track not in valid_outputs]
-        if invalid:
-            raise ValueError(
-                f"output tracks {invalid} not included in single-target outputs {sorted(valid_outputs)}"
-            )
-
-        _, _, length = input_audio.shape
-        film_dict = self.film(condition_embed.to(self.device))
-        audio_data = self.preprocess(input_audio, sample_rate)
-        feats = self.encode(audio_data)
-        est_mask = self.separator(feats, film_dict=film_dict).squeeze(0)
-        target_feats = feats * est_mask
-        target_hat = self.decode(target_feats)[:, :, : audio_data.shape[-1]]
-
-        if str(self.residual_mode).strip().lower() == "waveform_subtract":
-            residual_hat = input_audio - target_hat[..., :length]
-        else:
-            residual_feats = feats * (1.0 - est_mask)
-            residual_hat = self.decode(residual_feats)[:, :, : audio_data.shape[-1]]
-
-        outputs: list[torch.Tensor] = []
-        for track in output_tracks:
-            if track == "mix":
-                outputs.append(target_hat[..., :length] + residual_hat[..., :length])
-            elif track in {primary_track, "target"}:
-                outputs.append(target_hat[..., :length])
-            else:
-                outputs.append(residual_hat[..., :length])
-        return torch.cat(outputs, dim=1)
-
-    @torch.inference_mode()
-    def evaluate(
-        self,
-        input_audio_and_prompt: tuple,
-        sample_rate: int | None = None,
-        output_tracks: list[str] | None = None,
-        embedding_overrides: Mapping[str, torch.Tensor] | None = None,
-    ) -> torch.Tensor:
-        if embedding_overrides is None:
-            return super().evaluate(
-                input_audio_and_prompt,
-                sample_rate=sample_rate,
-                output_tracks=output_tracks,
-            )
-
-        input_audio, prompt = input_audio_and_prompt
-        batch_size = int(input_audio.shape[0])
-
-        if self.conditioning_mode == "class_id":
-            target_present = None
-            query_mode = None
-            if isinstance(prompt, Mapping):
-                class_ids = prompt["target_class_id"]
-                target_present = prompt.get("target_present")
-                query_mode = prompt.get("query_mode")
-            else:
-                class_ids = prompt
-            return self.evaluate_with_class_ids(
-                input_audio,
-                torch.as_tensor(class_ids, dtype=torch.long, device=self.device),
-                target_present=target_present,
-                query_mode=query_mode,
-                sample_rate=sample_rate,
-            )
-
-        if str(getattr(self, "mode", "legacy_3slot")).strip().lower() == "single_target":
-            condition_embed = self._resolve_single_target_embedding(
-                prompt=prompt,
-                batch_size=batch_size,
-                embedding_overrides=embedding_overrides,
-            )
-            return self._evaluate_single_target_with_embedding(
-                input_audio,
-                condition_embed,
-                sample_rate=sample_rate,
-                output_tracks=output_tracks,
-            )
-
-        track_embeddings = self._build_track_embeddings(
-            prompt=prompt,
-            batch_size=batch_size,
-            embedding_overrides=embedding_overrides,
-        )
-        return self.evaluate_with_embeddings(
-            input_audio,
-            track_embeddings,
-            sample_rate=sample_rate,
-            output_tracks=output_tracks,
-        )
-
-    @torch.inference_mode()
-    def evaluate_with_embeddings(
-        self,
-        input_audio: torch.Tensor,
-        track_embeddings: Mapping[str, torch.Tensor],
-        *,
-        sample_rate: int | None = None,
-        output_tracks: list[str] | None = None,
-    ) -> torch.Tensor:
-        if str(getattr(self, "mode", "legacy_3slot")).strip().lower() == "single_target":
-            primary_track = str(getattr(self, "primary_track", "target"))
-            condition_embed = track_embeddings.get(primary_track)
-            if condition_embed is None and track_embeddings:
-                condition_embed = next(iter(track_embeddings.values()))
-            if condition_embed is None:
-                raise ValueError("Single-target evaluation requires at least one conditioning embedding.")
-            return self._evaluate_single_target_with_embedding(
-                input_audio,
-                condition_embed,
-                sample_rate=sample_rate,
-                output_tracks=output_tracks,
-            )
-
-        if output_tracks is None:
-            output_tracks = ["mix"] + list(self.tracks)
-
-        film_dicts = {
-            track: self.film(track_embeddings[track].to(self.device))
-            for track in self.tracks
-        }
-
-        _, _, length = input_audio.shape
-        audio_data = self.preprocess(input_audio, sample_rate)
-        feats = self.encode(audio_data)
-
-        sep_masks = []
-        for track in self.tracks:
-            est_mask = self.separator(feats, film_dict=film_dicts[track])
-            sep_masks.append(est_mask.squeeze(0))
-        est_mask = torch.stack(sep_masks)
-
-        feats_stacked = feats.unsqueeze(0).expand(len(self.tracks), -1, -1, -1)
-        recon = feats_stacked * est_mask
-        mix_latent = recon.sum(0)
-
-        outputs: list[torch.Tensor] = []
-        for track in output_tracks:
-            if track == "mix":
-                decoded = self.decode(mix_latent)[:, :, : audio_data.shape[-1]]
-            else:
-                decoded = self.decode(recon[self.track2idx[track]])[:, :, : audio_data.shape[-1]]
-            outputs.append(decoded)
-
-        return torch.cat(outputs, dim=1)[..., :length]
-
-    @torch.inference_mode()
-    def separate_class_ids(
-        self,
-        input_audio: torch.Tensor,
-        class_ids: torch.Tensor,
-        *,
-        target_present: torch.Tensor | None = None,
-        query_mode: list[str] | None = None,
-        sample_rate: int | None = None,
-    ) -> torch.Tensor:
-        if self.conditioning_mode != "class_id":
-            raise RuntimeError("separate_class_ids requires conditioning.mode=class_id")
-        if str(getattr(self, "mode", "legacy_3slot")).strip().lower() != "single_target":
-            raise RuntimeError(
-                "separate_class_ids requires a single-target CodecSep checkpoint "
-                f"(got mode={getattr(self, 'mode', 'unknown')!r})."
-            )
-
-        class_ids = class_ids.reshape(-1).long().to(self.device)
-        if int(class_ids.numel()) == 0:
-            raise ValueError("Expected at least one class id for separation.")
-
-        batch_size, _, length = input_audio.shape
-        if batch_size != 1:
-            raise ValueError(f"separate_class_ids currently expects batch size 1, got {batch_size}")
-
-        audio_data = self.preprocess(input_audio, sample_rate)
-        feats = self.encode(audio_data)
-        class_embed = self._encode_class_id_batch(
-            class_ids,
-            target_present=target_present,
-            query_mode=query_mode,
-        )
-        film_dict = self.film(class_embed.to(self.device))
-        expanded_feats = feats.expand(class_ids.shape[0], -1, -1)
-        est_mask = self.separator(expanded_feats, film_dict=film_dict).squeeze(0)
-        target_feats = expanded_feats * est_mask
-        target_audio = self.decode(target_feats)[:, :, : audio_data.shape[-1]]
-        return target_audio[..., :length]
-
-    @torch.inference_mode()
-    def evaluate_with_class_ids(
-        self,
-        input_audio: torch.Tensor,
-        class_ids: torch.Tensor,
-        *,
-        target_present: torch.Tensor | None = None,
-        query_mode: list[str] | None = None,
-        sample_rate: int | None = None,
-    ) -> torch.Tensor:
-        return self.separate_class_ids(
-            input_audio,
-            class_ids,
-            target_present=target_present,
-            query_mode=query_mode,
-            sample_rate=sample_rate,
-        )
+CodecSep = _LegacyRuntimeCodecSep

@@ -1,202 +1,297 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { Audio } from 'expo-av';
-import AudioRecord from 'react-native-audio-record';
-import { Buffer } from 'buffer';
-import { waveformerService } from '../services/WaveformerInferenceService';
-import { codecSepApiService } from '../services/CodecSepApiService';
-import { writeWavFile } from '../utils/wavUtils';
-import * as FileSystem from 'expo-file-system/legacy';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PermissionsAndroid, Platform } from 'react-native';
 
-interface UseSuppressionDemoResult {
-    startDemo: () => Promise<void>;
-    status: string;
-    originalUri: string | null;
-    cleanUri: string | null;
-    playOriginal: () => Promise<void>;
-    playClean: () => Promise<void>;
-    isRecording: boolean;
-    target: string;
-    setTarget: (t: string) => void;
-    debugInfo: string;
+import { modelBundleService } from '../services/ModelBundleService';
+import {
+  EngineCategoryInfo,
+  EngineMeterEvent,
+  EngineRuntimeInfo,
+  EngineStatusEvent,
+  suppressionEngineService,
+} from '../services/SuppressionEngineService';
+
+interface UseSuppressionDemoOptions {
+  accessToken: string | null;
 }
 
-export const useSuppressionDemo = (): UseSuppressionDemoResult => {
-    const [isRecording, setIsRecording] = useState(false);
-    const [status, setStatus] = useState<string>('Idle');
-    const [originalUri, setOriginalUri] = useState<string | null>(null);
-    const [cleanUri, setCleanUri] = useState<string | null>(null);
-    const [target, setTarget] = useState<string>('typing');
-    const [debugInfo, setDebugInfo] = useState<string>('');
+interface UseSuppressionDemoResult {
+  startLive: () => Promise<void>;
+  stopLive: () => Promise<void>;
+  status: string;
+  isLive: boolean;
+  target: string;
+  setTarget: (target: string) => void;
+  debugInfo: string;
+  runtimeInfo: EngineRuntimeInfo | null;
+  liveStatus: EngineStatusEvent | null;
+  meter: EngineMeterEvent | null;
+  availableTargets: SuppressionTarget[];
+}
 
-    // Buffers to hold recorded data
-    const chunksRef = useRef<Float32Array[]>([]);
-    const listenerRef = useRef<any>(null);
+interface SuppressionTarget {
+  id: string;
+  label: string;
+  icon: string;
+  defaultAggressiveness: number;
+  transient: boolean;
+}
 
-    // Fix FileSystem type if needed
-    const docDir = (FileSystem as any).documentDirectory;
+interface CategoryDecoration {
+  icon: string;
+  defaultAggressiveness?: number;
+  transient?: boolean;
+}
 
-    const initRecorder = async () => {
-        if (Platform.OS === 'android') {
-            const granted = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-                {
-                    title: 'Microphone Permission',
-                    message: 'App needs mic access to demo suppression.',
-                    buttonNeutral: 'Ask Me Later',
-                    buttonNegative: 'Cancel',
-                    buttonPositive: 'OK',
-                },
-            );
-            if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                throw new Error('Permission denied');
-            }
-        }
+// UI-only decorations stay separate from the packaged runtime contract so the
+// native layer remains the source of truth for whichever model is active.
+const CATEGORY_DECORATIONS: Record<string, CategoryDecoration> = {
+  alarm: { icon: 'alarm-outline', transient: true },
+  alarm_clock: { icon: 'alarm-outline', transient: true },
+  baby_cry: { icon: 'happy-outline' },
+  background_noise: { icon: 'pulse-outline' },
+  'background noise': { icon: 'pulse-outline' },
+  bird_singing: { icon: 'leaf-outline' },
+  'bird singing': { icon: 'leaf-outline' },
+  birds_chirping: { icon: 'leaf-outline' },
+  car_engine: { icon: 'car-sport-outline' },
+  'car engine': { icon: 'car-sport-outline' },
+  car_horn: { icon: 'car-sport-outline', transient: true },
+  cat: { icon: 'paw-outline' },
+  cock_a_doodle_doo: { icon: 'sunny-outline', transient: true },
+  computer_typing: { icon: 'keypad-outline', transient: true },
+  cricket: { icon: 'bug-outline' },
+  crowd_noise: { icon: 'people-outline' },
+  'crowd noise': { icon: 'people-outline' },
+  dog: { icon: 'paw-outline' },
+  dog_barking: { icon: 'paw-outline' },
+  'dog barking': { icon: 'paw-outline' },
+  door_knock: { icon: 'hand-left-outline', transient: true },
+  door_knocking: { icon: 'hand-left-outline', transient: true },
+  'door knocking': { icon: 'hand-left-outline', transient: true },
+  footsteps: { icon: 'walk-outline' },
+  glass_breaking: { icon: 'alert-circle-outline', transient: true },
+  gunshot: { icon: 'flash-outline', transient: true },
+  hammer: { icon: 'construct-outline', transient: true },
+  keyboard_typing: { icon: 'keypad-outline', transient: true },
+  'keyboard typing': { icon: 'keypad-outline', transient: true },
+  music: { icon: 'musical-notes-outline' },
+  ocean: { icon: 'water-outline' },
+  phone_ringing: { icon: 'call-outline' },
+  'phone ringing': { icon: 'call-outline' },
+  rain: { icon: 'rainy-outline' },
+  singing: { icon: 'mic-outline' },
+  siren: { icon: 'radio-outline', transient: true },
+  speech: { icon: 'chatbubble-ellipses-outline' },
+  thunderstorm: { icon: 'thunderstorm-outline' },
+  toilet_flush: { icon: 'water-outline', transient: true },
+  water_flowing: { icon: 'water-outline' },
+  'water flowing': { icon: 'water-outline' },
+  wind: { icon: 'cloud-outline' },
+};
 
-        const options = {
-            sampleRate: 44100, // Match model expected rate
-            channels: 1,
-            bitsPerSample: 16,
-            audioSource: 6,
-            wavFile: 'test.wav'
-        };
-        AudioRecord.init(options);
+const DEFAULT_TARGET_PRIORITY = [
+  'speech',
+  'computer_typing',
+  'keyboard typing',
+  'music',
+  'alarm_clock',
+  'alarm',
+];
+
+function prettifyCategoryLabel(categoryId: string): string {
+  return categoryId.replace(/[_-]+/g, ' ');
+}
+
+function decorationForCategory(categoryId: string): CategoryDecoration {
+  return CATEGORY_DECORATIONS[categoryId] ?? CATEGORY_DECORATIONS[categoryId.toLowerCase()] ?? {
+    icon: 'pulse-outline',
+  };
+}
+
+function pickDefaultTarget(categories: SuppressionTarget[]): string {
+  for (const preferred of DEFAULT_TARGET_PRIORITY) {
+    const match = categories.find((category) => category.id === preferred);
+    if (match) {
+      return match.id;
+    }
+  }
+  return categories[0]?.id ?? '';
+}
+
+function mapEngineCategory(category: EngineCategoryInfo): SuppressionTarget {
+  const decoration = decorationForCategory(category.id);
+  return {
+    id: category.id,
+    label: category.label || prettifyCategoryLabel(category.id),
+    icon: decoration.icon,
+    defaultAggressiveness:
+      category.defaultAggressiveness ?? decoration.defaultAggressiveness ?? 1.2,
+    transient: category.transient ?? decoration.transient ?? false,
+  };
+}
+
+async function requestMicrophonePermission(): Promise<void> {
+  if (Platform.OS !== 'android') {
+    return;
+  }
+
+  const granted = await PermissionsAndroid.request(
+    PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+    {
+      title: 'Microphone Permission',
+      message: 'Semantic Noise Suppression needs microphone access for live suppression.',
+      buttonPositive: 'OK',
+      buttonNegative: 'Cancel',
+      buttonNeutral: 'Ask Me Later',
+    }
+  );
+
+  if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+    throw new Error('Microphone permission was denied');
+  }
+}
+
+export const useSuppressionDemo = ({
+  accessToken,
+}: UseSuppressionDemoOptions): UseSuppressionDemoResult => {
+  const nativeEngineAvailable = suppressionEngineService.isAvailable();
+  const [status, setStatus] = useState<string>('Idle');
+  const [isLive, setIsLive] = useState(false);
+  const [target, setTarget] = useState<string>('');
+  const [runtimeInfo, setRuntimeInfo] = useState<EngineRuntimeInfo | null>(null);
+  const [liveStatus, setLiveStatus] = useState<EngineStatusEvent | null>(null);
+  const [meter, setMeter] = useState<EngineMeterEvent | null>(null);
+  const [nativeCategories, setNativeCategories] = useState<SuppressionTarget[]>([]);
+
+  const syncEngine = useCallback(async () => {
+    if (!nativeEngineAvailable) {
+      setStatus('Live suppression requires a native Android build.');
+      return null;
+    }
+    if (!accessToken) {
+      setStatus('Login required');
+      return null;
+    }
+
+    setStatus('Preparing on-device model...');
+    const prepared = await modelBundleService.ensurePrepared(accessToken);
+    setRuntimeInfo(prepared);
+
+    const categories = await suppressionEngineService.getCategories().catch(() => []);
+    if (categories.length > 0) {
+      const mapped = categories.map(mapEngineCategory);
+      setNativeCategories(mapped);
+      setTarget((current) => (
+        mapped.some((category) => category.id === current) ? current : pickDefaultTarget(mapped)
+      ));
+    }
+
+    setStatus(prepared.warmed ? 'Engine ready' : 'Engine loaded');
+    return prepared;
+  }, [accessToken, nativeEngineAvailable]);
+
+  useEffect(() => {
+    if (!nativeEngineAvailable) {
+      setStatus('Live suppression requires a native Android build.');
+      return;
+    }
+
+    const statusSub = suppressionEngineService.addStatusListener((event) => {
+      setLiveStatus(event);
+      setStatus(event.message || event.state);
+      setIsLive(event.state === 'running' || event.state === 'warming');
+    });
+    const meterSub = suppressionEngineService.addMeterListener((event) => {
+      setMeter(event);
+    });
+
+    return () => {
+      statusSub.remove();
+      meterSub.remove();
     };
+  }, [nativeEngineAvailable]);
 
-    const startDemo = useCallback(async () => {
-        try {
-            console.log('Starting Demo...');
-            setStatus('Initializing...');
-            setDebugInfo('');
-            chunksRef.current = [];
-            setOriginalUri(null);
-            setCleanUri(null);
+  useEffect(() => {
+    if (!accessToken || !nativeEngineAvailable) {
+      return;
+    }
 
-            await initRecorder();
+    syncEngine().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Failed to prepare the engine';
+      setStatus(`Error: ${message}`);
+    });
+  }, [accessToken, nativeEngineAvailable, syncEngine]);
 
-            // Initialize Remote API service
-            setStatus('Connecting to server...');
-            await codecSepApiService.initialize();
+  useEffect(() => {
+    if (!nativeEngineAvailable) {
+      return;
+    }
 
-            // Start recording
-            AudioRecord.start();
-            setIsRecording(true);
-            setStatus(`Recording (Target: ${target})...`);
-
-            // Listen for data
-            let packetCount = 0;
-            listenerRef.current = AudioRecord.on('data', (data) => {
-                packetCount++;
-                if (packetCount % 10 === 0) console.log(`Received ${packetCount} packets`);
-
-                // data is base64
-                const buffer = Buffer.from(data, 'base64');
-                // Convert int16 buffer to Float32
-                const int16 = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length / 2);
-                const float32 = new Float32Array(int16.length);
-                for (let i = 0; i < int16.length; i++) {
-                    float32[i] = int16[i] / 32768.0;
-                }
-                chunksRef.current.push(float32);
-            });
-
-            // Stop automatically after exactly 15 seconds
-            setTimeout(async () => {
-                await finishRecording();
-            }, 15000);
-
-        } catch (e: any) {
-            console.error('Start failed', e);
-            setStatus('Error: ' + e.message);
-            setIsRecording(false);
-        }
-    }, [target]);
-
-    const finishRecording = async () => {
-        try {
-            console.log('Stopping recording...');
-
-            const filePath = await AudioRecord.stop();
-            setIsRecording(false);
-            setStatus('Processing...');
-
-            console.log('Recording stopped. File:', filePath);
-
-            // 1. Flatten Buffer
-            const totalLen = chunksRef.current.reduce((acc, c) => acc + c.length, 0);
-            setDebugInfo(`Captured ${totalLen} samples`);
-            console.log(`Captured ${totalLen} samples`);
-
-            if (totalLen === 0) {
-                setStatus('Error: No audio captured.');
-                return;
-            }
-
-            const audioData = new Float32Array(totalLen);
-            let offset = 0;
-            for (const c of chunksRef.current) {
-                audioData.set(c, offset);
-                offset += c.length;
-            }
-
-            setDebugInfo(`Samples: ${audioData.length}, Model Ready: ${waveformerService.isInitialized}`);
-
-            // 2. Save original audio as WAV
-            setStatus('Saving original recording...');
-            const newOrigPath = docDir + 'original.wav';
-
-            // AudioRecord filePath might not have file:// prefix on Android
-            let sourcePath = filePath;
-            if (Platform.OS === 'android' && !sourcePath.startsWith('file://')) {
-                sourcePath = 'file://' + sourcePath;
-            }
-            await FileSystem.copyAsync({ from: sourcePath, to: newOrigPath });
-            setOriginalUri(newOrigPath);
-
-            // 3. Run Remote Separation (15-Category Model)
-            setStatus(`Sending to server... (${target})`);
-            console.log('[Demo] Running Remote high-quality separation...');
-            
-            // We pass the local URI of the original WAV file to the API service
-            const remoteCleanUri = await codecSepApiService.suppress(newOrigPath, target);
-
-            setCleanUri(remoteCleanUri);
-            setStatus('Done. Ready to Play.');
-            console.log('[Demo] Complete. Clean audio received and saved to:', remoteCleanUri);
-
-        } catch (e: any) {
-            console.error('Finish failed', e);
-            setStatus('Error: ' + e.message);
-            setIsRecording(false);
-        }
+    return () => {
+      suppressionEngineService.stopLive().catch(() => undefined);
     };
+  }, [nativeEngineAvailable]);
 
-    const playOriginal = async () => {
-        if (!originalUri) return;
-        try {
-            const { sound } = await Audio.Sound.createAsync({ uri: originalUri });
-            await sound.playAsync();
-        } catch (e) { console.error(e); }
-    };
+  const startLive = useCallback(async () => {
+    if (!nativeEngineAvailable) {
+      setStatus('Live suppression requires a native Android build.');
+      return;
+    }
+    await requestMicrophonePermission();
+    const prepared = runtimeInfo ?? (await syncEngine());
+    if (!prepared) {
+      throw new Error('The suppression engine is not ready');
+    }
 
-    const playClean = async () => {
-        if (!cleanUri) return;
-        try {
-            const { sound } = await Audio.Sound.createAsync({ uri: cleanUri });
-            await sound.playAsync();
-        } catch (e) { console.error(e); }
-    };
+    const category = nativeCategories.find((value) => value.id === target);
+    if (!category) {
+      setStatus('Loading Waveformer categories...');
+      return;
+    }
 
-    return {
-        startDemo,
-        status,
-        originalUri,
-        cleanUri,
-        playOriginal,
-        playClean,
-        isRecording,
-        target,
-        setTarget,
-        debugInfo
-    };
+    setStatus(`Starting live suppression for ${category.label}...`);
+    await suppressionEngineService.startLive({
+      categoryId: category.id,
+      aggressiveness: category.defaultAggressiveness,
+      hopMs: 500,
+      lookaheadMs: 250,
+    });
+  }, [nativeCategories, nativeEngineAvailable, runtimeInfo, syncEngine, target]);
+
+  const stopLive = useCallback(async () => {
+    if (!nativeEngineAvailable) {
+      return;
+    }
+    await suppressionEngineService.stopLive();
+    setIsLive(false);
+    setStatus('Live suppression stopped');
+  }, [nativeEngineAvailable]);
+
+  const debugInfo = useMemo(() => {
+    const lines = [
+      `Model: ${runtimeInfo?.displayName ?? runtimeInfo?.modelVersion ?? 'none'}`,
+      `Provider: ${runtimeInfo?.provider ?? 'unknown'}`,
+      `Runtime: ${runtimeInfo?.runtimeKind ?? 'unknown'}`,
+      `Latency: ${liveStatus?.inferenceMs?.toFixed(1) ?? '--'} ms`,
+      `Queue: ${liveStatus?.queueDepthMs?.toFixed(1) ?? '--'} ms`,
+      `XRuns: ${liveStatus?.xruns ?? 0}`,
+      `Input RMS: ${meter?.rmsIn?.toFixed(3) ?? '--'}`,
+      `Output RMS: ${meter?.rmsOut?.toFixed(3) ?? '--'}`,
+    ];
+    return lines.join('\n');
+  }, [liveStatus, meter, runtimeInfo]);
+
+  return {
+    startLive,
+    stopLive,
+    status,
+    isLive,
+    target,
+    setTarget,
+    debugInfo,
+    runtimeInfo,
+    liveStatus,
+    meter,
+    availableTargets: nativeCategories,
+  };
 };

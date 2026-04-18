@@ -4,10 +4,11 @@ fn main() {
     tauri_build::build();
 
     println!("cargo:rerun-if-changed=tauri.conf.json");
-    println!("cargo:rerun-if-changed=../ai/ai_runtime/config/audiosep_hive15cat_categories.yaml");
-    println!("cargo:rerun-if-changed=../ai/ai_runtime/config/default_profiles.json");
+    println!("cargo:rerun-if-changed=../ai/models/model_selection.json");
+    println!("cargo:rerun-if-changed=../ai/models/AudioSepHive15Cat/model_package.json");
+    println!("cargo:rerun-if-changed=../ai/models/Waveformer/model_package.json");
     println!("cargo:rerun-if-changed=../ai/models/AudioSepHive15Cat/frozensep_hive_15cat.onnx");
-    println!("cargo:rerun-if-changed=../ai/models/AudioSepHive15Cat/categories_15.txt");
+    println!("cargo:rerun-if-changed=../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx");
 
     if let Err(error) = stage_onnx_runtime_dlls() {
         println!("cargo:warning=Unable to pre-stage ONNX Runtime DLLs: {error}");
