@@ -8,10 +8,14 @@ import { StatusBar } from 'expo-status-bar';
 
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { ThemeProvider, AppThemeContext } from './context/ThemeContext';
+import { RecordingsProvider } from './context/RecordingsContext';
 import DashboardScreen from './screens/DashboardScreen';
+
 import ProfileScreen from './screens/ProfileScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import RecordingsScreen from './screens/RecordingsScreen';
 import LoginScreen from './screens/auth/LoginScreen';
+
 import SignupScreen from './screens/auth/SignupScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen';
 
@@ -31,7 +35,10 @@ function TabNav() {
             iconName = focused ? 'account' : 'account-outline';
           } else if (route.name === 'Settings') {
             iconName = focused ? 'cog' : 'cog-outline';
+          } else if (route.name === 'Recordings') {
+            iconName = focused ? 'folder-music' : 'folder-music-outline';
           } else {
+
             iconName = 'alert-circle-outline';
           }
           return <MaterialCommunityIcons name={iconName} size={28} color={color} />;
@@ -46,8 +53,10 @@ function TabNav() {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Recordings" component={RecordingsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
+
     </Tab.Navigator>
   );
 }
@@ -92,8 +101,11 @@ export default function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <AppNav />
+        <RecordingsProvider>
+          <AppNav />
+        </RecordingsProvider>
       </ThemeProvider>
     </AuthProvider>
   );
+
 }

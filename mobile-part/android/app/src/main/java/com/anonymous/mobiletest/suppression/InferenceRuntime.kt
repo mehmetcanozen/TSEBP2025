@@ -3,6 +3,7 @@ package com.anonymous.mobiletest.suppression
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import android.util.Log
 import java.io.File
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
@@ -39,10 +40,18 @@ private class AudioSepOnnxRuntime(
     ((manifest.sampleRate * (manifest.overlapSeconds ?: 1.0)).roundToInt()).coerceAtLeast(0)
 
   init {
-    sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-    sessionOptions.setIntraOpNumThreads(2)
-    session = environment.createSession(modelFile.absolutePath, sessionOptions)
-    warmup()
+    try {
+      Log.d("AudioSepOnnxRuntime", "Loading ONNX model from: ${modelFile.absolutePath}")
+      sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+      sessionOptions.setIntraOpNumThreads(2)
+      session = environment.createSession(modelFile.absolutePath, sessionOptions)
+      Log.d("AudioSepOnnxRuntime", "ONNX model loaded successfully. Warming up...")
+      warmup()
+      Log.d("AudioSepOnnxRuntime", "Warmup complete.")
+    } catch (e: Exception) {
+      Log.e("AudioSepOnnxRuntime", "Failed to initialize ONNX runtime: ${e.message}", e)
+      throw e
+    }
   }
 
   override fun runtimeInfo(bundlePath: String): RuntimeInfo {
@@ -234,7 +243,15 @@ private class WaveformerExecuTorchRuntime(
   private val manifest: ModelBundleManifest,
   private val modelFile: File,
 ) : SuppressionRuntime {
-  private val module = Module.load(modelFile.absolutePath)
+  private val module: Module = try {
+    Log.d("WaveformerExecuTorchRuntime", "Loading ExecuTorch model from: ${modelFile.absolutePath}")
+    Module.load(modelFile.absolutePath).also {
+      Log.d("WaveformerExecuTorchRuntime", "ExecuTorch model loaded successfully.")
+    }
+  } catch (e: Exception) {
+    Log.e("WaveformerExecuTorchRuntime", "Failed to load ExecuTorch module: ${e.message}", e)
+    throw e
+  }
   private val categoryOrder = manifest.categories.map { it.id }
   private val chunkSamples =
     manifest.chunkSamples ?: error("Waveformer manifest is missing chunkSamples")
@@ -318,10 +335,27 @@ private class WaveformerExecuTorchRuntime(
       EValue.from(Tensor.fromBlob(state.outBuf, outShape.toLongArray())),
     )
 
-    val target = outputs[0].toTensor().dataAsFloatArray
-    state.encBuf = outputs[1].toTensor().dataAsFloatArray
-    state.decBuf = outputs[2].toTensor().dataAsFloatArray
-    state.outBuf = outputs[3].toTensor().dataAsFloatArray
+    var target: FloatArray? = null
+    val encSize = encShape.product()
+    val decSize = decShape.product()
+    val outSize = outShape.product()
+
+    for (output in outputs) {
+      if (!output.isTensor) continue
+      val data = output.toTensor().dataAsFloatArray
+      when (data.size) {
+        chunkSamples * mixChannels -> target = data
+        encSize -> state.encBuf = data
+        decSize -> state.decBuf = data
+        outSize -> state.outBuf = data
+        else -> Log.w("WaveformerExecuTorchRuntime", "Unknown output tensor size: ${data.size}")
+      }
+    }
+
+    if (target == null) {
+      Log.e("WaveformerExecuTorchRuntime", "No target_chunk tensor found in outputs (expected size ${chunkSamples * mixChannels})")
+      throw IllegalStateException("Failed to extract target chunk from model outputs")
+    }
 
     val monoTarget = FloatArray(chunk.size)
     for (index in monoTarget.indices) {

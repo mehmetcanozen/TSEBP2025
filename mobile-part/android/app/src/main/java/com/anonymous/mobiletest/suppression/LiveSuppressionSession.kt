@@ -9,10 +9,13 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Process
+import android.util.Log
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+
 import kotlin.math.max
 
 class LiveSuppressionSession(
@@ -20,13 +23,21 @@ class LiveSuppressionSession(
   private val runtime: SuppressionRuntime,
   private val category: CategoryProfile,
   private val config: LiveConfig,
+  private val recordFile: File? = null,
   private val onStatus: (StatusSnapshot) -> Unit,
   private val onMeter: (MeterSnapshot) -> Unit,
 ) : AutoCloseable {
+
+  companion object {
+    private const val TAG = "LiveSuppressionSession"
+  }
+
   private val sessionId = UUID.randomUUID().toString()
   private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
   private val running = AtomicBoolean(false)
+  private val isClosing = AtomicBoolean(false)
   private val xruns = AtomicInteger(0)
+
   private val capturedFrames = AtomicLong(0)
   private val renderedFrames = AtomicLong(0)
   private val providerName = runtime.runtimeInfo("").provider
@@ -40,7 +51,9 @@ class LiveSuppressionSession(
   private val renderRing = FloatRingBuffer(nativeSampleRate * 8)
 
   private var liveProcessor: LiveSuppressionProcessor? = null
+  private var wavWriter: WavWriter? = null
   private var activeHopSamples = max(1, nativeSampleRate * config.hopMs / 1000)
+
   private var activeHopMs = config.hopMs.coerceIn(50, 1000)
   private var record: AudioRecord? = null
   private var track: AudioTrack? = null
@@ -51,13 +64,18 @@ class LiveSuppressionSession(
   private var lastOutputChunk = FloatArray(0)
   private var lastMeterAt = 0L
 
+  fun getSessionId(): String = sessionId
+
   fun start(): String {
+
     if (!running.compareAndSet(false, true)) {
       return sessionId
     }
 
     liveProcessor = runtime.createLiveProcessor(category, nativeSampleRate, config)
+    wavWriter = recordFile?.let { WavWriter(it, nativeSampleRate) }
     activeHopSamples = liveProcessor?.preferredHopSamples()?.coerceAtLeast(1)
+
       ?: max(1, nativeSampleRate * config.hopMs / 1000)
     activeHopMs = max(1, (activeHopSamples * 1000.0 / nativeSampleRate.toDouble()).toInt())
 
@@ -110,10 +128,19 @@ class LiveSuppressionSession(
       trackBuilder.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
     }
 
+    Log.d(TAG, "Initializing AudioRecord with sampleRate=$nativeSampleRate, source=VOICE_RECOGNITION")
     record = recordBuilder.build()
+    Log.d(TAG, "Initializing AudioTrack with sampleRate=$nativeSampleRate, usage=VOICE_COMMUNICATION")
     track = trackBuilder.build()
-    check(record?.state == AudioRecord.STATE_INITIALIZED) { "AudioRecord could not be initialized" }
-    check(track?.state == AudioTrack.STATE_INITIALIZED) { "AudioTrack could not be initialized" }
+
+    if (record?.state != AudioRecord.STATE_INITIALIZED) {
+        Log.e(TAG, "AudioRecord could not be initialized. State: ${record?.state}")
+        throw IllegalStateException("AudioRecord could not be initialized")
+    }
+    if (track?.state != AudioTrack.STATE_INITIALIZED) {
+        Log.e(TAG, "AudioTrack could not be initialized. State: ${track?.state}")
+        throw IllegalStateException("AudioTrack could not be initialized")
+    }
 
     audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
     emitStatus("warming", "Opening live audio streams", null, 0.0)
@@ -134,21 +161,32 @@ class LiveSuppressionSession(
     return sessionId
   }
 
+  fun requestStop() {
+    running.set(false)
+  }
+
   fun stop() {
-    if (!running.compareAndSet(true, false)) {
+    if (!isClosing.compareAndSet(false, true)) {
       return
     }
+    running.set(false)
 
-    captureThread?.join(2_000)
-    processThread?.join(2_000)
-    renderThread?.join(2_000)
+    captureThread?.join(5000)
+    processThread?.join(60000) // Give AI plenty of time to drain queue (up to 60s for slow devices)
+    renderThread?.join(5000)
+
+
     record?.stop()
     record?.release()
     track?.pause()
     track?.flush()
     track?.release()
     liveProcessor?.close()
+    wavWriter?.close()
     liveProcessor = null
+    wavWriter = null
+
+
     record = null
     track = null
     audioManager.mode = AudioManager.MODE_NORMAL
@@ -189,7 +227,8 @@ class LiveSuppressionSession(
     val scratch = FloatArray(max(blockFrames * 2, activeHopSamples))
     val pending = ArrayList<Float>(activeHopSamples * 4)
 
-    while (running.get()) {
+    while (running.get() || captureRing.availableToRead() > 0 || pending.size >= activeHopSamples) {
+
       val read = captureRing.read(scratch, scratch.size)
       if (read > 0) {
         for (index in 0 until read) {
@@ -197,13 +236,20 @@ class LiveSuppressionSession(
         }
       }
 
-      while (pending.size >= activeHopSamples && running.get()) {
+      if (read <= 0 && !running.get()) {
+        if (pending.size < activeHopSamples) break
+      }
+
+      while (pending.size >= activeHopSamples) {
         val inputChunk = FloatArray(activeHopSamples)
+
+
         for (index in 0 until activeHopSamples) {
           inputChunk[index] = pending[index]
         }
         pending.subList(0, activeHopSamples).clear()
         lastInputChunk = inputChunk
+
 
         val started = System.nanoTime()
         val cleanChunk = processor.processChunk(inputChunk)
@@ -211,13 +257,17 @@ class LiveSuppressionSession(
         lastOutputChunk = cleanChunk
 
         val written = renderRing.write(cleanChunk, cleanChunk.size)
+        wavWriter?.write(cleanChunk, cleanChunk.size)
         if (written < cleanChunk.size) {
+
           xruns.incrementAndGet()
         }
 
         val queueDepthMs =
           renderRing.availableToRead().toDouble() / nativeSampleRate.toDouble() * 1000.0
-        emitStatus("running", "Live suppression active", inferenceMs, queueDepthMs)
+        val currentState = if (running.get()) "running" else "stopping"
+        val currentMsg = if (running.get()) "Live suppression active" else "Finishing recording..."
+        emitStatus(currentState, currentMsg, inferenceMs, queueDepthMs)
       }
 
       maybeEmitMeter()

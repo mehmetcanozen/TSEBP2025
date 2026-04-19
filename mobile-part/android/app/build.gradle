@@ -68,16 +68,16 @@ tasks.register("prepareBundledSuppressionModel") {
     outputs.dir(generatedSuppressionAssetsRoot)
 
     doLast {
-        def bundledContext = resolveBundledSuppressionModelContext()
-        def activeModelId = bundledContext.activeModelId
-        def packageFile = bundledContext.packageFile
-        def packageManifest = bundledContext.packageManifest
-        def androidPlatform = bundledContext.androidPlatform
+        def runtimeContext = resolveBundledSuppressionModelContext()
+        def activeModelId = runtimeContext.activeModelId
+        def packageFile = runtimeContext.packageFile
+        def packageManifest = runtimeContext.packageManifest
+        def androidPlatform = runtimeContext.androidPlatform
 
         delete(generatedSuppressionAssetsRoot)
         generatedSuppressionBundleDir.mkdirs()
 
-        def bundledFiles = bundledContext.assetFiles
+        def bundledFiles = runtimeContext.assetFiles
 
         bundledFiles.each { sourceFile ->
             if (!sourceFile.exists()) {

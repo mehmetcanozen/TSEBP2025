@@ -39,11 +39,17 @@ export interface EngineStartLiveConfig {
   aggressiveness: number;
   hopMs?: number;
   lookaheadMs?: number;
+  recordEnabled?: boolean;
+  recordPath?: string;
 }
+
+
 
 export interface EngineStartLiveResult {
   sessionId: string;
+  recordPath?: string;
 }
+
 
 export interface EngineStatusEvent {
   sessionId: string | null;
@@ -130,6 +136,11 @@ class SuppressionEngineService {
   addMeterListener(listener: (event: EngineMeterEvent) => void): EmitterSubscription {
     return this.emitter.addListener('SuppressionEngineMeter', listener);
   }
+
+  addFinishedListener(listener: (event: { sessionId: string }) => void): EmitterSubscription {
+    return this.emitter.addListener('SuppressionEngineFinished', listener);
+  }
 }
+
 
 export const suppressionEngineService = new SuppressionEngineService();

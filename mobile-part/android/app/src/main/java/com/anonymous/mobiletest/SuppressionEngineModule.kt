@@ -11,6 +11,8 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import android.util.Log
+import java.io.File
 import java.util.concurrent.Executors
 
 class SuppressionEngineModule(
@@ -58,6 +60,24 @@ class SuppressionEngineModule(
         val category = runtimeStore.categories().find { it.id == categoryId }
           ?: throw IllegalArgumentException("Unknown category: $categoryId")
 
+        val recordEnabled = config.getBooleanOrDefault("recordEnabled", false) ?: false
+        val providedPath = config.getStringOrNull("recordPath")
+        val recordFile = when {
+          providedPath != null -> {
+            val f = File(providedPath)
+            f.parentFile?.mkdirs()
+            f
+          }
+          recordEnabled == true -> {
+            val dir = reactApplicationContext.cacheDir
+            dir.mkdirs()
+            File(dir, "suppression_${System.currentTimeMillis()}.wav")
+          }
+
+          else -> null
+        }
+
+
         liveSession?.close()
         liveSession = LiveSuppressionSession(
           context = reactApplicationContext,
@@ -69,14 +89,23 @@ class SuppressionEngineModule(
             hopMs = config.getIntOrDefault("hopMs", 500),
             lookaheadMs = config.getIntOrDefault("lookaheadMs", 250),
           ),
+          recordFile = recordFile,
           onStatus = { snapshot -> emitEvent("SuppressionEngineStatus", snapshot.toWritableMap()) },
+
           onMeter = { snapshot -> emitEvent("SuppressionEngineMeter", snapshot.toWritableMap()) },
         )
+        Log.d("SuppressionEngineModule", "Live session starting with recordFile: ${recordFile?.absolutePath ?: "none"}")
         val sessionId = liveSession?.start() ?: throw IllegalStateException("Failed to start live session")
+        Log.d("SuppressionEngineModule", "Live session started successfully: $sessionId")
         val payload = Arguments.createMap()
         payload.putString("sessionId", sessionId)
+        if (recordFile != null) {
+          payload.putString("recordPath", recordFile.absolutePath)
+        }
         promise.resolve(payload)
+
       } catch (error: Throwable) {
+        Log.e("SuppressionEngineModule", "Failed to start live session: ${error.message}", error)
         promise.reject("start_live_failed", error.message, error)
       }
     }
@@ -86,13 +115,33 @@ class SuppressionEngineModule(
   fun stopLive(promise: Promise) {
     executor.execute {
       try {
-        liveSession?.close()
+        val session = liveSession
+        if (session != null) {
+          // Request stop immediately (non-blocking for capture)
+          session.requestStop()
+          
+          // Complete the cleanup in a separate background thread so this executor (bridge) isn't blocked items
+          Thread {
+            try {
+              session.close() // This will perform the 10s drain/join
+              Log.d("SuppressionEngineModule", "Session final cleanup complete")
+              
+              val payload = Arguments.createMap()
+              payload.putString("sessionId", session.getSessionId())
+              emitEvent("SuppressionEngineFinished", payload)
+            } catch (e: Exception) {
+              Log.e("SuppressionEngineModule", "Background cleanup failed", e)
+            }
+          }.start()
+
+        }
         liveSession = null
         promise.resolve(null)
       } catch (error: Throwable) {
         promise.reject("stop_live_failed", error.message, error)
       }
     }
+
   }
 
   @ReactMethod

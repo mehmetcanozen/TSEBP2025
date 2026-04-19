@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { useRecordings } from '../context/RecordingsContext';
+
+
+
+
 
 import { modelBundleService } from '../services/ModelBundleService';
 import {
@@ -26,7 +32,12 @@ interface UseSuppressionDemoResult {
   liveStatus: EngineStatusEvent | null;
   meter: EngineMeterEvent | null;
   availableTargets: SuppressionTarget[];
+  isRecordEnabled: boolean;
+  setIsRecordEnabled: (enabled: boolean) => void;
+  lastRecordingUri: string | null;
+  clearLastRecording: () => void;
 }
+
 
 interface SuppressionTarget {
   id: string;
@@ -162,6 +173,12 @@ export const useSuppressionDemo = ({
   const [liveStatus, setLiveStatus] = useState<EngineStatusEvent | null>(null);
   const [meter, setMeter] = useState<EngineMeterEvent | null>(null);
   const [nativeCategories, setNativeCategories] = useState<SuppressionTarget[]>([]);
+  const [isRecordEnabled, setIsRecordEnabled] = useState(false);
+  const [lastRecordingUri, setLastRecordingUri] = useState<string | null>(null);
+  const activeRecordUri = useRef<string | null>(null);
+  const { addRecording } = useRecordings();
+
+
 
   const syncEngine = useCallback(async () => {
     if (!nativeEngineAvailable) {
@@ -201,15 +218,43 @@ export const useSuppressionDemo = ({
       setStatus(event.message || event.state);
       setIsLive(event.state === 'running' || event.state === 'warming');
     });
+
     const meterSub = suppressionEngineService.addMeterListener((event) => {
       setMeter(event);
+    });
+
+    const finishedSub = suppressionEngineService.addFinishedListener(async (event) => {
+      console.log('[useSuppressionDemo] Native engine finished draining:', event.sessionId);
+
+      if (activeRecordUri.current && isRecordEnabled) {
+        const uri = activeRecordUri.current;
+        setLastRecordingUri(uri);
+
+        // Auto-save to gallery
+        const category = nativeCategories.find((v) => v.id === target);
+        try {
+          await addRecording({
+            id: Date.now().toString(),
+            uri: uri,
+            category: target,
+            categoryLabel: category?.label ?? target,
+            createdAt: Date.now(),
+          });
+          console.log('[useSuppressionDemo] Successfully saved to gallery after background drain:', uri);
+        } catch (err) {
+          console.error('[useSuppressionDemo] Failed to save gallery after background drain', err);
+        }
+        activeRecordUri.current = null;
+      }
     });
 
     return () => {
       statusSub.remove();
       meterSub.remove();
+      finishedSub.remove();
     };
-  }, [nativeEngineAvailable]);
+  }, [nativeEngineAvailable, isRecordEnabled, target, nativeCategories, addRecording]);
+
 
   useEffect(() => {
     if (!accessToken || !nativeEngineAvailable) {
@@ -250,22 +295,57 @@ export const useSuppressionDemo = ({
     }
 
     setStatus(`Starting live suppression for ${category.label}...`);
-    await suppressionEngineService.startLive({
-      categoryId: category.id,
-      aggressiveness: category.defaultAggressiveness,
-      hopMs: 500,
-      lookaheadMs: 250,
-    });
-  }, [nativeCategories, nativeEngineAvailable, runtimeInfo, syncEngine, target]);
+
+    try {
+      console.log(`[useSuppressionDemo] Starting live, recordEnabled: ${isRecordEnabled}`);
+      const result = await suppressionEngineService.startLive({
+        categoryId: category.id,
+        aggressiveness: category.defaultAggressiveness,
+        hopMs: 500,
+        lookaheadMs: 250,
+        recordEnabled: isRecordEnabled,
+      });
+
+      // Native returns the actual record path it created
+      if (result.recordPath) {
+        // Force absolute path for playback
+        const uri = Platform.OS === 'android' ? `file://${result.recordPath}` : result.recordPath;
+        console.log(`[useSuppressionDemo] Native recording to: ${uri}`);
+        activeRecordUri.current = uri;
+        setLastRecordingUri(null);
+      } else {
+        console.log('[useSuppressionDemo] No recording path returned (recording disabled).');
+        activeRecordUri.current = null;
+      }
+    } catch (error: any) {
+
+      console.error('[useSuppressionDemo] startLive failed:', error);
+      setStatus(`Error: ${error.message || 'Failed to start'}`);
+      setIsLive(false);
+      activeRecordUri.current = null;
+      throw error;
+    }
+
+  }, [nativeCategories, nativeEngineAvailable, runtimeInfo, syncEngine, target, isRecordEnabled]);
+
+
 
   const stopLive = useCallback(async () => {
     if (!nativeEngineAvailable) {
       return;
     }
-    await suppressionEngineService.stopLive();
+
+    // Optimistically set UI to not-live so button changes immediately
     setIsLive(false);
-    setStatus('Live suppression stopped');
+    setStatus('Stopping and preserving recording...');
+
+    await suppressionEngineService.stopLive();
+
+    console.log('[useSuppressionDemo] stopLive request sent to native');
+    // Note: The actual file saving now happens in the finishedListener
   }, [nativeEngineAvailable]);
+
+
 
   const debugInfo = useMemo(() => {
     const lines = [
@@ -293,5 +373,10 @@ export const useSuppressionDemo = ({
     liveStatus,
     meter,
     availableTargets: nativeCategories,
+    isRecordEnabled,
+    setIsRecordEnabled,
+    lastRecordingUri,
+    clearLastRecording: () => setLastRecordingUri(null),
   };
 };
+
