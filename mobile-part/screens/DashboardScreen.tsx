@@ -8,6 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
+
 
 const { width } = Dimensions.get('window');
 
@@ -25,12 +27,21 @@ export default function DashboardScreen() {
         liveStatus,
         meter,
         availableTargets,
+        isRecordEnabled,
+        setIsRecordEnabled,
+        lastRecordingUri,
+        clearLastRecording,
     } = useSuppressionDemo({ accessToken: userToken });
+
+
 
     const { colors, isDarkMode } = useTheme();
     const navigation = useNavigation<any>();
 
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+
 
     useFocusEffect(
         React.useCallback(() => {
@@ -54,203 +65,311 @@ export default function DashboardScreen() {
         await AsyncStorage.setItem('APP_NOTIFICATIONS', String(newValue));
     };
 
+    const playRecording = async () => {
+        if (!lastRecordingUri) return;
+
+        try {
+            // Force audio to play through speakers
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: true,
+                shouldDuckAndroid: true,
+                staysActiveInBackground: false,
+                playThroughEarpieceAndroid: false,
+            });
+
+            if (sound) {
+                await sound.unloadAsync();
+            }
+
+
+            const { sound: newSound } = await Audio.Sound.createAsync(
+                { uri: lastRecordingUri },
+                { shouldPlay: true }
+            );
+
+            setSound(newSound);
+            setIsPlaying(true);
+
+            newSound.setOnPlaybackStatusUpdate((status) => {
+                if (status.isLoaded && !status.isPlaying && status.didJustFinish) {
+                    setIsPlaying(false);
+                }
+            });
+        } catch (error) {
+            console.error('Failed to play recording', error);
+        }
+    };
+
+    const stopPlayback = async () => {
+        if (sound) {
+            await sound.stopAsync();
+            setIsPlaying(false);
+        }
+    };
+
+    React.useEffect(() => {
+        return sound ? () => { sound.unloadAsync(); } : undefined;
+    }, [sound]);
+
+
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
             <ScrollView contentContainerStyle={styles.container} bounces={false}>
                 <View style={styles.headerWrapper}>
-                <LinearGradient
-                    colors={[colors.headerGradientStart || '#FF8A00', colors.headerGradientEnd || '#FF5722']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.headerBackground}
-                />
-                
-                {/* Top Bar */}
-                <View style={[styles.headerTopBar, {marginTop: 10, justifyContent: 'flex-end'}]}>
-                    <View style={styles.headerTopRight}>
-                        <TouchableOpacity onPress={toggleNotifications} activeOpacity={0.8} style={{ padding: 5, marginRight: 10 }}>
-                            <Ionicons name={notificationsEnabled ? "notifications" : "notifications-off-outline"} size={22} color="#FFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={{ flexDirection: 'row', alignItems: 'center' }} 
-                            onPress={() => navigation.navigate('Profile')} 
-                            activeOpacity={0.8}
-                        >
-                            <Text style={{ color: '#FFF', fontWeight: 'bold', marginRight: 10, fontSize: 15 }}>
-                                {userInfo?.full_name?.split(' ')[0] || userInfo?.username || 'User'}
+                    <LinearGradient
+                        colors={[colors.headerGradientStart || '#FF8A00', colors.headerGradientEnd || '#FF5722']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.headerBackground}
+                    />
+
+                    {/* Top Bar */}
+                    <View style={[styles.headerTopBar, { marginTop: 10, justifyContent: 'flex-end' }]}>
+                        <View style={styles.headerTopRight}>
+                            <TouchableOpacity onPress={toggleNotifications} activeOpacity={0.8} style={{ padding: 5, marginRight: 10 }}>
+                                <Ionicons name={notificationsEnabled ? "notifications" : "notifications-off-outline"} size={22} color="#FFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={{ flexDirection: 'row', alignItems: 'center' }}
+                                onPress={() => navigation.navigate('Profile')}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: '#FFF', fontWeight: 'bold', marginRight: 10, fontSize: 15 }}>
+                                    {userInfo?.full_name?.split(' ')[0] || userInfo?.username || 'User'}
+                                </Text>
+                                <View style={styles.avatarPlaceholder}>
+                                    {userInfo?.photo_uri ? (
+                                        <Image source={{ uri: userInfo.photo_uri }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+                                    ) : (
+                                        <Ionicons name="person" size={20} color={colors.primary} />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Greeting */}
+                    <View style={styles.headerGreeting}>
+                        <Text style={styles.greetingTitle}>Hi {userInfo?.full_name || userInfo?.username || 'Developer'},</Text>
+                        <Text style={styles.greetingSubtitle}>AI Powered Noise Cancellation</Text>
+                    </View>
+                </View>
+
+                <View style={styles.contentWrapper}>
+                    {/* Main Overlapping Card */}
+                    <View style={[styles.mainCard, { backgroundColor: colors.card }]}>
+                        <View style={styles.mainCardTop}>
+                            <View style={styles.mainCardTopLeft}>
+                                <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? '#4A5568' : '#EBF8FF' }]}>
+                                    <Ionicons name="pulse" size={16} color={colors.primary} />
+                                </View>
+                                {/* Status text removed */}
+                            </View>
+                            <TouchableOpacity
+                                style={[styles.topUpButton, { backgroundColor: colors.primary, marginRight: 10 }, isLive && { backgroundColor: '#E53E3E' }]}
+                                onPress={isLive ? stopLive : startLive}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.topUpButtonText}>{isLive ? "Stop Live" : "Start Live"}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.recordToggle, isRecordEnabled && { backgroundColor: isDarkMode ? '#44337A' : '#E9D8FD' }]}
+                                onPress={() => setIsRecordEnabled(!isRecordEnabled)}
+                            >
+                                <Ionicons name="mic-circle" size={24} color={isRecordEnabled ? colors.primary : '#A0AEC0'} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={[styles.divider, { backgroundColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]} />
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
+                            <Text style={[styles.playbackSub, { color: isRecordEnabled ? colors.primary : '#A0AEC0', fontWeight: 'bold' }]}>
+                                {isRecordEnabled ? "RECORDING ENABLED" : "RECORDING DISABLED"}
                             </Text>
-                            <View style={styles.avatarPlaceholder}>
-                                {userInfo?.photo_uri ? (
-                                    <Image source={{ uri: userInfo.photo_uri }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
-                                ) : (
-                                    <Ionicons name="person" size={20} color={colors.primary} />
-                                )}
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Greeting */}
-                <View style={styles.headerGreeting}>
-                    <Text style={styles.greetingTitle}>Hi {userInfo?.full_name || userInfo?.username || 'Developer'},</Text>
-                    <Text style={styles.greetingSubtitle}>AI Powered Noise Cancellation</Text>
-                </View>
-            </View>
-
-            <View style={styles.contentWrapper}>
-                {/* Main Overlapping Card */}
-                <View style={[styles.mainCard, { backgroundColor: colors.card }]}>
-                    <View style={styles.mainCardTop}>
-                        <View style={styles.mainCardTopLeft}>
-                            <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? '#4A5568' : '#EBF8FF' }]}>
-                                <Ionicons name="pulse" size={16} color={colors.primary} />
-                            </View>
-                            {/* Status text removed */}
                         </View>
-                        <TouchableOpacity
-                            style={[styles.topUpButton, { backgroundColor: colors.primary }, isLive && { backgroundColor: '#E53E3E' }]}
-                            onPress={isLive ? stopLive : startLive}
-                            activeOpacity={0.8}
-                        >
-                            <Text style={styles.topUpButtonText}>{isLive ? "Stop Live" : "Start Live"}</Text>
-                        </TouchableOpacity>
-                    </View>
 
-                    <View style={[styles.divider, { backgroundColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]} />
 
-                    <View style={styles.mainCardBottom}>
-                        <View style={styles.mainCardBottomLeft}>
-                            <View style={styles.tagsRow}>
-                                <View style={[styles.tag, { backgroundColor: isDarkMode ? '#22543D' : '#E6FFFA' }]}>
-                                    <Text style={[styles.tagText, { color: isDarkMode ? '#9AE6B4' : '#319795' }]}>AI Mode</Text>
+
+                        <View style={styles.mainCardBottom}>
+                            <View style={styles.mainCardBottomLeft}>
+                                <View style={styles.tagsRow}>
+                                    <View style={[styles.tag, { backgroundColor: isDarkMode ? '#22543D' : '#E6FFFA' }]}>
+                                        <Text style={[styles.tagText, { color: isDarkMode ? '#9AE6B4' : '#319795' }]}>AI Mode</Text>
+                                    </View>
+                                    <View style={[styles.tag, { backgroundColor: isDarkMode ? '#2C5282' : '#EBF8FF' }]}>
+                                        <Text style={[styles.tagText, { color: isDarkMode ? '#90CDF4' : '#3182CE' }]}>Denoise</Text>
+                                    </View>
                                 </View>
-                                <View style={[styles.tag, { backgroundColor: isDarkMode ? '#2C5282' : '#EBF8FF' }]}>
-                                    <Text style={[styles.tagText, { color: isDarkMode ? '#90CDF4' : '#3182CE' }]}>Denoise</Text>
+
+                                <View style={styles.targetInfoRow}>
+                                    <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#22543D' : '#C6F6D5' }]}>
+                                        <Ionicons name="swap-vertical" size={16} color={isDarkMode ? '#9AE6B4' : '#38A169'} />
+                                    </View>
+                                    <View style={{ marginLeft: 10 }}>
+                                        <Text style={[styles.activeTargetTitle, { color: colors.text }]}>
+                                            {availableTargets.find(t => t.id === target)?.label}
+                                        </Text>
+                                        <Text style={styles.activeTargetSubtitle}>
+                                            {isLive ? 'Edge suppression active' : 'Ready for live suppression'}
+                                        </Text>
+                                    </View>
                                 </View>
                             </View>
 
-                            <View style={styles.targetInfoRow}>
-                                <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#22543D' : '#C6F6D5' }]}>
-                                    <Ionicons name="swap-vertical" size={16} color={isDarkMode ? '#9AE6B4' : '#38A169'} />
-                                </View>
-                                <View style={{ marginLeft: 10 }}>
-                                    <Text style={[styles.activeTargetTitle, { color: colors.text }]}>
-                                        {availableTargets.find(t => t.id === target)?.label}
-                                    </Text>
-                                    <Text style={styles.activeTargetSubtitle}>
-                                        {isLive ? 'Edge suppression active' : 'Ready for live suppression'}
-                                    </Text>
+                            <View style={styles.mainCardBottomRight}>
+                                <View style={styles.circularProgressWrap}>
+                                    <View style={[styles.circularProgressInner, { backgroundColor: colors.card }]}>
+                                        <Text style={[styles.circleValueText, { color: colors.text }]}>{isLive ? "LIVE" : "RDY"}</Text>
+                                        <Text style={styles.circleSubText}>/ SNS</Text>
+                                    </View>
+                                    <View style={[styles.circleBorder, { borderRightColor: colors.primary, borderBottomColor: colors.primary, transform: [{ rotate: isLive ? '45deg' : '225deg' }] }]} />
+                                    <View style={[styles.circleBorderTrack, { borderColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]} />
                                 </View>
                             </View>
                         </View>
-
-                        <View style={styles.mainCardBottomRight}>
-                            <View style={styles.circularProgressWrap}>
-                                <View style={[styles.circularProgressInner, { backgroundColor: colors.card }]}>
-                                    <Text style={[styles.circleValueText, { color: colors.text }]}>{isLive ? "LIVE" : "RDY"}</Text>
-                                    <Text style={styles.circleSubText}>/ SNS</Text>
-                                </View>
-                                <View style={[styles.circleBorder, { borderRightColor: colors.primary, borderBottomColor: colors.primary, transform: [{ rotate: isLive ? '45deg' : '225deg' }] }]} />
-                                <View style={[styles.circleBorderTrack, { borderColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]} />
-                            </View>
-                        </View>
                     </View>
-                </View>
 
-                {/* Select Noise Type Section */}
+                    {/* Select Noise Type Section */}
                     <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Noise To Suppress</Text>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-                    {availableTargets.map((t) => (
-                        <TouchableOpacity
-                            key={t.id}
-                            style={[
-                                styles.horizontalCard,
-                                { backgroundColor: colors.card },
-                                target === t.id && { borderColor: colors.primary, borderWidth: 2 }
-                            ]}
-                            onPress={() => setTarget(t.id)}
-                            activeOpacity={0.8}
-                        >
-                            <View style={styles.horizontalCardTop}>
-                                <View style={[
-                                    styles.iconContainerGreen, 
-                                    { backgroundColor: isDarkMode ? '#4A5568' : '#C6F6D5' },
-                                    target === t.id && { backgroundColor: colors.primary }
-                                ]}>
-                                    <Ionicons name={t.icon as any} size={16} color={target === t.id ? '#FFF' : (isDarkMode ? '#9AE6B4' : '#38A169')} />
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                        {availableTargets.map((t) => (
+                            <TouchableOpacity
+                                key={t.id}
+                                style={[
+                                    styles.horizontalCard,
+                                    { backgroundColor: colors.card },
+                                    target === t.id && { borderColor: colors.primary, borderWidth: 2 }
+                                ]}
+                                onPress={() => setTarget(t.id)}
+                                activeOpacity={0.8}
+                            >
+                                <View style={styles.horizontalCardTop}>
+                                    <View style={[
+                                        styles.iconContainerGreen,
+                                        { backgroundColor: isDarkMode ? '#4A5568' : '#C6F6D5' },
+                                        target === t.id && { backgroundColor: colors.primary }
+                                    ]}>
+                                        <Ionicons name={t.icon as any} size={16} color={target === t.id ? '#FFF' : (isDarkMode ? '#9AE6B4' : '#38A169')} />
+                                    </View>
+                                    <Text style={[styles.horizontalCardTitle, { color: colors.text }]} numberOfLines={1}>{t.label}</Text>
                                 </View>
-                                <Text style={[styles.horizontalCardTitle, { color: colors.text }]} numberOfLines={1}>{t.label}</Text>
-                            </View>
-                            <Text style={[styles.horizontalCardDesc, { color: isDarkMode ? '#E2E8F0' : '#4A5568' }]}>Apply target</Text>
-                            <Text style={styles.horizontalCardSub}>{t.transient ? 'Transient-aware profile' : 'Steady-noise profile'}</Text>
-                            {/* Option and chevron removed */}
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
+                                <Text style={[styles.horizontalCardDesc, { color: isDarkMode ? '#E2E8F0' : '#4A5568' }]}>Apply target</Text>
+                                <Text style={styles.horizontalCardSub}>{t.transient ? 'Transient-aware profile' : 'Steady-noise profile'}</Text>
+                                {/* Option and chevron removed */}
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
 
-                {/* Runtime Section */}
-                {(runtimeInfo || debugInfo) && (
-                    <View style={styles.playbackSection}>
-                        <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 15 }]}>Live Runtime</Text>
-
-                        <View style={[styles.playbackCard, { backgroundColor: colors.card }]}>
-                            <View style={styles.playbackLeft}>
-                                <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#22543D' : '#C6F6D5' }]}>
-                                    <Ionicons name="hardware-chip-outline" size={16} color={isDarkMode ? '#9AE6B4' : '#38A169'} />
-                                </View>
-                                <View style={{ marginLeft: 15 }}>
-                                    <Text style={[styles.playbackTitle, { color: colors.text }]}>Runtime</Text>
-                                    <Text style={styles.playbackSub}>
-                                        {runtimeInfo?.displayName ?? runtimeInfo?.provider ?? 'pending'} / {runtimeInfo?.modelVersion ?? 'unloaded'}
-                                    </Text>
-                                </View>
+                    {/* Latest Result Section */}
+                    {lastRecordingUri && (
+                        <View style={styles.playbackSection}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={[styles.sectionTitle, { color: colors.text }]}>Latest Result</Text>
+                                <TouchableOpacity onPress={clearLastRecording}>
+                                    <Text style={[styles.sectionLink, { color: '#E53E3E' }]}>Clear</Text>
+                                </TouchableOpacity>
                             </View>
-                            <View style={[styles.playBadge, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
-                                <Text style={[styles.playBadgeText, { color: colors.primary }]}>
-                                    {runtimeInfo?.sampleRate ?? '--'} Hz
-                                </Text>
+
+                            <View style={[styles.playbackCard, { backgroundColor: colors.card, borderLeftWidth: 4, borderLeftColor: colors.primary }]}>
+                                <View style={styles.playbackLeft}>
+                                    <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? '#4A5568' : '#EBF8FF' }]}>
+                                        <Ionicons name="musical-note" size={18} color={colors.primary} />
+                                    </View>
+                                    <View style={{ marginLeft: 15 }}>
+                                        <Text style={[styles.playbackTitle, { color: colors.text }]}>Processed Snippet</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text style={styles.playbackSub}>Saved to </Text>
+                                            <TouchableOpacity onPress={() => navigation.navigate('Recordings')}>
+                                                <Text style={[styles.playbackSub, { color: colors.primary, fontWeight: '700' }]}>Library</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                </View>
+                                <View style={{ flexDirection: 'row' }}>
+                                    <TouchableOpacity
+                                        style={[styles.playButton, { backgroundColor: colors.primary, marginRight: 8 }]}
+                                        onPress={isPlaying ? stopPlayback : playRecording}
+                                    >
+                                        <Ionicons name={isPlaying ? "stop" : "play"} size={20} color="#FFF" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.playButton, { backgroundColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]}
+                                        onPress={() => navigation.navigate('Recordings')}
+                                    >
+                                        <Ionicons name="list" size={20} color={colors.text} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
 
-                        <View style={[styles.playbackCard, { backgroundColor: colors.card }]}>
-                            <View style={styles.playbackLeft}>
-                                <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#2C5282' : '#EBF8FF' }]}>
-                                    <Ionicons name="speedometer-outline" size={16} color={isDarkMode ? '#90CDF4' : '#3182CE'} />
+                    )}
+
+                    {/* Runtime Section */}
+
+                    {(runtimeInfo || debugInfo) && (
+                        <View style={styles.playbackSection}>
+                            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 15 }]}>Live Runtime</Text>
+
+                            <View style={[styles.playbackCard, { backgroundColor: colors.card }]}>
+                                <View style={styles.playbackLeft}>
+                                    <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#22543D' : '#C6F6D5' }]}>
+                                        <Ionicons name="hardware-chip-outline" size={16} color={isDarkMode ? '#9AE6B4' : '#38A169'} />
+                                    </View>
+                                    <View style={{ marginLeft: 15 }}>
+                                        <Text style={[styles.playbackTitle, { color: colors.text }]}>Runtime</Text>
+                                        <Text style={styles.playbackSub}>
+                                            {runtimeInfo?.displayName ?? runtimeInfo?.provider ?? 'pending'} / {runtimeInfo?.modelVersion ?? 'unloaded'}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View style={{ marginLeft: 15 }}>
-                                    <Text style={[styles.playbackTitle, { color: colors.text }]}>Live Metrics</Text>
-                                    <Text style={styles.playbackSub}>
-                                        {liveStatus?.inferenceMs?.toFixed(1) ?? '--'} ms infer / {liveStatus?.queueDepthMs?.toFixed(1) ?? '--'} ms queue
+                                <View style={[styles.playBadge, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
+                                    <Text style={[styles.playBadgeText, { color: colors.primary }]}>
+                                        {runtimeInfo?.sampleRate ?? '--'} Hz
                                     </Text>
                                 </View>
                             </View>
-                            <View style={[styles.playBadge, { backgroundColor: colors.primary }]}>
-                                <Text style={[styles.playBadgeText, { color: '#FFF' }]}>
-                                    XR {liveStatus?.xruns ?? 0}
-                                </Text>
-                            </View>
-                        </View>
 
-                        <View style={[styles.playbackCard, { backgroundColor: colors.card, alignItems: 'flex-start' }]}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[styles.playbackTitle, { color: colors.text, marginBottom: 6 }]}>Status</Text>
-                                <Text style={styles.playbackSub}>{status}</Text>
-                                <Text style={[styles.debugText, { color: colors.text, marginTop: 12 }]}>
-                                    {debugInfo}
-                                </Text>
-                                {meter && (
-                                    <Text style={styles.playbackSub}>
-                                        In peak {meter.peakIn.toFixed(3)} / Out peak {meter.peakOut.toFixed(3)}
+                            <View style={[styles.playbackCard, { backgroundColor: colors.card }]}>
+                                <View style={styles.playbackLeft}>
+                                    <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#2C5282' : '#EBF8FF' }]}>
+                                        <Ionicons name="speedometer-outline" size={16} color={isDarkMode ? '#90CDF4' : '#3182CE'} />
+                                    </View>
+                                    <View style={{ marginLeft: 15 }}>
+                                        <Text style={[styles.playbackTitle, { color: colors.text }]}>Live Metrics</Text>
+                                        <Text style={styles.playbackSub}>
+                                            {liveStatus?.inferenceMs?.toFixed(1) ?? '--'} ms infer / {liveStatus?.queueDepthMs?.toFixed(1) ?? '--'} ms queue
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={[styles.playBadge, { backgroundColor: colors.primary }]}>
+                                    <Text style={[styles.playBadgeText, { color: '#FFF' }]}>
+                                        XR {liveStatus?.xruns ?? 0}
                                     </Text>
-                                )}
+                                </View>
+                            </View>
+
+                            <View style={[styles.playbackCard, { backgroundColor: colors.card, alignItems: 'flex-start' }]}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[styles.playbackTitle, { color: colors.text, marginBottom: 6 }]}>Status</Text>
+                                    <Text style={styles.playbackSub}>{status}</Text>
+                                    <Text style={[styles.debugText, { color: colors.text, marginTop: 12 }]}>
+                                        {debugInfo}
+                                    </Text>
+                                    {meter && (
+                                        <Text style={styles.playbackSub}>
+                                            In peak {meter.peakIn.toFixed(3)} / Out peak {meter.peakOut.toFixed(3)}
+                                        </Text>
+                                    )}
+                                </View>
                             </View>
                         </View>
-                    </View>
-                )}
-            </View>
+                    )}
+                </View>
 
-            <StatusBar style="light" />
+                <StatusBar style="light" />
             </ScrollView>
         </View>
     );
@@ -575,4 +694,26 @@ const styles = StyleSheet.create({
         marginBottom: 10,
         fontFamily: 'monospace',
     },
+    recordToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#EDF2F7',
+    },
+    recordToggleText: {
+        fontSize: 12,
+        fontWeight: '600',
+        marginLeft: 6,
+    },
+    playButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
 });
+
