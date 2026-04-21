@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRecordings } from '../context/RecordingsContext';
 
 
@@ -176,7 +176,11 @@ export const useSuppressionDemo = ({
   const [isRecordEnabled, setIsRecordEnabled] = useState(false);
   const [lastRecordingUri, setLastRecordingUri] = useState<string | null>(null);
   const activeRecordUri = useRef<string | null>(null);
+  const sessionIntendedToRecord = useRef(false);
+  const currentSessionId = useRef<string | null>(null);
   const { addRecording } = useRecordings();
+
+
 
 
 
@@ -226,34 +230,58 @@ export const useSuppressionDemo = ({
     const finishedSub = suppressionEngineService.addFinishedListener(async (event) => {
       console.log('[useSuppressionDemo] Native engine finished draining:', event.sessionId);
 
-      if (activeRecordUri.current && isRecordEnabled) {
-        const uri = activeRecordUri.current;
-        setLastRecordingUri(uri);
+      // Only process if it's the session we are tracking
+      if (event.sessionId !== currentSessionId.current) {
+        console.log('[useSuppressionDemo] Ignoring finished event for old/mismatched session:', event.sessionId);
+        return;
+      }
 
-        // Auto-save to gallery
+      if (activeRecordUri.current && sessionIntendedToRecord.current) {
+        const uri = activeRecordUri.current;
+
+        // Add a small cache buster to the URI to force UI refresh
+        const busterUri = `${uri}?t=${Date.now()}`;
+        setLastRecordingUri(busterUri);
+
+        // Auto-save to library
         const category = nativeCategories.find((v) => v.id === target);
         try {
+          // Verify file exists and has size
+          const fileInfo = await FileSystem.getInfoAsync(uri);
+          console.log(`[useSuppressionDemo] Recording file info: exists=${fileInfo.exists}, size=${(fileInfo as any).size} bytes`);
+
           await addRecording({
+
             id: Date.now().toString(),
             uri: uri,
             category: target,
             categoryLabel: category?.label ?? target,
             createdAt: Date.now(),
           });
-          console.log('[useSuppressionDemo] Successfully saved to gallery after background drain:', uri);
+          console.log('[useSuppressionDemo] Successfully saved to library after background drain:', uri);
         } catch (err) {
-          console.error('[useSuppressionDemo] Failed to save gallery after background drain', err);
+          console.error('[useSuppressionDemo] Failed to save library after background drain', err);
         }
         activeRecordUri.current = null;
+        sessionIntendedToRecord.current = false;
+        currentSessionId.current = null;
+      } else {
+        console.log('[useSuppressionDemo] Session ended but no recording saved. activeUri:', !!activeRecordUri.current, 'intended:', sessionIntendedToRecord.current);
+        activeRecordUri.current = null;
+        sessionIntendedToRecord.current = false;
+        currentSessionId.current = null;
       }
     });
+
+
 
     return () => {
       statusSub.remove();
       meterSub.remove();
       finishedSub.remove();
     };
-  }, [nativeEngineAvailable, isRecordEnabled, target, nativeCategories, addRecording]);
+  }, [nativeEngineAvailable, target, nativeCategories, addRecording]);
+
 
 
   useEffect(() => {
@@ -301,10 +329,13 @@ export const useSuppressionDemo = ({
       const result = await suppressionEngineService.startLive({
         categoryId: category.id,
         aggressiveness: category.defaultAggressiveness,
-        hopMs: 500,
-        lookaheadMs: 250,
+        hopMs: 200,
+        lookaheadMs: 100,
         recordEnabled: isRecordEnabled,
       });
+
+      console.log(`[useSuppressionDemo] Starting session: ${result.sessionId}`);
+      currentSessionId.current = result.sessionId;
 
       // Native returns the actual record path it created
       if (result.recordPath) {
@@ -312,17 +343,22 @@ export const useSuppressionDemo = ({
         const uri = Platform.OS === 'android' ? `file://${result.recordPath}` : result.recordPath;
         console.log(`[useSuppressionDemo] Native recording to: ${uri}`);
         activeRecordUri.current = uri;
+        sessionIntendedToRecord.current = true;
         setLastRecordingUri(null);
       } else {
         console.log('[useSuppressionDemo] No recording path returned (recording disabled).');
         activeRecordUri.current = null;
+        sessionIntendedToRecord.current = false;
       }
-    } catch (error: any) {
 
+    } catch (error: any) {
       console.error('[useSuppressionDemo] startLive failed:', error);
       setStatus(`Error: ${error.message || 'Failed to start'}`);
       setIsLive(false);
       activeRecordUri.current = null;
+      sessionIntendedToRecord.current = false;
+      currentSessionId.current = null;
+      setLastRecordingUri(null); // Clear card on start error
       throw error;
     }
 
