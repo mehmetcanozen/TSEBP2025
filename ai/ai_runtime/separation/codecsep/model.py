@@ -13,6 +13,7 @@ import importlib.util
 import json
 import logging
 import math
+import os
 from pathlib import Path
 import sys
 from typing import Any, List, Mapping, Optional
@@ -37,6 +38,10 @@ from .modules import (
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+
+# Keep CLAP/Transformers on the PyTorch-only path in this workspace.
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 
 
 def _resolve_conditioning_num_classes(
@@ -658,10 +663,9 @@ class _LegacyRuntimeCodecSep(nn.Module, CodecMixin):
                         zero_mask[index] = True
                 elif normalized_mode != "present" and self.conditioning_zero_for_absent:
                     zero_mask[index] = True
-        if bool(zero_mask.any().item()):
-            embeddings = embeddings.clone()
-            embeddings[zero_mask] = 0.0
-        return embeddings
+        if zero_mask.ndim < embeddings.ndim:
+            zero_mask = zero_mask.unsqueeze(-1)
+        return torch.where(zero_mask, torch.zeros_like(embeddings), embeddings)
 
     def _encode_class_id_batch(
         self,

@@ -1,0 +1,83 @@
+# Exact-15 category surface for the frozen CodecSepDNRv2_15Cat backend.
+#
+# This mirrors the AudioSepHive15Cat category surface, but uses the
+# frozen CodecSep class-id export running at 16 kHz / 2 s windows.
+
+categories:
+  speech:
+    codecsep15_targets: ["speech"]
+    detection_threshold: -1
+    aggressiveness_override: 1.4
+
+  music:
+    codecsep15_targets: ["music"]
+    detection_threshold: -1
+    aggressiveness_override: 1.5
+
+  dog barking:
+    codecsep15_targets: ["dog barking"]
+    detection_threshold: -1
+    aggressiveness_override: 1.9
+
+  car engine:
+    codecsep15_targets: ["car engine"]
+    detection_threshold: -1
+    aggressiveness_override: 1.8
+
+  footsteps:
+    codecsep15_targets: ["footsteps"]
+    detection_threshold: -1
+    aggressiveness_override: 1.5
+
+  rain:
+    codecsep15_targets: ["rain"]
+    detection_threshold: -1
+    aggressiveness_override: 1.3
+
+  wind:
+    codecsep15_targets: ["wind"]
+    detection_threshold: -1
+    aggressiveness_override: 1.6
+
+  keyboard typing:
+    codecsep15_targets: ["keyboard typing"]
+    detection_threshold: -1
+    transient: true
+    aggressiveness_override: 2.2
+
+  phone ringing:
+    codecsep15_targets: ["phone ringing"]
+    detection_threshold: -1
+    aggressiveness_override: 2.0
+
+  crowd noise:
+    codecsep15_targets: ["crowd noise"]
+    detection_threshold: -1
+    aggressiveness_override: 1.5
+
+  bird singing:
+    codecsep15_targets: ["bird singing"]
+    detection_threshold: -1
+    aggressiveness_override: 1.5
+
+  water flowing:
+    codecsep15_targets: ["water flowing"]
+    detection_threshold: -1
+    aggressiveness_override: 1.4
+
+  door knocking:
+    codecsep15_targets: ["door knocking"]
+    detection_threshold: -1
+    transient: true
+    aggressiveness_override: 2.0
+
+  alarm:
+    codecsep15_targets: ["alarm"]
+    detection_threshold: -1
+    transient: true
+    aggressiveness_override: 2.3
+
+  background noise:
+    codecsep15_targets: ["background noise"]
+    detection_threshold: -1
+    aggressiveness_override: 1.2

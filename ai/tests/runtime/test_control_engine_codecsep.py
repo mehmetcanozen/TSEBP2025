@@ -94,3 +94,38 @@ def test_control_engine_forwards_audiosep_hive15cat_suppression_params(tmp_path)
     assert call["audiosep_hive15cat_model_path"] == "C:/tmp/frozensep_hive_15cat.onnx"
     assert call["audiosep_hive15cat_device"] == "cpu"
     assert call["audiosep_hive15cat_realtime_hop_seconds"] == 1.25
+
+
+def test_control_engine_forwards_codecsep_dnrv2_15cat_suppression_params(tmp_path):
+    manager = ProfileManager(profiles_dir=tmp_path / "profiles")
+    profile = manager.create_profile(
+        name="CodecSep15 Profile",
+        suppressions={"alarm": True},
+        suppression_params={
+            "separator_backend": "codecsep_dnrv2_15cat",
+            "masking_method": "wiener_dd",
+            "detection_threshold": -1,
+            "aggressiveness": 1.6,
+            "codecsep_dnrv2_15cat_model_path": "C:/tmp/codecsep_dnrv2_15cat.pte",
+            "codecsep_dnrv2_15cat_runtime": "executorch",
+            "codecsep_dnrv2_15cat_device": "cpu",
+            "codecsep_dnrv2_15cat_realtime_hop_seconds": 0.5,
+        },
+    )
+    suppressor = CaptureSuppressor()
+    engine = ControlEngine(profile_manager=manager, suppressor=suppressor)
+    engine.set_profile(profile)
+
+    audio = np.zeros(1600, dtype=np.float32)
+    out = engine.process_audio(audio, 16000)
+
+    assert np.array_equal(out, audio)
+    assert len(suppressor.calls) == 1
+    call = suppressor.calls[0]
+    assert call["suppress_categories"] == ["alarm"]
+    assert call["separator_backend"] == "codecsep_dnrv2_15cat"
+    assert call["masking_method"] == "wiener_dd"
+    assert call["codecsep_dnrv2_15cat_model_path"] == "C:/tmp/codecsep_dnrv2_15cat.pte"
+    assert call["codecsep_dnrv2_15cat_runtime"] == "executorch"
+    assert call["codecsep_dnrv2_15cat_device"] == "cpu"
+    assert call["codecsep_dnrv2_15cat_realtime_hop_seconds"] == 0.5

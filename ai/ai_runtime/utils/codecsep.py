@@ -357,12 +357,15 @@ def add_codecsep_runtime_arguments(
         parser.add_argument(
             "--separator-backend",
             type=str,
-            choices=["waveformer", "codecsep", "audiosep_hive15cat"],
+            choices=["waveformer", "codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"],
             default="waveformer",
             help=(
-                "Separation model: waveformer (default), codecsep, or audiosep_hive15cat. "
+                "Separation model: waveformer (default), codecsep, audiosep_hive15cat, "
+                "or codecsep_dnrv2_15cat. "
                 "CodecSep defaults to the active AudioCaps run directory under ai/models/CodecSep/. "
-                "AudioSepHive15Cat defaults to ai/models/AudioSepHive15Cat/frozensep_hive_15cat.onnx."
+                "AudioSepHive15Cat defaults to ai/models/AudioSepHive15Cat/frozensep_hive_15cat.onnx. "
+                "CodecSepDNRv2_15Cat defaults to ai/models/CodecSepDNRv2_15Cat/ and uses "
+                "--codecsep15-runtime to choose ONNX or ExecuTorch."
             ),
         )
     if include_masking:
@@ -396,6 +399,43 @@ def add_codecsep_runtime_arguments(
         type=float,
         default=1.0,
         help="Buffered live inference hop in seconds for AudioSepHive15Cat realtime mode.",
+    )
+    parser.add_argument(
+        "--codecsep15-model",
+        type=str,
+        default=None,
+        help=(
+            "CodecSepDNRv2_15Cat packaged model file or model directory override. "
+            "Resolves codecsep_dnrv2_15cat.onnx or codecsep_dnrv2_15cat.pte depending on "
+            "--codecsep15-runtime."
+        ),
+    )
+    parser.add_argument(
+        "--codecsep15-runtime",
+        type=str,
+        choices=["onnx", "executorch"],
+        default="onnx",
+        help=(
+            "Packaged CodecSepDNRv2_15Cat runtime: onnx (default) or executorch. "
+            "Use with --separator-backend codecsep_dnrv2_15cat. "
+            "On Windows desktop, executorch expects a XNNPACK-lowered .pte; "
+            "the older portable export will fail fast instead of hanging."
+        ),
+    )
+    parser.add_argument(
+        "--codecsep15-device",
+        type=str,
+        default=None,
+        help=(
+            "Optional CodecSepDNRv2_15Cat execution hint, e.g. cpu or cuda. "
+            "ExecuTorch currently runs on CPU and ignores non-CPU device hints."
+        ),
+    )
+    parser.add_argument(
+        "--codecsep15-realtime-hop",
+        type=float,
+        default=0.5,
+        help="Buffered live inference hop in seconds for CodecSepDNRv2_15Cat realtime mode.",
     )
     parser.add_argument(
         "--codecsep-checkpoint",
@@ -509,6 +549,9 @@ def build_suppressor_kwargs_from_args(args: Any) -> dict[str, Any]:
         "masking_method": getattr(args, "masking_method", "wiener_dd"),
         "audiosep_hive15cat_model_path": getattr(args, "audiosep15_model", None),
         "audiosep_hive15cat_device": getattr(args, "audiosep15_device", None),
+        "codecsep_dnrv2_15cat_model_path": getattr(args, "codecsep15_model", None),
+        "codecsep_dnrv2_15cat_runtime": getattr(args, "codecsep15_runtime", "onnx"),
+        "codecsep_dnrv2_15cat_device": getattr(args, "codecsep15_device", None),
         "codecsep_checkpoint_path": getattr(args, "codecsep_checkpoint", None),
         "codecsep_device": getattr(args, "codecsep_device", None),
     }
@@ -530,6 +573,12 @@ def build_codecsep_call_kwargs_from_args(args: Any) -> dict[str, Any]:
         "audiosep_hive15cat_device": getattr(args, "audiosep15_device", None),
         "audiosep_hive15cat_realtime_hop_seconds": float(
             getattr(args, "audiosep15_realtime_hop", 1.0) or 1.0
+        ),
+        "codecsep_dnrv2_15cat_model_path": getattr(args, "codecsep15_model", None),
+        "codecsep_dnrv2_15cat_runtime": getattr(args, "codecsep15_runtime", "onnx"),
+        "codecsep_dnrv2_15cat_device": getattr(args, "codecsep15_device", None),
+        "codecsep_dnrv2_15cat_realtime_hop_seconds": float(
+            getattr(args, "codecsep15_realtime_hop", 0.5) or 0.5
         ),
         "codecsep_prompt_overrides": build_codecsep_prompt_overrides_from_args(args),
         "codecsep_negative_prompts": normalize_codecsep_prompt_value(

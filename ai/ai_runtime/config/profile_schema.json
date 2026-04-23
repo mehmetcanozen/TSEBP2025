@@ -90,9 +90,9 @@
       "properties": {
         "separator_backend": {
           "type": "string",
-          "enum": ["waveformer", "codecsep", "audiosep_hive15cat"],
+          "enum": ["waveformer", "codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"],
           "default": "waveformer",
-          "description": "Which separation model to use (waveformer = 41-class target extractor, codecsep = 3-stem text-guided separator, audiosep_hive15cat = exact-15 ONNX separator)"
+          "description": "Which separation model to use (waveformer = 41-class target extractor, codecsep = 3-stem text-guided separator, audiosep_hive15cat = exact-15 AudioSep ONNX separator, codecsep_dnrv2_15cat = exact-15 frozen CodecSep DNRv2 packaged separator with ONNX or ExecuTorch runtime)"
         },
         "masking_method": {
           "type": "string",
@@ -112,6 +112,25 @@
           "type": "number",
           "minimum": 0,
           "description": "Buffered realtime inference hop for AudioSepHive15Cat live mode"
+        },
+        "codecsep_dnrv2_15cat_model_path": {
+          "type": "string",
+          "description": "Optional CodecSepDNRv2_15Cat packaged model path or model directory override; resolves .onnx or .pte based on codecsep_dnrv2_15cat_runtime"
+        },
+        "codecsep_dnrv2_15cat_runtime": {
+          "type": "string",
+          "enum": ["onnx", "executorch"],
+          "default": "onnx",
+          "description": "Runtime for the packaged CodecSepDNRv2_15Cat separator"
+        },
+        "codecsep_dnrv2_15cat_device": {
+          "type": "string",
+          "description": "Optional CodecSepDNRv2_15Cat execution hint, e.g. cpu or cuda; ExecuTorch currently runs on CPU"
+        },
+        "codecsep_dnrv2_15cat_realtime_hop_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Buffered realtime inference hop for CodecSepDNRv2_15Cat live mode"
         },
         "codecsep_checkpoint_path": {
           "type": "string",

@@ -66,7 +66,7 @@ class BatchProcessor:
         backend = getattr(self.suppressor, "separator_backend", "waveformer")
         if universal_prompts and backend != "codecsep":
             return False
-        return backend in {"codecsep", "audiosep_hive15cat"}
+        return backend in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"}
 
     def _suppress_mono_chunk(
         self,
@@ -81,6 +81,10 @@ class BatchProcessor:
         audiosep_hive15cat_model_path: Optional[str],
         audiosep_hive15cat_device: Optional[str],
         audiosep_hive15cat_realtime_hop_seconds: float,
+        codecsep_dnrv2_15cat_model_path: Optional[str],
+        codecsep_dnrv2_15cat_runtime: str,
+        codecsep_dnrv2_15cat_device: Optional[str],
+        codecsep_dnrv2_15cat_realtime_hop_seconds: float,
         codecsep_prompt_overrides: Optional[dict[str, list[str]]],
         codecsep_negative_prompts: Optional[list[str]],
         codecsep_preserve_prompts: Optional[list[str]],
@@ -103,6 +107,10 @@ class BatchProcessor:
             audiosep_hive15cat_model_path=audiosep_hive15cat_model_path,
             audiosep_hive15cat_device=audiosep_hive15cat_device,
             audiosep_hive15cat_realtime_hop_seconds=audiosep_hive15cat_realtime_hop_seconds,
+            codecsep_dnrv2_15cat_model_path=codecsep_dnrv2_15cat_model_path,
+            codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
+            codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
+            codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
             codecsep_prompt_overrides=codecsep_prompt_overrides,
             codecsep_negative_prompts=codecsep_negative_prompts,
             codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -118,7 +126,7 @@ class BatchProcessor:
             backend = getattr(self.suppressor, "separator_backend", "waveformer")
             clean_audio = np.asarray(result["clean_audio"], dtype=chunk.dtype)
             removed_audio = np.asarray(result["removed_audio"], dtype=chunk.dtype)
-            if backend == "audiosep_hive15cat":
+            if backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}:
                 removed_audio = np.asarray(chunk - clean_audio, dtype=chunk.dtype)
             return (
                 clean_audio,
@@ -157,6 +165,10 @@ class BatchProcessor:
         audiosep_hive15cat_model_path: Optional[str],
         audiosep_hive15cat_device: Optional[str],
         audiosep_hive15cat_realtime_hop_seconds: float,
+        codecsep_dnrv2_15cat_model_path: Optional[str],
+        codecsep_dnrv2_15cat_runtime: str,
+        codecsep_dnrv2_15cat_device: Optional[str],
+        codecsep_dnrv2_15cat_realtime_hop_seconds: float,
         codecsep_prompt_overrides: Optional[dict[str, list[str]]],
         codecsep_negative_prompts: Optional[list[str]],
         codecsep_preserve_prompts: Optional[list[str]],
@@ -194,6 +206,10 @@ class BatchProcessor:
                         audiosep_hive15cat_model_path=audiosep_hive15cat_model_path,
                         audiosep_hive15cat_device=audiosep_hive15cat_device,
                         audiosep_hive15cat_realtime_hop_seconds=audiosep_hive15cat_realtime_hop_seconds,
+                        codecsep_dnrv2_15cat_model_path=codecsep_dnrv2_15cat_model_path,
+                        codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
+                        codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
+                        codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
                         codecsep_prompt_overrides=codecsep_prompt_overrides,
                         codecsep_negative_prompts=codecsep_negative_prompts,
                         codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -221,7 +237,7 @@ class BatchProcessor:
             mono_chunk = chunk.mean(axis=1)
             capture_removed = output_noise or (
                 getattr(self.suppressor, "separator_backend", "waveformer")
-                in {"codecsep", "audiosep_hive15cat"}
+                in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"}
             )
             clean_mono, removed_mono = self._suppress_mono_chunk(
                 mono_chunk,
@@ -234,6 +250,10 @@ class BatchProcessor:
                 audiosep_hive15cat_model_path=audiosep_hive15cat_model_path,
                 audiosep_hive15cat_device=audiosep_hive15cat_device,
                 audiosep_hive15cat_realtime_hop_seconds=audiosep_hive15cat_realtime_hop_seconds,
+                codecsep_dnrv2_15cat_model_path=codecsep_dnrv2_15cat_model_path,
+                codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
+                codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
+                codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
                 codecsep_prompt_overrides=codecsep_prompt_overrides,
                 codecsep_negative_prompts=codecsep_negative_prompts,
                 codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -247,7 +267,7 @@ class BatchProcessor:
             )
             if (
                 getattr(self.suppressor, "separator_backend", "waveformer")
-                in {"codecsep", "audiosep_hive15cat"}
+                in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"}
                 and removed_mono is not None
             ):
                 removed_stereo = self._project_mono_removed_to_stereo(chunk, removed_mono)
@@ -290,10 +310,20 @@ class BatchProcessor:
     def _codecsep_overlap_samples(sample_rate: int, chunk_size: int) -> int:
         return max(0, min(chunk_size // 10, int(sample_rate * 0.25)))
 
-    def _outer_overlap_samples(self, sample_rate: int, chunk_size: int) -> int:
+    def _outer_overlap_samples(
+        self,
+        sample_rate: int,
+        chunk_size: int,
+        *,
+        codecsep_dnrv2_15cat_runtime: str = "onnx",
+    ) -> int:
         backend = getattr(self.suppressor, "separator_backend", "waveformer")
         if backend == "audiosep_hive15cat":
             return max(0, min(chunk_size // 2, int(sample_rate * 1.0)))
+        if backend == "codecsep_dnrv2_15cat":
+            if str(codecsep_dnrv2_15cat_runtime).strip().casefold() == "executorch":
+                return 0
+            return max(0, min(chunk_size // 2, int(sample_rate * 0.5)))
         return self._codecsep_overlap_samples(sample_rate, chunk_size)
 
     @staticmethod
@@ -330,6 +360,10 @@ class BatchProcessor:
         audiosep_hive15cat_model_path: Optional[str] = None,
         audiosep_hive15cat_device: Optional[str] = None,
         audiosep_hive15cat_realtime_hop_seconds: float = 1.0,
+        codecsep_dnrv2_15cat_model_path: Optional[str] = None,
+        codecsep_dnrv2_15cat_runtime: str = "onnx",
+        codecsep_dnrv2_15cat_device: Optional[str] = None,
+        codecsep_dnrv2_15cat_realtime_hop_seconds: float = 0.5,
         codecsep_prompt_overrides: Optional[dict[str, list[str]]] = None,
         codecsep_negative_prompts: Optional[list[str]] = None,
         codecsep_preserve_prompts: Optional[list[str]] = None,
@@ -357,17 +391,33 @@ class BatchProcessor:
         if hasattr(self.suppressor, "reset_runtime_state"):
             self.suppressor.reset_runtime_state()
 
-        chunk_size = int(chunk_size_seconds * sample_rate)
+        backend = getattr(self.suppressor, "separator_backend", "waveformer")
+        effective_chunk_size_seconds = float(chunk_size_seconds)
+        if (
+            backend == "codecsep_dnrv2_15cat"
+            and str(codecsep_dnrv2_15cat_runtime).strip().casefold() == "executorch"
+            and effective_chunk_size_seconds > 2.0
+        ):
+            logger.info(
+                "CodecSepDNRv2_15Cat ExecuTorch uses 2.0s outer chunks on desktop "
+                "to avoid long first-chunk stalls."
+            )
+            effective_chunk_size_seconds = 2.0
+
+        chunk_size = int(effective_chunk_size_seconds * sample_rate)
         use_overlap_add = self._uses_overlap_add_chunking(
             suppress_all=suppress_all,
             universal_prompts=universal_prompts,
         )
 
         if use_overlap_add and len(audio) > chunk_size:
-            overlap_samples = self._outer_overlap_samples(sample_rate, chunk_size)
+            overlap_samples = self._outer_overlap_samples(
+                sample_rate,
+                chunk_size,
+                codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
+            )
             step_size = max(1, chunk_size - overlap_samples)
             num_chunks = (len(audio) + step_size - 1) // step_size
-            backend = getattr(self.suppressor, "separator_backend", "waveformer")
             logger.info(
                 "%s offline processing enabled overlap-add chunking (chunk=%.2fs, overlap=%.2fs)",
                 backend,
@@ -393,15 +443,19 @@ class BatchProcessor:
                         suppress_categories=suppress_categories,
                         detection_threshold=detection_threshold,
                         aggressiveness=aggressiveness,
-                        suppress_all=suppress_all,
-                        universal_prompts=universal_prompts,
-                        audiosep_hive15cat_model_path=audiosep_hive15cat_model_path,
-                        audiosep_hive15cat_device=audiosep_hive15cat_device,
-                        audiosep_hive15cat_realtime_hop_seconds=audiosep_hive15cat_realtime_hop_seconds,
-                        codecsep_prompt_overrides=codecsep_prompt_overrides,
-                        codecsep_negative_prompts=codecsep_negative_prompts,
-                        codecsep_preserve_prompts=codecsep_preserve_prompts,
-                        codecsep_mode=codecsep_mode,
+                    suppress_all=suppress_all,
+                    universal_prompts=universal_prompts,
+                    audiosep_hive15cat_model_path=audiosep_hive15cat_model_path,
+                    audiosep_hive15cat_device=audiosep_hive15cat_device,
+                    audiosep_hive15cat_realtime_hop_seconds=audiosep_hive15cat_realtime_hop_seconds,
+                    codecsep_dnrv2_15cat_model_path=codecsep_dnrv2_15cat_model_path,
+                    codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
+                    codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
+                    codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+                    codecsep_prompt_overrides=codecsep_prompt_overrides,
+                    codecsep_negative_prompts=codecsep_negative_prompts,
+                    codecsep_preserve_prompts=codecsep_preserve_prompts,
+                    codecsep_mode=codecsep_mode,
                         codecsep_query_strategy=codecsep_query_strategy,
                         codecsep_multistep_steps=codecsep_multistep_steps,
                         codecsep_stereo_mode=codecsep_stereo_mode,
@@ -453,15 +507,19 @@ class BatchProcessor:
                         suppress_categories=suppress_categories,
                         detection_threshold=detection_threshold,
                         aggressiveness=aggressiveness,
-                        suppress_all=suppress_all,
-                        universal_prompts=universal_prompts,
-                        audiosep_hive15cat_model_path=audiosep_hive15cat_model_path,
-                        audiosep_hive15cat_device=audiosep_hive15cat_device,
-                        audiosep_hive15cat_realtime_hop_seconds=audiosep_hive15cat_realtime_hop_seconds,
-                        codecsep_prompt_overrides=codecsep_prompt_overrides,
-                        codecsep_negative_prompts=codecsep_negative_prompts,
-                        codecsep_preserve_prompts=codecsep_preserve_prompts,
-                        codecsep_mode=codecsep_mode,
+                suppress_all=suppress_all,
+                universal_prompts=universal_prompts,
+                audiosep_hive15cat_model_path=audiosep_hive15cat_model_path,
+                audiosep_hive15cat_device=audiosep_hive15cat_device,
+                audiosep_hive15cat_realtime_hop_seconds=audiosep_hive15cat_realtime_hop_seconds,
+                codecsep_dnrv2_15cat_model_path=codecsep_dnrv2_15cat_model_path,
+                codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
+                codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
+                codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+                codecsep_prompt_overrides=codecsep_prompt_overrides,
+                codecsep_negative_prompts=codecsep_negative_prompts,
+                codecsep_preserve_prompts=codecsep_preserve_prompts,
+                codecsep_mode=codecsep_mode,
                         codecsep_query_strategy=codecsep_query_strategy,
                         codecsep_multistep_steps=codecsep_multistep_steps,
                         codecsep_stereo_mode=codecsep_stereo_mode,
@@ -557,6 +615,10 @@ def main(argv: Optional[list[str]] = None) -> None:
     universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
     codecsep_kwargs = build_codecsep_call_kwargs_from_args(args)
 
+    logger.info(
+        "Initializing suppression engine (backend=%s)...",
+        getattr(args, "separator_backend", "waveformer"),
+    )
     suppressor = SemanticSuppressor(**build_suppressor_kwargs_from_args(args))
     processor = BatchProcessor(suppressor=suppressor)
     stats = processor.process_file(

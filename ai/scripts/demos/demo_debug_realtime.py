@@ -8,7 +8,26 @@ import sys
 import time
 from pathlib import Path
 
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except ImportError:
+    class _MissingSoundDevice:
+        InputStream = None
+
+        @staticmethod
+        def query_devices(*_args, **_kwargs):
+            raise ImportError(
+                "sounddevice is required for realtime microphone demos. "
+                "Install with: pip install sounddevice"
+            )
+
+        def __getattr__(self, _name: str):
+            raise ImportError(
+                "sounddevice is required for realtime microphone demos. "
+                "Install with: pip install sounddevice"
+            )
+
+    sd = _MissingSoundDevice()
 
 _root = Path(__file__).resolve().parents[3]
 if str(_root) not in sys.path:
@@ -42,9 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None):
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.separator_backend == "audiosep_hive15cat":
+    if args.separator_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}:
         parser.error(
-            "audiosep_hive15cat is not supported in demo_debug_realtime.py because this demo "
+            f"{args.separator_backend} is not supported in demo_debug_realtime.py because this demo "
             "runs suppression inside the audio callback. Use ai.ai_runtime.audio.recorder_cleaner "
             "for buffered live support."
         )

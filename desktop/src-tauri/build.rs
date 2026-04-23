@@ -6,8 +6,10 @@ fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
     println!("cargo:rerun-if-changed=../ai/models/model_selection.json");
     println!("cargo:rerun-if-changed=../ai/models/AudioSepHive15Cat/model_package.json");
+    println!("cargo:rerun-if-changed=../ai/models/CodecSepDNRv2_15Cat/model_package.json");
     println!("cargo:rerun-if-changed=../ai/models/Waveformer/model_package.json");
     println!("cargo:rerun-if-changed=../ai/models/AudioSepHive15Cat/frozensep_hive_15cat.onnx");
+    println!("cargo:rerun-if-changed=../ai/models/CodecSepDNRv2_15Cat/codecsep_dnrv2_15cat.onnx");
     println!("cargo:rerun-if-changed=../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx");
 
     if let Err(error) = stage_onnx_runtime_dlls() {

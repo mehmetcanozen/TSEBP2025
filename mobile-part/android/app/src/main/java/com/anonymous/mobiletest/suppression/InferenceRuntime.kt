@@ -19,6 +19,7 @@ fun createSuppressionRuntime(
 ): SuppressionRuntime {
   return when (manifest.runtimeKind) {
     "onnx_category_separator" -> AudioSepOnnxRuntime(manifest, modelFile)
+    "executorch_category_separator" -> CodecSepExecuTorchRuntime(manifest, modelFile)
     "executorch_streaming_target_extractor" -> WaveformerExecuTorchRuntime(manifest, modelFile)
     else -> throw IllegalArgumentException("Unsupported runtime kind: ${manifest.runtimeKind}")
   }
@@ -172,6 +173,195 @@ private class AudioSepOnnxRuntime(
   ) : LiveSuppressionProcessor {
     private val contextSamples =
       max(1, (nativeSampleRate * (runtime.manifest.segmentSeconds ?: 5.0)).toInt())
+    private val preferredHopSamples =
+      max(1, nativeSampleRate * runtime.manifest.preferredLiveHopMs.orDefault(config.hopMs) / 1000)
+    private val rollingInput = RollingWindow(contextSamples + nativeSampleRate * 2)
+    private val masker = WienerMasker()
+
+    override fun preferredHopSamples(): Int = preferredHopSamples
+
+    override fun processChunk(chunk: FloatArray): FloatArray {
+      if (chunk.isEmpty()) {
+        return FloatArray(0)
+      }
+
+      rollingInput.append(chunk, chunk.size)
+      val context = rollingInput.latestPadded(contextSamples)
+      val peakValue = max(peak(context).toFloat(), 1f)
+      val normalized = FloatArray(context.size) { index ->
+        (context[index] / peakValue).coerceIn(-1f, 1f)
+      }
+      val resampled = linearResample(normalized, nativeSampleRate, runtime.manifest.sampleRate)
+      val unwantedResampled = runtime.separateCategory(resampled, category.id)
+      var unwanted = linearResample(unwantedResampled, runtime.manifest.sampleRate, nativeSampleRate)
+      if (unwanted.size != context.size) {
+        unwanted = unwanted.copyOf(context.size)
+      }
+
+      val separationRatio = (rms(unwanted) / max(rms(context), 1.0e-8)).toFloat()
+      if (separationRatio in 1.0e-6f..0.18f) {
+        val scale = min(0.18f / separationRatio, 1.15f)
+        for (index in unwanted.indices) {
+          unwanted[index] *= scale
+        }
+      }
+
+      val effectiveAggressiveness =
+        max(config.aggressiveness, category.defaultAggressiveness)
+      val nFft = if (category.transient) 1024 else 2048
+      val ddAlpha = if (category.transient) 0.92f else 0.98f
+      val clean = masker.apply(
+        mix = context,
+        unwanted = unwanted,
+        sampleRate = nativeSampleRate,
+        nFft = nFft,
+        options = MaskingOptions(
+          aggressiveness = effectiveAggressiveness,
+          ddAlpha = ddAlpha,
+          maskFloor = 0.07f,
+          maxSuppressionRatio = 0.82f,
+          speechDominanceThreshold = 2.5f,
+        )
+      )
+      val keep = min(chunk.size, clean.size)
+      return clean.copyOfRange(clean.size - keep, clean.size)
+    }
+
+    override fun close() = Unit
+  }
+}
+
+private class CodecSepExecuTorchRuntime(
+  private val manifest: ModelBundleManifest,
+  private val modelFile: File,
+) : SuppressionRuntime {
+  private val module = Module.load(modelFile.absolutePath)
+  private val lock = Any()
+  private val categoryOrder = manifest.categories.map { it.id }
+  private val segmentSamples =
+    max(1, (manifest.sampleRate * (manifest.segmentSeconds ?: 2.0)).toInt())
+  private val overlapSamples =
+    ((manifest.sampleRate * (manifest.overlapSeconds ?: 0.5)).roundToInt()).coerceAtLeast(0)
+
+  init {
+    warmup()
+  }
+
+  override fun runtimeInfo(bundlePath: String): RuntimeInfo {
+    return RuntimeInfo(
+      provider = "executorch",
+      warmed = true,
+      modelId = manifest.modelId,
+      modelFamily = manifest.modelFamily,
+      displayName = manifest.displayName,
+      runtimeKind = manifest.runtimeKind,
+      modelVersion = manifest.version,
+      modelPath = modelFile.absolutePath,
+      bundlePath = bundlePath,
+      sampleRate = manifest.sampleRate,
+      categoryCount = manifest.categories.size,
+      availableProviders = listOf("executorch"),
+    )
+  }
+
+  override fun categories(): List<CategoryProfile> = manifest.categories
+
+  override fun createLiveProcessor(
+    category: CategoryProfile,
+    nativeSampleRate: Int,
+    config: LiveConfig,
+  ): LiveSuppressionProcessor {
+    return CodecSepLiveProcessor(
+      runtime = this,
+      category = category,
+      nativeSampleRate = nativeSampleRate,
+      config = config,
+    )
+  }
+
+  override fun close() {
+    module.destroy()
+  }
+
+  private fun warmup() {
+    runWindow(FloatArray(segmentSamples), 0)
+  }
+
+  private fun categoryIndex(categoryId: String): Int {
+    val index = categoryOrder.indexOf(categoryId)
+    require(index >= 0) { "Unknown model category: $categoryId" }
+    return index
+  }
+
+  private fun separateCategory(audio: FloatArray, categoryId: String): FloatArray {
+    val categoryIndex = categoryIndex(categoryId)
+    if (audio.size <= segmentSamples) {
+      return runWindow(audio, categoryIndex)
+    }
+
+    val step = max(1, segmentSamples - overlapSamples)
+    val separated = FloatArray(audio.size)
+    val weights = FloatArray(audio.size)
+    var start = 0
+
+    while (true) {
+      val end = min(start + segmentSamples, audio.size)
+      val chunk = audio.copyOfRange(start, end)
+      val window = buildOverlapWindow(
+        length = chunk.size,
+        overlapSamples = min(overlapSamples, chunk.size),
+        fadeIn = start > 0,
+        fadeOut = end < audio.size,
+      )
+      val chunkOutput = runWindow(chunk, categoryIndex)
+      for (index in chunkOutput.indices) {
+        separated[start + index] += chunkOutput[index] * window[index]
+        weights[start + index] += window[index]
+      }
+      if (end >= audio.size) {
+        break
+      }
+      start += step
+    }
+
+    for (index in separated.indices) {
+      if (weights[index] > 1.0e-8f) {
+        separated[index] /= weights[index]
+      }
+    }
+    return separated
+  }
+
+  private fun runWindow(chunk: FloatArray, categoryIndex: Int): FloatArray {
+    val validLength = min(chunk.size, segmentSamples)
+    val padded = FloatArray(segmentSamples)
+    for (index in 0 until validLength) {
+      padded[index] = chunk[index]
+    }
+
+    val labelVector = FloatArray(categoryOrder.size)
+    labelVector[categoryIndex] = 1f
+    var separated = FloatArray(validLength)
+
+    synchronized(lock) {
+      val outputs = module.forward(
+        EValue.from(Tensor.fromBlob(padded, longArrayOf(1, 1, segmentSamples.toLong()))),
+        EValue.from(Tensor.fromBlob(labelVector, longArrayOf(1, categoryOrder.size.toLong()))),
+      )
+      val output = outputs[0].toTensor().dataAsFloatArray
+      separated = output.copyOf(validLength)
+    }
+    return separated
+  }
+
+  private class CodecSepLiveProcessor(
+    private val runtime: CodecSepExecuTorchRuntime,
+    private val category: CategoryProfile,
+    private val nativeSampleRate: Int,
+    private val config: LiveConfig,
+  ) : LiveSuppressionProcessor {
+    private val contextSamples =
+      max(1, (nativeSampleRate * (runtime.manifest.segmentSeconds ?: 2.0)).toInt())
     private val preferredHopSamples =
       max(1, nativeSampleRate * runtime.manifest.preferredLiveHopMs.orDefault(config.hopMs) / 1000)
     private val rollingInput = RollingWindow(contextSamples + nativeSampleRate * 2)
