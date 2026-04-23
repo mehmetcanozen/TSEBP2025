@@ -98,6 +98,9 @@ class LiveSuppressionSession(
     )
 
     val recordBuilder = AudioRecord.Builder()
+      // VOICE_RECOGNITION lets Android's audio processing clean the signal before it
+      // reaches our model. This significantly improves speech isolation quality.
+      // MIC gives raw audio but results in much weaker speech suppression.
       .setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
       .setAudioFormat(
         AudioFormat.Builder()
