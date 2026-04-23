@@ -137,50 +137,7 @@ export default function SettingsScreen() {
                     </View>
                 </View>
 
-                {/* Backend Connection Test */}
-                <View style={[styles.card, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Developer</Text>
-                    <TouchableOpacity
-                        style={[styles.testButton, { backgroundColor: colors.primary }]}
-                        onPress={handleTestConnection}
-                        activeOpacity={0.8}
-                        disabled={connectionStatus === 'testing'}
-                    >
-                        {connectionStatus === 'testing' ? (
-                            <ActivityIndicator color="#FFF" size="small" />
-                        ) : (
-                            <Ionicons name="wifi" size={20} color="#FFF" style={{ marginRight: 8 }} />
-                        )}
-                        <Text style={styles.testButtonText}>
-                            {connectionStatus === 'testing' ? 'Testing...' : 'Test Backend Connection'}
-                        </Text>
-                    </TouchableOpacity>
 
-                    {connectionStatus !== 'idle' && (
-                        <View style={[styles.statusBox, {
-                            backgroundColor: connectionStatus === 'success'
-                                ? (isDarkMode ? '#22543D' : '#F0FFF4')
-                                : (isDarkMode ? '#742A2A' : '#FFF5F5')
-                        }]}>
-                            <Ionicons
-                                name={connectionStatus === 'success' ? 'checkmark-circle' : 'close-circle'}
-                                size={18}
-                                color={connectionStatus === 'success' ? '#38A169' : '#E53E3E'}
-                                style={{ marginRight: 8 }}
-                            />
-                            <Text style={[styles.statusText, {
-                                color: connectionStatus === 'success'
-                                    ? (isDarkMode ? '#9AE6B4' : '#276749')
-                                    : (isDarkMode ? '#FC8181' : '#9B2C2C')
-                            }]} numberOfLines={3}>
-                                {connectionStatus === 'success'
-                                    ? `✅ Connected! ${connectionMessage}`
-                                    : `❌ Error: ${connectionMessage}`
-                                }
-                            </Text>
-                        </View>
-                    )}
-                </View>
 
                 <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.8}>
                     <Ionicons name="log-out-outline" size={22} color="#FFF" style={{marginRight: 8}} />
