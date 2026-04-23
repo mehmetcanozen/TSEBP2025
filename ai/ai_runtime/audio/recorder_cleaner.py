@@ -20,8 +20,28 @@ from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
-import sounddevice as sd
 import soundfile as sf
+
+try:
+    import sounddevice as sd
+except ImportError:
+    class _MissingSoundDevice:
+        InputStream = None
+
+        @staticmethod
+        def query_devices(*_args, **_kwargs):
+            raise ImportError(
+                "sounddevice is required for live audio capture. "
+                "Install with: pip install sounddevice"
+            )
+
+        def __getattr__(self, _name: str):
+            raise ImportError(
+                "sounddevice is required for live audio capture. "
+                "Install with: pip install sounddevice"
+            )
+
+    sd = _MissingSoundDevice()
 
 _project_root = Path(__file__).resolve().parents[3]
 if str(_project_root) not in sys.path:
@@ -317,8 +337,26 @@ def main(argv: list[str] | None = None) -> None:
 
     q = queue.Queue(maxsize=10)
     sample_rate = 44100
-    use_buffered_audiosep15 = args.separator_backend == "audiosep_hive15cat"
-    context_duration = 5.0 if use_buffered_audiosep15 else 3.0
+    use_buffered_exact15 = args.separator_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}
+    if args.separator_backend == "audiosep_hive15cat":
+        context_duration = 5.0
+        realtime_hop_seconds = float(
+            codecsep_call_kwargs.get("audiosep_hive15cat_realtime_hop_seconds", 1.0)
+        )
+        buffered_backend_label = "AudioSepHive15Cat"
+    elif args.separator_backend == "codecsep_dnrv2_15cat":
+        context_duration = 2.0
+        realtime_hop_seconds = float(
+            codecsep_call_kwargs.get("codecsep_dnrv2_15cat_realtime_hop_seconds", 0.5)
+        )
+        buffered_backend_label = (
+            "CodecSepDNRv2_15Cat "
+            f"({codecsep_call_kwargs.get('codecsep_dnrv2_15cat_runtime', 'onnx')})"
+        )
+    else:
+        context_duration = 3.0
+        realtime_hop_seconds = 0.0
+        buffered_backend_label = ""
     context_size = int(sample_rate * context_duration)
     rolling_buffer = np.zeros(context_size, dtype=np.float32)
     buffered_live: BufferedRealtimeSuppressor | None = None
@@ -338,11 +376,12 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Recording for %ss...", args.duration)
     logger.info("Suppressing: %s", args.suppress)
     logger.info("Press Ctrl+C to stop early")
-    if use_buffered_audiosep15:
+    if use_buffered_exact15:
         logger.info(
-            "AudioSepHive15Cat live mode uses %.1fs rolling context with %.1fs async inference hops",
+            "%s live mode uses %.1fs rolling context with %.1fs async inference hops",
+            buffered_backend_label,
             context_duration,
-            codecsep_call_kwargs.get("audiosep_hive15cat_realtime_hop_seconds", 1.0),
+            realtime_hop_seconds,
         )
 
     try:
@@ -355,14 +394,12 @@ def main(argv: list[str] | None = None) -> None:
         stft_aligned_blocksize = 8192
         if args.device is not None:
             logger.info("Using specified input device ID: %s", args.device)
-        if use_buffered_audiosep15:
+        if use_buffered_exact15:
             buffered_live = BufferedRealtimeSuppressor(
                 suppress_fn=engine.suppressor.suppress,
                 sample_rate=sample_rate,
                 context_duration=context_duration,
-                hop_seconds=float(
-                    codecsep_call_kwargs.get("audiosep_hive15cat_realtime_hop_seconds", 1.0)
-                ),
+                hop_seconds=realtime_hop_seconds,
             )
             buffered_live.start()
 
@@ -389,7 +426,7 @@ def main(argv: list[str] | None = None) -> None:
                     targets = list(engine.current_profile.suppressions.keys()) if engine.current_profile else []
                     universal_targets = [p.strip() for p in args.universal.split(",")] if args.universal else []
 
-                    if use_buffered_audiosep15 and (targets or args.suppress_all or universal_targets):
+                    if use_buffered_exact15 and (targets or args.suppress_all or universal_targets):
                         buffered_live.poll_results()
                         buffered_live.submit_if_due(
                             rolling_buffer,

@@ -140,14 +140,34 @@ def get_audiosep_hive15cat_model_path() -> Path:
     return get_models_path() / "AudioSepHive15Cat"
 
 
+def get_codecsep_dnrv2_15cat_model_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat model directory (ai/models/CodecSepDNRv2_15Cat/)."""
+    return get_models_path() / "CodecSepDNRv2_15Cat"
+
+
 def get_audiosep_hive15cat_onnx_path() -> Path:
     """Return the default AudioSepHive15Cat ONNX path."""
     return get_audiosep_hive15cat_model_path() / "frozensep_hive_15cat.onnx"
 
 
+def get_codecsep_dnrv2_15cat_onnx_path() -> Path:
+    """Return the default CodecSepDNRv2_15Cat ONNX path."""
+    return get_codecsep_dnrv2_15cat_model_path() / "codecsep_dnrv2_15cat.onnx"
+
+
+def get_codecsep_dnrv2_15cat_executorch_path() -> Path:
+    """Return the default CodecSepDNRv2_15Cat ExecuTorch path."""
+    return get_codecsep_dnrv2_15cat_model_path() / "codecsep_dnrv2_15cat.pte"
+
+
 def get_audiosep_hive15cat_categories_path() -> Path:
     """Return the default AudioSepHive15Cat category catalog YAML path."""
     return get_audiosep_hive15cat_model_path() / "categories_15.yaml"
+
+
+def get_codecsep_dnrv2_15cat_categories_path() -> Path:
+    """Return the default CodecSepDNRv2_15Cat category catalog YAML path."""
+    return get_codecsep_dnrv2_15cat_model_path() / "categories_15.yaml"
 
 
 def get_codecsep_code_path() -> Path:

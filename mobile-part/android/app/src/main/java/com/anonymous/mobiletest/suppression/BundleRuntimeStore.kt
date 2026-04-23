@@ -296,7 +296,7 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
 
   private fun chooseModelFile(bundleDirectory: File, bundleManifest: ModelBundleManifest): File {
     val preferred = when (bundleManifest.runtimeKind) {
-      "executorch_streaming_target_extractor" ->
+      "executorch_streaming_target_extractor", "executorch_category_separator" ->
         bundleManifest.artifacts
           .filter { it.format == "executorch" || it.filename.endsWith(".pte") }
           .map { it.filename }
@@ -312,7 +312,8 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
         continue
       }
       val isLoadable = when (bundleManifest.runtimeKind) {
-        "executorch_streaming_target_extractor" -> filename.endsWith(".pte")
+        "executorch_streaming_target_extractor", "executorch_category_separator" ->
+          filename.endsWith(".pte")
         else -> filename.endsWith(".onnx") || filename.endsWith(".ort")
       }
       if (isLoadable) {

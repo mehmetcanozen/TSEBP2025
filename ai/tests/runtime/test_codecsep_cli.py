@@ -203,9 +203,45 @@ def test_demo_parsers_accept_audiosep15_args():
     assert realtime_args.separator_backend == "audiosep_hive15cat"
 
 
+def test_demo_parsers_accept_codecsep15_args():
+    custom_args = demo_custom_realtime.build_parser().parse_args(
+        [
+            "--separator-backend", "codecsep_dnrv2_15cat",
+            "--codecsep15-model", "C:/tmp/codecsep_dnrv2_15cat.pte",
+            "--codecsep15-runtime", "executorch",
+            "--codecsep15-realtime-hop", "0.5",
+        ],
+    )
+    debug_args = demo_debug_realtime.build_parser().parse_args(
+        [
+            "--separator-backend", "codecsep_dnrv2_15cat",
+            "--codecsep15-device", "cpu",
+        ],
+    )
+    realtime_args = demo_realtime.build_parser().parse_args(
+        [
+            "--separator-backend", "codecsep_dnrv2_15cat",
+            "--codecsep15-runtime", "onnx",
+        ],
+    )
+
+    assert custom_args.separator_backend == "codecsep_dnrv2_15cat"
+    assert custom_args.codecsep15_model == "C:/tmp/codecsep_dnrv2_15cat.pte"
+    assert custom_args.codecsep15_runtime == "executorch"
+    assert custom_args.codecsep15_realtime_hop == 0.5
+    assert debug_args.codecsep15_device == "cpu"
+    assert realtime_args.separator_backend == "codecsep_dnrv2_15cat"
+    assert realtime_args.codecsep15_runtime == "onnx"
+
+
 def test_demo_realtime_rejects_audiosep15_backend():
     with pytest.raises(SystemExit):
         demo_realtime.main(["--separator-backend", "audiosep_hive15cat", "--duration", "0"])
+
+
+def test_demo_realtime_rejects_codecsep15_backend():
+    with pytest.raises(SystemExit):
+        demo_realtime.main(["--separator-backend", "codecsep_dnrv2_15cat", "--duration", "0"])
 
 
 def test_batch_main_builds_audiosep15_suppressor(monkeypatch, tmp_path):
@@ -257,6 +293,64 @@ def test_batch_main_builds_audiosep15_suppressor(monkeypatch, tmp_path):
     assert captured["suppressor_kwargs"]["audiosep_hive15cat_device"] == "cpu"
     assert captured["process_kwargs"]["audiosep_hive15cat_realtime_hop_seconds"] == 1.25
     assert captured["process_kwargs"]["suppress_categories"] == ["keyboard typing"]
+
+
+def test_batch_main_builds_codecsep15_executorch_suppressor(monkeypatch, tmp_path):
+    captured: dict = {}
+
+    class FakeSuppressor:
+        def __init__(self, **kwargs):
+            captured["suppressor_kwargs"] = kwargs
+
+    class FakeProcessor:
+        def __init__(self, suppressor=None):
+            captured["processor_suppressor"] = suppressor
+
+        def process_file(self, **kwargs):
+            captured["process_kwargs"] = kwargs
+            return {
+                "input_file": str(kwargs["input_path"]),
+                "output_file": str(kwargs["output_path"]),
+                "sample_rate": 16000,
+                "duration_seconds": 1.0,
+                "original_rms": 1.0,
+                "cleaned_rms": 0.72,
+                "rms_reduction_db": -2.8,
+                "suppressed_categories": kwargs["suppress_categories"],
+                "noise_audio": None,
+            }
+
+    monkeypatch.setattr(batch_processor, "SemanticSuppressor", FakeSuppressor)
+    monkeypatch.setattr(batch_processor, "BatchProcessor", FakeProcessor)
+
+    batch_processor.main(
+        [
+            "--input", str(tmp_path / "in.wav"),
+            "--output", str(tmp_path / "out.wav"),
+            "--suppress", "alarm",
+            "--separator-backend", "codecsep_dnrv2_15cat",
+            "--masking-method", "wiener_dd",
+            "--codecsep15-model", str(tmp_path / "codecsep_dnrv2_15cat.pte"),
+            "--codecsep15-runtime", "executorch",
+            "--codecsep15-device", "cpu",
+            "--codecsep15-realtime-hop", "0.5",
+        ],
+    )
+
+    assert captured["suppressor_kwargs"]["separator_backend"] == "codecsep_dnrv2_15cat"
+    assert captured["suppressor_kwargs"]["masking_method"] == "wiener_dd"
+    assert captured["suppressor_kwargs"]["codecsep_dnrv2_15cat_model_path"] == str(
+        tmp_path / "codecsep_dnrv2_15cat.pte"
+    )
+    assert captured["suppressor_kwargs"]["codecsep_dnrv2_15cat_runtime"] == "executorch"
+    assert captured["suppressor_kwargs"]["codecsep_dnrv2_15cat_device"] == "cpu"
+    assert captured["process_kwargs"]["codecsep_dnrv2_15cat_model_path"] == str(
+        tmp_path / "codecsep_dnrv2_15cat.pte"
+    )
+    assert captured["process_kwargs"]["codecsep_dnrv2_15cat_runtime"] == "executorch"
+    assert captured["process_kwargs"]["codecsep_dnrv2_15cat_device"] == "cpu"
+    assert captured["process_kwargs"]["codecsep_dnrv2_15cat_realtime_hop_seconds"] == 0.5
+    assert captured["process_kwargs"]["suppress_categories"] == ["alarm"]
 
 
 def test_recorder_main_builds_audiosep15_profile_and_suppressor(monkeypatch, tmp_path):
@@ -340,6 +434,96 @@ def test_recorder_main_builds_audiosep15_profile_and_suppressor(monkeypatch, tmp
     assert (
         captured["profile_kwargs"]["suppression_params"]["audiosep_hive15cat_realtime_hop_seconds"]
         == 1.25
+    )
+    assert captured["deleted_profile_id"] == "temp-profile"
+
+
+def test_recorder_main_builds_codecsep15_executorch_profile_and_suppressor(monkeypatch, tmp_path):
+    captured: dict = {}
+
+    class FakeProfileManager:
+        def __init__(self):
+            self.created = None
+
+        def create_profile(self, **kwargs):
+            self.created = SimpleNamespace(
+                id="temp-profile",
+                suppressions=dict(kwargs["suppressions"]),
+                suppression_params=dict(kwargs.get("suppression_params") or {}),
+            )
+            captured["profile_kwargs"] = kwargs
+            return self.created
+
+        def delete_profile(self, profile_id):
+            captured["deleted_profile_id"] = profile_id
+            return True
+
+    class FakeSuppressor:
+        def __init__(self, **kwargs):
+            captured["suppressor_kwargs"] = kwargs
+            self.category_map = {"alarm": {"detection_threshold": -1}}
+
+        def suppress(self, *args, **kwargs):
+            return kwargs["audio"]
+
+    class FakeControlEngine:
+        def __init__(self, profile_manager=None, suppressor=None):
+            self.profile_manager = profile_manager
+            self.suppressor = suppressor
+            self.current_profile = None
+
+        def set_profile(self, profile):
+            self.current_profile = profile
+
+        def set_mode(self, mode):
+            captured["mode"] = mode
+
+    class DummyInputStream:
+        def __init__(self, *args, **kwargs):
+            captured["input_stream_kwargs"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(recorder_cleaner, "ProfileManager", FakeProfileManager)
+    monkeypatch.setattr(recorder_cleaner, "SemanticSuppressor", FakeSuppressor)
+    monkeypatch.setattr(recorder_cleaner, "ControlEngine", FakeControlEngine)
+    monkeypatch.setattr(recorder_cleaner.sd, "InputStream", DummyInputStream)
+    monkeypatch.setattr(
+        recorder_cleaner.sd,
+        "query_devices",
+        lambda kind=None: {"max_input_channels": 1},
+    )
+
+    recorder_cleaner.main(
+        [
+            "--duration", "0",
+            "--suppress", "alarm",
+            "--separator-backend", "codecsep_dnrv2_15cat",
+            "--codecsep15-model", str(tmp_path / "codecsep_dnrv2_15cat.pte"),
+            "--codecsep15-runtime", "executorch",
+            "--codecsep15-device", "cpu",
+            "--codecsep15-realtime-hop", "0.5",
+        ],
+    )
+
+    assert captured["suppressor_kwargs"]["separator_backend"] == "codecsep_dnrv2_15cat"
+    assert captured["suppressor_kwargs"]["codecsep_dnrv2_15cat_model_path"] == str(
+        tmp_path / "codecsep_dnrv2_15cat.pte"
+    )
+    assert captured["suppressor_kwargs"]["codecsep_dnrv2_15cat_runtime"] == "executorch"
+    assert captured["suppressor_kwargs"]["codecsep_dnrv2_15cat_device"] == "cpu"
+    assert captured["profile_kwargs"]["suppression_params"]["codecsep_dnrv2_15cat_model_path"] == str(
+        tmp_path / "codecsep_dnrv2_15cat.pte"
+    )
+    assert captured["profile_kwargs"]["suppression_params"]["codecsep_dnrv2_15cat_runtime"] == "executorch"
+    assert captured["profile_kwargs"]["suppression_params"]["codecsep_dnrv2_15cat_device"] == "cpu"
+    assert (
+        captured["profile_kwargs"]["suppression_params"]["codecsep_dnrv2_15cat_realtime_hop_seconds"]
+        == 0.5
     )
     assert captured["deleted_profile_id"] == "temp-profile"
 

@@ -1037,6 +1037,107 @@ def test_audiosep_hive15cat_skips_detection_for_manual_exact_labels():
     assert clean.shape == audio.shape
 
 
+def test_codecsep_dnrv2_15cat_routes_through_post_masking(monkeypatch):
+    separator = FakeAudioSepHive15CatSeparator({"keyboard typing": 0.2})
+    supp = SemanticSuppressor(
+        detector=FailingDetector(),
+        separator_backend="codecsep_dnrv2_15cat",
+        masking_method="wiener_dd",
+        codecsep_dnrv2_15cat=separator,
+    )
+    supp.under_extract_scale = 1.0
+
+    captured: dict = {}
+
+    class FakeMasking:
+        def apply(self, *, mix, unwanted, aggressiveness, sample_rate, **kwargs):
+            captured["mix"] = np.asarray(mix)
+            captured["unwanted"] = np.asarray(unwanted)
+            captured["aggressiveness"] = aggressiveness
+            captured["sample_rate"] = sample_rate
+            captured["kwargs"] = kwargs
+            return np.full_like(np.asarray(mix, dtype=np.float32), 0.25)
+
+    monkeypatch.setattr(supp, "_get_masking_strategy", lambda *_args, **_kwargs: FakeMasking())
+
+    audio = np.ones(4096, dtype=np.float32)
+    result = supp.suppress(
+        audio=audio,
+        sample_rate=16000,
+        suppress_categories=["keyboard typing"],
+        return_details=True,
+    )
+
+    assert len(separator.calls) == 1
+    assert separator.calls[0]["categories"] == ["keyboard typing"]
+    np.testing.assert_allclose(captured["unwanted"], np.full_like(audio, 0.2), atol=1e-6)
+    assert captured["kwargs"]["mask_floor"] == pytest.approx(0.07)
+    assert captured["kwargs"]["max_suppression_ratio"] == pytest.approx(0.82)
+    assert captured["kwargs"]["speech_dominance_threshold"] == pytest.approx(2.5)
+    np.testing.assert_allclose(result["clean_audio"], np.full_like(audio, 0.25), atol=1e-6)
+    np.testing.assert_allclose(result["removed_audio"], np.full_like(audio, 0.75), atol=1e-6)
+
+
+def test_codecsep_dnrv2_15cat_skips_detection_for_manual_exact_labels():
+    separator = FakeAudioSepHive15CatSeparator({"alarm": 0.1})
+    supp = SemanticSuppressor(
+        detector=FailingDetector(),
+        separator_backend="codecsep_dnrv2_15cat",
+        codecsep_dnrv2_15cat=separator,
+    )
+
+    audio = np.ones(4096, dtype=np.float32)
+    clean = supp.suppress(
+        audio=audio,
+        sample_rate=16000,
+        suppress_categories=["alarm"],
+    )
+
+    assert len(separator.calls) == 1
+    assert separator.calls[0]["categories"] == ["alarm"]
+    assert clean.shape == audio.shape
+
+
+def test_codecsep_dnrv2_15cat_executorch_routes_through_post_masking(monkeypatch):
+    separator = FakeAudioSepHive15CatSeparator({"alarm": 0.15})
+    supp = SemanticSuppressor(
+        detector=FailingDetector(),
+        separator_backend="codecsep_dnrv2_15cat",
+        masking_method="cirm",
+        codecsep_dnrv2_15cat_runtime="executorch",
+        codecsep_dnrv2_15cat_executorch=separator,
+    )
+    supp.under_extract_scale = 1.0
+
+    captured: dict = {}
+
+    class FakeMasking:
+        def apply(self, *, mix, unwanted, aggressiveness, sample_rate, **kwargs):
+            captured["mix"] = np.asarray(mix)
+            captured["unwanted"] = np.asarray(unwanted)
+            captured["aggressiveness"] = aggressiveness
+            captured["sample_rate"] = sample_rate
+            captured["kwargs"] = kwargs
+            return np.full_like(np.asarray(mix, dtype=np.float32), 0.4)
+
+    monkeypatch.setattr(supp, "_get_masking_strategy", lambda *_args, **_kwargs: FakeMasking())
+
+    audio = np.ones(4096, dtype=np.float32)
+    result = supp.suppress(
+        audio=audio,
+        sample_rate=16000,
+        suppress_categories=["alarm"],
+        codecsep_dnrv2_15cat_runtime="executorch",
+        return_details=True,
+    )
+
+    assert len(separator.calls) == 1
+    assert separator.calls[0]["categories"] == ["alarm"]
+    np.testing.assert_allclose(captured["unwanted"], np.full_like(audio, 0.15), atol=1e-6)
+    np.testing.assert_allclose(result["clean_audio"], np.full_like(audio, 0.4), atol=1e-6)
+    np.testing.assert_allclose(result["removed_audio"], np.full_like(audio, 0.6), atol=1e-6)
+
+
 @pytest.mark.parametrize(
     ("category", "target_freq"),
     [

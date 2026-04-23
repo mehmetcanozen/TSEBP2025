@@ -1,0 +1,13 @@
+# Minimal environment for exporting the already-frozen CodecSepDNRv2_15Cat
+# checkpoint to ExecuTorch.
+#
+# Install one line at a time if you want to keep each step small and visible:
+#   python -m pip install numpy==1.26.4
+#   python -m pip install PyYAML==6.0.3
+#   python -m pip install torch==2.11.0
+#   python -m pip install executorch==1.2.0
+
+numpy==1.26.4
+PyYAML==6.0.3
+torch==2.11.0
+executorch==1.2.0

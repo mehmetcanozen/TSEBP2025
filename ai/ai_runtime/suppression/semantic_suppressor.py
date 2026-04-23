@@ -19,7 +19,6 @@ import yaml
 
 from ai.ai_runtime.separation.codecsep_query import CodecSepQueryPlan
 from ai.ai_runtime.separation.codecsep_separator import DEFAULT_PROMPTS as DEFAULT_CODECSEP_PROMPTS
-from ai.ai_runtime.suppression.masking import CIRMMasking, MaskingStrategy, WienerDDMasking
 from ai.ai_runtime.utils.codecsep import (
     FixedCategoryRuntimeCatalog,
     collapse_codecsep_prompt_value,
@@ -28,6 +27,8 @@ from ai.ai_runtime.utils.codecsep import (
 )
 from ai.ai_runtime.utils.paths import (
     get_audiosep_hive15cat_onnx_path,
+    get_codecsep_dnrv2_15cat_executorch_path,
+    get_codecsep_dnrv2_15cat_onnx_path,
     get_codecsep_fixed_category_gate_thresholds_path,
     get_codecsep_fixed_category_identity_path,
     get_codecsep_runtime_fixed_category_mapping_path,
@@ -37,8 +38,15 @@ from ai.ai_runtime.utils.paths import (
 if TYPE_CHECKING:
     from ai.ai_runtime.detection import SemanticDetective
     from ai.ai_runtime.enhancement import SpeechEnhancer
+    from ai.ai_runtime.suppression.masking import (
+        CIRMMasking,
+        MaskingStrategy,
+        WienerDDMasking,
+    )
     from ai.ai_runtime.separation import (
         AudioSepHive15CatSeparator,
+        CodecSepDNRv2_15CatExecuTorchSeparator,
+        CodecSepDNRv2_15CatSeparator,
         CodecSepSeparator,
         UniversalSeparator,
         WaveformerSeparator,
@@ -56,12 +64,14 @@ except ImportError:
 
 DEFAULT_MAPPING_PATH = get_config_path("yamnet_to_waveformer.yaml")
 AUDIOSEP_HIVE15CAT_MAPPING_PATH = get_config_path("audiosep_hive15cat_categories.yaml")
+CODECSEP_DNRV2_15CAT_MAPPING_PATH = get_config_path("codecsep_dnrv2_15cat_categories.yaml")
 CODECSEP_MAPPING_PATH = get_config_path("category_to_codecsep.yaml")
 CODECSEP_FIXEDSET_MAPPING_PATH = get_codecsep_runtime_fixed_category_mapping_path()
 CODECSEP_FIXEDSET_IDENTITY_PATH = get_codecsep_fixed_category_identity_path()
 CODECSEP_FIXEDSET_THRESHOLDS_PATH = get_codecsep_fixed_category_gate_thresholds_path()
 
-SEPARATOR_BACKENDS = ("waveformer", "codecsep", "audiosep_hive15cat")
+SEPARATOR_BACKENDS = ("waveformer", "codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat")
+CODECSEP_DNRV2_15CAT_RUNTIMES = ("onnx", "executorch")
 MASKING_METHODS = ("wiener_dd", "cirm")
 
 
@@ -72,6 +82,8 @@ def _build_masking_strategy(
     floor_min: float = 0.01,
     floor_max: float = 0.05,
 ) -> Union[WienerDDMasking, CIRMMasking]:
+    from ai.ai_runtime.suppression.masking import CIRMMasking, WienerDDMasking
+
     if method == "wiener_dd":
         return WienerDDMasking(
             nperseg=nperseg, dd_alpha=dd_alpha,
@@ -93,7 +105,8 @@ class SemanticSuppressor:
     separator_backend:
         ``"waveformer"`` (default, 41-class target extractor) or
         ``"codecsep"`` (V5 fixed-category latent masker with legacy prompt compatibility) or
-        ``"audiosep_hive15cat"`` (exact-15 ONNX separator routed through post-masking).
+        ``"audiosep_hive15cat"`` / ``"codecsep_dnrv2_15cat"`` (exact-15 packaged separators
+        routed through post-masking; CodecSepDNRv2_15Cat can use ONNX or ExecuTorch).
     masking_method:
         ``"wiener_dd"`` (Ephraim-Malah Decision-Directed Wiener, default)
         or ``"cirm"`` (bounded phase-aware ratio masking).
@@ -107,11 +120,16 @@ class SemanticSuppressor:
         enhancer: Optional[SpeechEnhancer] = None,
         universal: Optional[UniversalSeparator] = None,
         audiosep_hive15cat: Optional[AudioSepHive15CatSeparator] = None,
+        codecsep_dnrv2_15cat: Optional[CodecSepDNRv2_15CatSeparator] = None,
+        codecsep_dnrv2_15cat_executorch: Optional[CodecSepDNRv2_15CatExecuTorchSeparator] = None,
         *,
         separator_backend: str = "waveformer",
         masking_method: str = "wiener_dd",
         audiosep_hive15cat_model_path: Optional[Union[str, Path]] = None,
         audiosep_hive15cat_device: Optional[str] = None,
+        codecsep_dnrv2_15cat_model_path: Optional[Union[str, Path]] = None,
+        codecsep_dnrv2_15cat_runtime: str = "onnx",
+        codecsep_dnrv2_15cat_device: Optional[str] = None,
         codecsep_checkpoint_path: Optional[Union[str, Path]] = None,
         codecsep_device: Optional[str] = None,
         codecsep_prompts: Optional[Dict[str, Sequence[str]]] = None,
@@ -135,6 +153,15 @@ class SemanticSuppressor:
             else get_audiosep_hive15cat_onnx_path()
         )
         self.audiosep_hive15cat_device = audiosep_hive15cat_device
+        self.codecsep_dnrv2_15cat_model_path = (
+            Path(codecsep_dnrv2_15cat_model_path)
+            if codecsep_dnrv2_15cat_model_path
+            else None
+        )
+        self.codecsep_dnrv2_15cat_runtime = self._normalize_codecsep_dnrv2_15cat_runtime(
+            codecsep_dnrv2_15cat_runtime,
+        )
+        self.codecsep_dnrv2_15cat_device = codecsep_dnrv2_15cat_device
         self.codecsep_checkpoint_path = (
             Path(codecsep_checkpoint_path) if codecsep_checkpoint_path else None
         )
@@ -164,6 +191,24 @@ class SemanticSuppressor:
             if audiosep_hive15cat is not None
             else None
         )
+        self._codecsep_dnrv2_15cat = codecsep_dnrv2_15cat
+        self._codecsep_dnrv2_15cat_key: tuple[str | None, str | None] | None = (
+            (
+                str(self._default_codecsep_dnrv2_15cat_model_path("onnx")),
+                self.codecsep_dnrv2_15cat_device,
+            )
+            if codecsep_dnrv2_15cat is not None
+            else None
+        )
+        self._codecsep_dnrv2_15cat_executorch = codecsep_dnrv2_15cat_executorch
+        self._codecsep_dnrv2_15cat_executorch_key: tuple[str | None, str | None] | None = (
+            (
+                str(self._default_codecsep_dnrv2_15cat_model_path("executorch")),
+                self.codecsep_dnrv2_15cat_device,
+            )
+            if codecsep_dnrv2_15cat_executorch is not None
+            else None
+        )
         self._codecsep_separator: CodecSepSeparator | None = None
         self._codecsep_separator_key: tuple[str | None, str | None] | None = None
         self._enhancer = enhancer
@@ -183,19 +228,31 @@ class SemanticSuppressor:
         self.dd_alpha = 0.98
 
         self._masking_cache: dict[str, MaskingStrategy] = {}
-        self._masking_cache[masking_method] = _build_masking_strategy(
-            masking_method,
-            nperseg=self.spectral_nperseg,
-            dd_alpha=self.dd_alpha,
-            floor_min=self.perceptual_floor_min,
-            floor_max=self.perceptual_floor_max,
-        )
 
     @staticmethod
     def _default_mapping_path(separator_backend: str) -> Path:
         if separator_backend == "audiosep_hive15cat":
             return AUDIOSEP_HIVE15CAT_MAPPING_PATH
+        if separator_backend == "codecsep_dnrv2_15cat":
+            return CODECSEP_DNRV2_15CAT_MAPPING_PATH
         return DEFAULT_MAPPING_PATH
+
+    @staticmethod
+    def _normalize_codecsep_dnrv2_15cat_runtime(runtime: str | None) -> str:
+        normalized = str(runtime or "onnx").strip().casefold()
+        if normalized not in CODECSEP_DNRV2_15CAT_RUNTIMES:
+            raise ValueError(
+                "codecsep_dnrv2_15cat_runtime must be one of: "
+                f"{CODECSEP_DNRV2_15CAT_RUNTIMES}"
+            )
+        return normalized
+
+    def _default_codecsep_dnrv2_15cat_model_path(self, runtime: str) -> Path:
+        if self.codecsep_dnrv2_15cat_model_path is not None:
+            return self.codecsep_dnrv2_15cat_model_path
+        if runtime == "executorch":
+            return get_codecsep_dnrv2_15cat_executorch_path()
+        return get_codecsep_dnrv2_15cat_onnx_path()
 
     # ------------------------------------------------------------------
     # Lazy-loading properties
@@ -276,6 +333,11 @@ class SemanticSuppressor:
     def audiosep_hive15cat_separator(self):
         """Lazy-load the exact-15 AudioSep ONNX separator."""
         return self._get_audiosep_hive15cat_separator()
+
+    @property
+    def codecsep_dnrv2_15cat_separator(self):
+        """Lazy-load the exact-15 CodecSep packaged separator."""
+        return self._get_codecsep_dnrv2_15cat_separator()
 
     @property
     def codecsep_separator(self):
@@ -370,6 +432,52 @@ class SemanticSuppressor:
         self._audiosep_hive15cat_key = cache_key
         return self._audiosep_hive15cat
 
+    def _get_codecsep_dnrv2_15cat_separator(
+        self,
+        model_path: Optional[Union[str, Path]] = None,
+        device: Optional[str] = None,
+        runtime: Optional[str] = None,
+    ):
+        requested_runtime = self._normalize_codecsep_dnrv2_15cat_runtime(
+            runtime or self.codecsep_dnrv2_15cat_runtime,
+        )
+        requested_path = (
+            Path(model_path)
+            if model_path is not None
+            else self._default_codecsep_dnrv2_15cat_model_path(requested_runtime)
+        )
+        requested_device = device if device is not None else self.codecsep_dnrv2_15cat_device
+        cache_key = (
+            str(requested_path) if requested_path is not None else None,
+            requested_device,
+        )
+        if requested_runtime == "executorch":
+            if self._codecsep_dnrv2_15cat_executorch is not None and self._codecsep_dnrv2_15cat_executorch_key == cache_key:
+                return self._codecsep_dnrv2_15cat_executorch
+
+            from ai.ai_runtime.separation import CodecSepDNRv2_15CatExecuTorchSeparator
+
+            logger.info("Initializing CodecSepDNRv2_15CatExecuTorchSeparator...")
+            self._codecsep_dnrv2_15cat_executorch = CodecSepDNRv2_15CatExecuTorchSeparator(
+                model_path=requested_path,
+                device=requested_device,
+            )
+            self._codecsep_dnrv2_15cat_executorch_key = cache_key
+            return self._codecsep_dnrv2_15cat_executorch
+
+        if self._codecsep_dnrv2_15cat is not None and self._codecsep_dnrv2_15cat_key == cache_key:
+            return self._codecsep_dnrv2_15cat
+
+        from ai.ai_runtime.separation import CodecSepDNRv2_15CatSeparator
+
+        logger.info("Initializing CodecSepDNRv2_15CatSeparator...")
+        self._codecsep_dnrv2_15cat = CodecSepDNRv2_15CatSeparator(
+            model_path=requested_path,
+            device=requested_device,
+        )
+        self._codecsep_dnrv2_15cat_key = cache_key
+        return self._codecsep_dnrv2_15cat
+
     @staticmethod
     def _sum_audio_tracks(tracks: Sequence[np.ndarray], reference: np.ndarray) -> np.ndarray:
         if not tracks:
@@ -441,6 +549,10 @@ class SemanticSuppressor:
         audiosep_hive15cat_model_path: Optional[Union[str, Path]] = None,
         audiosep_hive15cat_device: Optional[str] = None,
         audiosep_hive15cat_realtime_hop_seconds: Optional[float] = None,
+        codecsep_dnrv2_15cat_model_path: Optional[Union[str, Path]] = None,
+        codecsep_dnrv2_15cat_runtime: Optional[str] = None,
+        codecsep_dnrv2_15cat_device: Optional[str] = None,
+        codecsep_dnrv2_15cat_realtime_hop_seconds: Optional[float] = None,
         codecsep_checkpoint_path: Optional[Union[str, Path]] = None,
         codecsep_device: Optional[str] = None,
         codecsep_prompt_overrides: Optional[Dict[str, Sequence[str]]] = None,
@@ -459,8 +571,12 @@ class SemanticSuppressor:
         return_details: bool = False,
     ) -> Union[np.ndarray, dict[str, object]]:
         del audiosep_hive15cat_realtime_hop_seconds
+        del codecsep_dnrv2_15cat_realtime_hop_seconds
         effective_backend = separator_backend or self.separator_backend
         effective_masking_method = masking_method or self.masking_method
+        effective_codecsep15_runtime = self._normalize_codecsep_dnrv2_15cat_runtime(
+            codecsep_dnrv2_15cat_runtime or self.codecsep_dnrv2_15cat_runtime,
+        )
         resolved_codecsep_mode = self._resolve_codecsep_mode(codecsep_mode)
         self._last_codecsep_removed_audio = None
         if effective_backend not in SEPARATOR_BACKENDS:
@@ -558,6 +674,8 @@ class SemanticSuppressor:
                     cat_targets = self._get_codecsep_stems(category)
             elif effective_backend == "audiosep_hive15cat":
                 cat_targets = cat_config.get("audiosep15_targets", [])
+            elif effective_backend == "codecsep_dnrv2_15cat":
+                cat_targets = cat_config.get("codecsep15_targets", [])
             else:
                 cat_targets = cat_config.get("waveformer_targets", [])
 
@@ -572,7 +690,7 @@ class SemanticSuppressor:
                     has_transient_category = True
                 continue
 
-            if effective_backend == "audiosep_hive15cat":
+            if effective_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}:
                 per_category_targets.append((category, cat_targets))
                 targets_to_suppress.extend(cat_targets)
                 max_detection_confidence = max(max_detection_confidence, 0.9)
@@ -672,6 +790,15 @@ class SemanticSuppressor:
                 model_path=audiosep_hive15cat_model_path,
                 device=audiosep_hive15cat_device,
             )
+        elif effective_backend == "codecsep_dnrv2_15cat":
+            unwanted_audio, separation_ratio = self._separate_codecsep_dnrv2_15cat(
+                audio,
+                sample_rate,
+                per_category_targets,
+                model_path=codecsep_dnrv2_15cat_model_path,
+                runtime=effective_codecsep15_runtime,
+                device=codecsep_dnrv2_15cat_device,
+            )
         else:
             unwanted_audio, separation_ratio = self._separate_waveformer(
                 audio, sample_rate, per_category_targets, max_detection_confidence,
@@ -684,7 +811,7 @@ class SemanticSuppressor:
         # Under-extraction compensation
         under_extract_threshold = 0.3
         under_extract_scale = self.under_extract_scale
-        if effective_backend == "audiosep_hive15cat":
+        if effective_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}:
             # AudioSep15 estimates are already category-specific and can sound brittle
             # if we push the unwanted track too hard before masking.
             under_extract_threshold = 0.18
@@ -707,7 +834,7 @@ class SemanticSuppressor:
         effective_mask_floor = mask_floor
         effective_max_suppression_ratio = max_suppression_ratio
         effective_speech_dominance_threshold = speech_dominance_threshold
-        if effective_backend == "audiosep_hive15cat":
+        if effective_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}:
             if effective_mask_floor is None:
                 effective_mask_floor = (
                     0.07 if effective_masking_method == "wiener_dd" else 0.05
@@ -852,6 +979,48 @@ class SemanticSuppressor:
         )
         if profiler:
             profiler.end("audiosep_hive15cat_separation")
+
+        min_len = min(audio.shape[0], unwanted_audio.shape[0])
+        mix_rms = np.sqrt(np.mean(audio[:min_len] ** 2)) + 1e-8
+        unwanted_rms = np.sqrt(np.mean(unwanted_audio[:min_len] ** 2)) + 1e-8
+        return unwanted_audio, unwanted_rms / mix_rms
+
+    def _separate_codecsep_dnrv2_15cat(
+        self,
+        audio: np.ndarray,
+        sample_rate: int,
+        per_category_targets: list[tuple[str, list]],
+        *,
+        model_path: Optional[Union[str, Path]] = None,
+        runtime: Optional[str] = None,
+        device: Optional[str] = None,
+    ) -> tuple[np.ndarray, float]:
+        if profiler:
+            profiler.start("codecsep_dnrv2_15cat_separation")
+
+        labels: list[str] = []
+        for _, targets in per_category_targets:
+            for target in targets:
+                if target not in labels:
+                    labels.append(str(target))
+
+        if not labels:
+            if profiler:
+                profiler.end("codecsep_dnrv2_15cat_separation")
+            return np.zeros_like(audio), 0.0
+
+        separator = self._get_codecsep_dnrv2_15cat_separator(
+            model_path=model_path,
+            runtime=runtime,
+            device=device,
+        )
+        unwanted_audio = separator.separate(
+            audio=audio,
+            sample_rate=sample_rate,
+            categories=labels,
+        )
+        if profiler:
+            profiler.end("codecsep_dnrv2_15cat_separation")
 
         min_len = min(audio.shape[0], unwanted_audio.shape[0])
         mix_rms = np.sqrt(np.mean(audio[:min_len] ** 2)) + 1e-8

@@ -1,0 +1,18 @@
+# Dedicated freeze/export environment for CodecSepDNRv2_15Cat.
+#
+# Recommended:
+#   python -m venv .venv-codecsep-export
+#   .venv-codecsep-export\Scripts\Activate.ps1
+#   pip install -r ai/export/requirements_codecsep_dnrv2_15cat.txt
+
+torch
+torchaudio
+numpy<2
+onnx==1.16.0
+onnxruntime
+PyYAML
+soundfile
+scipy
+transformers
+laion-clap
+executorch

@@ -37,6 +37,7 @@
     "resources": {
       "../../ai/models/model_selection.json": "models/model_selection.json",
       "../../ai/models/AudioSepHive15Cat/": "models/AudioSepHive15Cat/",
+      "../../ai/models/CodecSepDNRv2_15Cat/": "models/CodecSepDNRv2_15Cat/",
       "../../ai/models/Waveformer/model_package.json": "models/Waveformer/model_package.json",
       "../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx": "models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
       "../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json": "models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json",

@@ -8,7 +8,12 @@ from database import models
 from conftest import TestingSession
 
 
-def _fake_packaged_model(tmp_path: Path, artifact_name: str = "frozensep_hive_15cat.onnx"):
+def _fake_packaged_model(
+    tmp_path: Path,
+    artifact_name: str = "frozensep_hive_15cat.onnx",
+    *,
+    runtime_kind: str = "onnx_category_separator",
+):
     model_path = tmp_path / artifact_name
     model_path.write_bytes(b"dummy-model")
     metadata_path = tmp_path / "categories_15.txt"
@@ -16,7 +21,7 @@ def _fake_packaged_model(tmp_path: Path, artifact_name: str = "frozensep_hive_15
 
     platform = mobile_model_bundle.PackagedModelPlatform(
         name="android",
-        runtime_kind="onnx_category_separator",
+        runtime_kind=runtime_kind,
         artifact=artifact_name,
         metadata_artifacts=("categories_15.txt",),
         sample_rate=32_000,
@@ -127,6 +132,33 @@ def test_android_model_download_returns_bundle_zip(client, auth_headers, tmp_pat
     assert manifest["sample_rate"] == 32000
     assert manifest["segment_seconds"] == 5.0
     assert manifest["categories"][0]["id"] == "speech"
+
+
+def test_android_bundle_marks_executorch_category_separator_artifact(client, auth_headers, tmp_path, monkeypatch):
+    packaged_model = _fake_packaged_model(
+        tmp_path,
+        artifact_name="codecsep_dnrv2_15cat.pte",
+        runtime_kind="executorch_category_separator",
+    )
+    monkeypatch.setattr(
+        mobile_model_bundle,
+        "resolve_packaged_model_for_artifact",
+        lambda artifact_path, platform_name="android": packaged_model
+    )
+
+    version_id = _create_model_version(packaged_model.artifact_path("android"), version="2.0.3")
+
+    response = client.get(f"/model/download/{version_id}", headers=auth_headers)
+    assert response.status_code == 200
+
+    with zipfile.ZipFile(io.BytesIO(response.content), "r") as archive:
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+
+    assert manifest["runtime_kind"] == "executorch_category_separator"
+    model_artifact = next(item for item in manifest["artifacts"] if item["role"] == "model")
+    assert model_artifact["filename"] == "codecsep_dnrv2_15cat.pte"
+    assert model_artifact["format"] == "executorch"
+    assert model_artifact["provider"] == "executorch"
 
 
 def test_latest_android_model_auto_registers_repository_export(
