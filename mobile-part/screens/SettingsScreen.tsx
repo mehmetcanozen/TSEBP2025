@@ -58,7 +58,7 @@ export default function SettingsScreen() {
             <ScrollView contentContainerStyle={styles.container} bounces={false}>
                 <View style={styles.headerWrapper}>
                 <LinearGradient
-                    colors={[colors.headerGradientStart || '#FF8A00', colors.headerGradientEnd || '#FF5722']}
+                    colors={[colors.headerGradientStart || '#1E3A8A', colors.headerGradientEnd || '#8B5CF6']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.headerBackground}
@@ -79,7 +79,7 @@ export default function SettingsScreen() {
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account</Text>
 
                     <View style={styles.row}>
-                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
+                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
                             <Ionicons name="mail" size={20} color={colors.primary} />
                         </View>
                         <View style={styles.rowContent}>
@@ -87,10 +87,10 @@ export default function SettingsScreen() {
                             <Text style={[styles.value, { color: colors.textSecondary }]}>{userEmail}</Text>
                         </View>
                     </View>
-                    <View style={[styles.separator, { backgroundColor: isDarkMode ? '#3D2D27' : '#FFE0D1' }]} />
+                    <View style={[styles.separator, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
 
                     <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => navigation.navigate('ChangePassword')}>
-                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
+                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
                             <Ionicons name="lock-closed" size={20} color={colors.primary} />
                         </View>
                         <View style={styles.rowContent}>
@@ -104,8 +104,8 @@ export default function SettingsScreen() {
                     <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Preferences</Text>
 
                     <View style={styles.row}>
-                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#2D3748' : '#EDF2F7' }]}>
-                            <Ionicons name="moon" size={20} color={isDarkMode ? '#90CDF4' : '#4A5568'} />
+                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
+                            <Ionicons name="moon" size={20} color={colors.primary} />
                         </View>
                         <View style={styles.rowContent}>
                             <Text style={[styles.label, { color: colors.text }]}>Dark Mode</Text>
@@ -118,11 +118,11 @@ export default function SettingsScreen() {
                             value={isDarkMode}
                         />
                     </View>
-                    <View style={[styles.separator, { backgroundColor: isDarkMode ? '#3D2D27' : '#FFE0D1' }]} />
+                    <View style={[styles.separator, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
 
                     <View style={styles.row}>
-                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#2D3748' : '#EDF2F7' }]}>
-                            <Ionicons name="notifications" size={20} color={isDarkMode ? '#F6AD55' : '#4A5568'} />
+                        <View style={[styles.iconContainer, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
+                            <Ionicons name="notifications" size={20} color={colors.primary} />
                         </View>
                         <View style={styles.rowContent}>
                             <Text style={[styles.label, { color: colors.text }]}>Notifications</Text>
