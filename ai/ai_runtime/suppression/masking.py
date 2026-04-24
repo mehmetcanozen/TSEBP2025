@@ -89,6 +89,13 @@ def _build_perceptual_floor(
 _build_perceptual_floor._cache: dict = {}  # type: ignore[attr-defined]
 
 
+def _effective_stft_params(requested_nperseg: int, signal_len: int) -> tuple[int, int]:
+    """Keep STFT and inverse STFT parameters valid for short tail chunks."""
+    effective_nperseg = max(1, min(int(requested_nperseg), int(signal_len)))
+    effective_noverlap = 0 if effective_nperseg <= 1 else effective_nperseg // 2
+    return effective_nperseg, effective_noverlap
+
+
 def _smooth_tfr(mask: np.ndarray) -> np.ndarray:
     """Apply a light 2D smoothing pass over a time-frequency mask."""
     if mask.ndim != 2 or min(mask.shape) <= 1:
@@ -200,7 +207,6 @@ class WienerDDMasking:
         speech_dominance_threshold: float | None = None,
     ) -> np.ndarray:
         nperseg = nperseg if nperseg is not None else self.nperseg
-        noverlap = nperseg // 2
         alpha = dd_alpha if dd_alpha is not None else self.dd_alpha
         eps = 1e-10
 
@@ -216,12 +222,16 @@ class WienerDDMasking:
             unw_ch = np.asarray(
                 unwanted_2d[:min_len, ch % unw_channels], dtype=np.float64,
             ).ravel()[:min_len]
+            effective_nperseg, effective_noverlap = _effective_stft_params(
+                nperseg,
+                min_len,
+            )
 
             _, _, Z_mix = scipy_signal.stft(
-                mix_ch, nperseg=nperseg, noverlap=noverlap,
+                mix_ch, nperseg=effective_nperseg, noverlap=effective_noverlap,
             )
             _, _, Z_unw = scipy_signal.stft(
-                unw_ch, nperseg=nperseg, noverlap=noverlap,
+                unw_ch, nperseg=effective_nperseg, noverlap=effective_noverlap,
             )
 
             mag_mix = np.abs(Z_mix)
@@ -285,7 +295,7 @@ class WienerDDMasking:
             Z_clean = (gain * mag_mix) * np.exp(1j * phase_mix)
 
             _, clean_ch = scipy_signal.istft(
-                Z_clean, nperseg=nperseg, noverlap=noverlap,
+                Z_clean, nperseg=effective_nperseg, noverlap=effective_noverlap,
             )
             clean_ch = clean_ch[:min_len]
             if len(clean_ch) < min_len:
@@ -349,7 +359,6 @@ class CIRMMasking:
         speech_dominance_threshold: float | None = None,
     ) -> np.ndarray:
         nperseg = nperseg if nperseg is not None else self.nperseg
-        noverlap = nperseg // 2
         eps = 1e-10
 
         mix_2d = mix.reshape(-1, 1) if mix.ndim == 1 else mix
@@ -364,12 +373,16 @@ class CIRMMasking:
             unw_ch = np.asarray(
                 unwanted_2d[:min_len, ch % unw_channels], dtype=np.float64,
             ).ravel()[:min_len]
+            effective_nperseg, effective_noverlap = _effective_stft_params(
+                nperseg,
+                min_len,
+            )
 
             _, _, Z_mix = scipy_signal.stft(
-                mix_ch, nperseg=nperseg, noverlap=noverlap,
+                mix_ch, nperseg=effective_nperseg, noverlap=effective_noverlap,
             )
             _, _, Z_unw = scipy_signal.stft(
-                unw_ch, nperseg=nperseg, noverlap=noverlap,
+                unw_ch, nperseg=effective_nperseg, noverlap=effective_noverlap,
             )
 
             effective_agg = aggressiveness
@@ -464,7 +477,7 @@ class CIRMMasking:
             Z_clean = (gain * mag_mix) * np.exp(1j * (phase_mix + phase_correction))
 
             _, clean_ch = scipy_signal.istft(
-                Z_clean, nperseg=nperseg, noverlap=noverlap,
+                Z_clean, nperseg=effective_nperseg, noverlap=effective_noverlap,
             )
             clean_ch = clean_ch[:min_len]
             if len(clean_ch) < min_len:
