@@ -86,7 +86,7 @@ export default function ProfileScreen() {
             <ScrollView contentContainerStyle={styles.container} bounces={false}>
                 <View style={styles.headerWrapper}>
                 <LinearGradient
-                    colors={[colors.headerGradientStart || '#FF8A00', colors.headerGradientEnd || '#FF5722']}
+                    colors={[colors.headerGradientStart || '#1E3A8A', colors.headerGradientEnd || '#8B5CF6']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.headerBackground}
@@ -191,7 +191,7 @@ export default function ProfileScreen() {
                         // ── GÖRÜNTÜLEME MODU ──
                         <>
                             <View style={styles.infoRow}>
-                                <View style={[styles.infoIconBox, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
+                                <View style={[styles.infoIconBox, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
                                     <Ionicons name="person-outline" size={18} color={colors.primary} />
                                 </View>
                                 <View style={styles.infoContent}>
@@ -199,9 +199,9 @@ export default function ProfileScreen() {
                                     <Text style={[styles.infoValue, { color: colors.text }]}>{name || '—'}</Text>
                                 </View>
                             </View>
-                            <View style={[styles.separator, { backgroundColor: isDarkMode ? '#3D2D27' : '#FFE0D1' }]} />
+                            <View style={[styles.separator, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
                             <View style={styles.infoRow}>
-                                <View style={[styles.infoIconBox, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
+                                <View style={[styles.infoIconBox, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
                                     <Ionicons name="document-text-outline" size={18} color={colors.primary} />
                                 </View>
                                 <View style={styles.infoContent}>
@@ -209,9 +209,9 @@ export default function ProfileScreen() {
                                     <Text style={[styles.infoValue, { color: colors.text }]}>{bio || '—'}</Text>
                                 </View>
                             </View>
-                            <View style={[styles.separator, { backgroundColor: isDarkMode ? '#3D2D27' : '#FFE0D1' }]} />
+                            <View style={[styles.separator, { backgroundColor: isDarkMode ? '#334155' : '#E2E8F0' }]} />
                             <View style={styles.infoRow}>
-                                <View style={[styles.infoIconBox, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
+                                <View style={[styles.infoIconBox, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
                                     <Ionicons name="mail-outline" size={18} color={colors.primary} />
                                 </View>
                                 <View style={styles.infoContent}>

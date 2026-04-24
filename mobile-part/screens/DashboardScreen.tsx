@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, Image } from 'react-native';
+import {
+    StyleSheet, Text, View, TouchableOpacity,
+    ScrollView, Dimensions, Image, Switch,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSuppressionDemo } from '../hooks/useSuppressionDemo';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,66 +13,51 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
-
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
+    // ── Auth & Engine ────────────────────────────────────────────
     const { userInfo, userToken } = useAuth();
     const {
-        startLive,
-        stopLive,
-        status,
-        isLive,
-        target,
-        setTarget,
-        debugInfo,
-        runtimeInfo,
-        liveStatus,
-        meter,
+        startLive, stopLive,
+        status, isLive,
+        target, setTarget,
+        debugInfo, runtimeInfo, liveStatus, meter,
         availableTargets,
-        isRecordEnabled,
-        setIsRecordEnabled,
-        lastRecordingUri,
-        clearLastRecording,
+        isRecordEnabled, setIsRecordEnabled,
+        lastRecordingUri, clearLastRecording,
     } = useSuppressionDemo({ accessToken: userToken });
-
-
 
     const { colors, isDarkMode } = useTheme();
     const navigation = useNavigation<any>();
 
+    // ── Local state ──────────────────────────────────────────────
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [sound, setSound] = useState<Audio.Sound | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [filterStrength, setFilterStrength] = useState(100); // visual only
+    const [showRuntime, setShowRuntime] = useState(false);
+    const [showTargets, setShowTargets] = useState(false);
 
-
+    // ── Load notification preference ─────────────────────────────
     useFocusEffect(
         React.useCallback(() => {
-            const loadNotificationPreference = async () => {
-                try {
-                    const savedValue = await AsyncStorage.getItem('APP_NOTIFICATIONS');
-                    if (savedValue !== null) {
-                        setNotificationsEnabled(savedValue === 'true');
-                    }
-                } catch (e) {
-                    console.log('Failed to load notification preference', e);
-                }
-            };
-            loadNotificationPreference();
+            AsyncStorage.getItem('APP_NOTIFICATIONS').then(v => {
+                if (v !== null) setNotificationsEnabled(v === 'true');
+            }).catch(() => {});
         }, [])
     );
 
     const toggleNotifications = async () => {
-        const newValue = !notificationsEnabled;
-        setNotificationsEnabled(newValue);
-        await AsyncStorage.setItem('APP_NOTIFICATIONS', String(newValue));
+        const next = !notificationsEnabled;
+        setNotificationsEnabled(next);
+        await AsyncStorage.setItem('APP_NOTIFICATIONS', String(next));
     };
 
+    // ── Playback ─────────────────────────────────────────────────
     const playRecording = async () => {
         if (!lastRecordingUri) return;
-
         try {
-            // Force audio to play through speakers
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: false,
                 playsInSilentModeIOS: true,
@@ -77,643 +65,645 @@ export default function DashboardScreen() {
                 staysActiveInBackground: false,
                 playThroughEarpieceAndroid: false,
             });
-
-            if (sound) {
-                await sound.unloadAsync();
-            }
-
-
-            const { sound: newSound } = await Audio.Sound.createAsync(
-                { uri: lastRecordingUri },
-                { shouldPlay: true }
+            if (sound) await sound.unloadAsync();
+            const { sound: s } = await Audio.Sound.createAsync(
+                { uri: lastRecordingUri }, { shouldPlay: true }
             );
-
-            setSound(newSound);
+            setSound(s);
             setIsPlaying(true);
-
-            newSound.setOnPlaybackStatusUpdate((status) => {
-                if (status.isLoaded && !status.isPlaying && status.didJustFinish) {
-                    setIsPlaying(false);
-                }
+            s.setOnPlaybackStatusUpdate(st => {
+                if (st.isLoaded && !st.isPlaying && st.didJustFinish) setIsPlaying(false);
             });
-        } catch (error) {
-            console.error('Failed to play recording', error);
-        }
+        } catch (e) { console.error('Playback error', e); }
     };
 
     const stopPlayback = async () => {
-        if (sound) {
-            await sound.stopAsync();
-            setIsPlaying(false);
-        }
+        if (sound) { await sound.stopAsync(); setIsPlaying(false); }
     };
 
     React.useEffect(() => {
         return sound ? () => { sound.unloadAsync(); } : undefined;
     }, [sound]);
 
+    // ── Derived ──────────────────────────────────────────────────
+    const selectedTarget = availableTargets.find(t => t.id === target);
+    const meterPct = meter
+        ? Math.min(Math.round(Math.abs(meter.peakIn) * 300), 100)
+        : 0;
+
+    // ── Color aliases ────────────────────────────────────────────
+    const bg      = colors.background;
+    const card    = colors.card;
+    const primary = colors.primary;
+    const txt     = colors.text;
+    const sub     = isDarkMode ? '#94A3B8' : '#64748B';
+    const div     = isDarkMode ? '#334155' : '#E2E8F0';
 
     return (
-        <View style={{ flex: 1, backgroundColor: colors.background }}>
-            <ScrollView contentContainerStyle={styles.container} bounces={false}>
-                <View style={styles.headerWrapper}>
-                    <LinearGradient
-                        colors={[colors.headerGradientStart || '#FF8A00', colors.headerGradientEnd || '#FF5722']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.headerBackground}
-                    />
+        <View style={{ flex: 1, backgroundColor: bg }}>
+            <StatusBar style="light" />
 
-                    {/* Top Bar */}
-                    <View style={[styles.headerTopBar, { marginTop: 10, justifyContent: 'flex-end' }]}>
-                        <View style={styles.headerTopRight}>
-                            <TouchableOpacity onPress={toggleNotifications} activeOpacity={0.8} style={{ padding: 5, marginRight: 10 }}>
-                                <Ionicons name={notificationsEnabled ? "notifications" : "notifications-off-outline"} size={22} color="#FFF" />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={{ flexDirection: 'row', alignItems: 'center' }}
-                                onPress={() => navigation.navigate('Profile')}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={{ color: '#FFF', fontWeight: 'bold', marginRight: 10, fontSize: 15 }}>
-                                    {userInfo?.full_name?.split(' ')[0] || userInfo?.username || 'User'}
-                                </Text>
-                                <View style={styles.avatarPlaceholder}>
-                                    {userInfo?.photo_uri ? (
-                                        <Image source={{ uri: userInfo.photo_uri }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
-                                    ) : (
-                                        <Ionicons name="person" size={20} color={colors.primary} />
-                                    )}
-                                </View>
-                            </TouchableOpacity>
-                        </View>
+            {/* ── HEADER ── */}
+            <LinearGradient
+                colors={[colors.headerGradientStart || '#1E3A8A', colors.headerGradientEnd || '#8B5CF6']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.header}
+            >
+                <View style={styles.headerRow}>
+                    <Text style={styles.headerTitle}>Live Listen</Text>
+                    <View style={styles.headerIcons}>
+                        <TouchableOpacity onPress={toggleNotifications} style={styles.iconBtn}>
+                            <Ionicons
+                                name={notificationsEnabled ? 'notifications' : 'notifications-off-outline'}
+                                size={22} color="#FFF"
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.avatarBtn}
+                            onPress={() => navigation.navigate('Profile')}
+                            activeOpacity={0.8}
+                        >
+                            {userInfo?.photo_uri
+                                ? <Image source={{ uri: userInfo.photo_uri }} style={styles.avatarImg} />
+                                : (
+                                    <View style={[styles.avatarFallback, { backgroundColor: '#FFF' }]}>
+                                        <Ionicons name="person" size={16} color={primary} />
+                                    </View>
+                                )
+                            }
+                        </TouchableOpacity>
                     </View>
+                </View>
+                <Text style={styles.headerSub}>
+                    {userInfo?.full_name?.split(' ')[0] || userInfo?.username || 'User'} •{' '}
+                    {isLive ? 'Session active' : 'Ready to listen'}
+                </Text>
+            </LinearGradient>
 
-                    {/* Greeting */}
-                    <View style={styles.headerGreeting}>
-                        <Text style={styles.greetingTitle}>Hi {userInfo?.full_name || userInfo?.username || 'Developer'},</Text>
-                        <Text style={styles.greetingSubtitle}>AI Powered Noise Cancellation</Text>
+            <ScrollView
+                contentContainerStyle={[styles.scroll, { backgroundColor: bg }]}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* ── BIG LIVE BUTTON ── */}
+                <View style={styles.liveSection}>
+                    <TouchableOpacity
+                        style={[styles.liveRing, { borderColor: isLive ? '#EF4444' : primary }]}
+                        onPress={isLive ? stopLive : startLive}
+                        activeOpacity={0.85}
+                    >
+                        <View style={[styles.liveCore, { backgroundColor: isLive ? '#EF4444' : primary }]}>
+                            <Ionicons name={isLive ? 'stop' : 'ear'} size={38} color="#FFF" />
+                        </View>
+                    </TouchableOpacity>
+                    {isLive && (
+                        <View style={styles.livePill}>
+                            <View style={styles.liveDot} />
+                            <Text style={styles.livePillText}>LIVE</Text>
+                        </View>
+                    )}
+                    <Text style={[styles.liveCta, { color: sub }]}>
+                        {isLive ? 'Tap to stop' : 'Tap to start listening'}
+                    </Text>
+                </View>
+
+                {/* ── SYSTEM SUGGESTIONS ── */}
+                <View style={[styles.card, { backgroundColor: card }]}>
+                    <Text style={[styles.cardLabel, { color: sub }]}>System Suggestions</Text>
+                    <View style={styles.suggestionRow}>
+                        <View style={[
+                            styles.suggIcon,
+                            { backgroundColor: isLive ? (isDarkMode ? '#1E3A5F' : '#DBEAFE') : (isDarkMode ? '#1E293B' : '#F1F5F9') }
+                        ]}>
+                            <Ionicons
+                                name={isLive ? 'volume-high-outline' : 'ear-outline'}
+                                size={18}
+                                color={isLive ? (isDarkMode ? '#93C5FD' : '#2563EB') : sub}
+                            />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={[styles.suggText, { color: txt }]} numberOfLines={2}>
+                                {isLive && status ? status : 'Start listening to see suggestions'}
+                            </Text>
+                            {isLive && (
+                                <Text style={[styles.suggSub, { color: sub }]}>
+                                    Tap to attenuate this sound
+                                </Text>
+                            )}
+                        </View>
                     </View>
                 </View>
 
-                <View style={styles.contentWrapper}>
-                    {/* Main Overlapping Card */}
-                    <View style={[styles.mainCard, { backgroundColor: colors.card }]}>
-                        <View style={styles.mainCardTop}>
-                            <View style={styles.mainCardTopLeft}>
-                                <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? '#4A5568' : '#EBF8FF' }]}>
-                                    <Ionicons name="pulse" size={16} color={colors.primary} />
-                                </View>
-                                {/* Status text removed */}
-                            </View>
-                            <TouchableOpacity
-                                style={[styles.topUpButton, { backgroundColor: colors.primary, marginRight: 10 }, isLive && { backgroundColor: '#E53E3E' }]}
-                                onPress={isLive ? stopLive : startLive}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={styles.topUpButtonText}>{isLive ? "Stop Live" : "Start Live"}</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.recordToggle, isRecordEnabled && { backgroundColor: isDarkMode ? '#44337A' : '#E9D8FD' }]}
-                                onPress={() => setIsRecordEnabled(!isRecordEnabled)}
-                            >
-                                <Ionicons name="mic-circle" size={24} color={isRecordEnabled ? colors.primary : '#A0AEC0'} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <View style={[styles.divider, { backgroundColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]} />
-
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
-                            <Text style={[styles.playbackSub, { color: isRecordEnabled ? colors.primary : '#A0AEC0', fontWeight: 'bold' }]}>
-                                {isRecordEnabled ? "RECORDING ENABLED" : "RECORDING DISABLED"}
+                {/* ── TARGET SOUNDS (collapsible) ── */}
+                <View style={[styles.card, { backgroundColor: card }]}>
+                    <TouchableOpacity
+                        style={styles.runtimeToggleRow}
+                        onPress={() => setShowTargets(v => !v)}
+                        activeOpacity={0.7}
+                    >
+                        <View>
+                            <Text style={[styles.cardLabel, { color: sub, marginBottom: 2 }]}>Target Sounds</Text>
+                            <Text style={[styles.recogTitle, { color: txt, fontSize: 14 }]}>
+                                {selectedTarget?.label ?? 'None selected'}
                             </Text>
                         </View>
-
-
-
-                        <View style={styles.mainCardBottom}>
-                            <View style={styles.mainCardBottomLeft}>
-                                <View style={styles.tagsRow}>
-                                    <View style={[styles.tag, { backgroundColor: isDarkMode ? '#22543D' : '#E6FFFA' }]}>
-                                        <Text style={[styles.tagText, { color: isDarkMode ? '#9AE6B4' : '#319795' }]}>AI Mode</Text>
-                                    </View>
-                                    <View style={[styles.tag, { backgroundColor: isDarkMode ? '#2C5282' : '#EBF8FF' }]}>
-                                        <Text style={[styles.tagText, { color: isDarkMode ? '#90CDF4' : '#3182CE' }]}>Denoise</Text>
-                                    </View>
-                                </View>
-
-                                <View style={styles.targetInfoRow}>
-                                    <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#22543D' : '#C6F6D5' }]}>
-                                        <Ionicons name="swap-vertical" size={16} color={isDarkMode ? '#9AE6B4' : '#38A169'} />
-                                    </View>
-                                    <View style={{ marginLeft: 10 }}>
-                                        <Text style={[styles.activeTargetTitle, { color: colors.text }]}>
-                                            {availableTargets.find(t => t.id === target)?.label}
-                                        </Text>
-                                        <Text style={styles.activeTargetSubtitle}>
-                                            {isLive ? 'Edge suppression active' : 'Ready for live suppression'}
-                                        </Text>
-                                    </View>
-                                </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={[styles.targetDot, { backgroundColor: primary }]}>
+                                <Ionicons name={selectedTarget?.icon as any ?? 'musical-note'} size={13} color="#FFF" />
                             </View>
-
-                            <View style={styles.mainCardBottomRight}>
-                                <View style={styles.circularProgressWrap}>
-                                    <View style={[styles.circularProgressInner, { backgroundColor: colors.card }]}>
-                                        <Text style={[styles.circleValueText, { color: colors.text }]}>{isLive ? "LIVE" : "RDY"}</Text>
-                                        <Text style={styles.circleSubText}>/ SNS</Text>
-                                    </View>
-                                    <View style={[styles.circleBorder, { borderRightColor: colors.primary, borderBottomColor: colors.primary, transform: [{ rotate: isLive ? '45deg' : '225deg' }] }]} />
-                                    <View style={[styles.circleBorderTrack, { borderColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]} />
-                                </View>
-                            </View>
+                            <Ionicons name={showTargets ? 'chevron-up' : 'chevron-down'} size={16} color={sub} />
                         </View>
-                    </View>
+                    </TouchableOpacity>
 
-                    {/* Select Noise Type Section */}
-                    <Text style={[styles.sectionTitle, { color: colors.text }]}>Select Noise To Suppress</Text>
-
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-                        {availableTargets.map((t) => (
-                            <TouchableOpacity
-                                key={t.id}
-                                style={[
-                                    styles.horizontalCard,
-                                    { backgroundColor: colors.card },
-                                    target === t.id && { borderColor: colors.primary, borderWidth: 2 }
-                                ]}
-                                onPress={() => setTarget(t.id)}
-                                activeOpacity={0.8}
-                            >
-                                <View style={styles.horizontalCardTop}>
-                                    <View style={[
-                                        styles.iconContainerGreen,
-                                        { backgroundColor: isDarkMode ? '#4A5568' : '#C6F6D5' },
-                                        target === t.id && { backgroundColor: colors.primary }
-                                    ]}>
-                                        <Ionicons name={t.icon as any} size={16} color={target === t.id ? '#FFF' : (isDarkMode ? '#9AE6B4' : '#38A169')} />
-                                    </View>
-                                    <Text style={[styles.horizontalCardTitle, { color: colors.text }]} numberOfLines={1}>{t.label}</Text>
-                                </View>
-                                <Text style={[styles.horizontalCardDesc, { color: isDarkMode ? '#E2E8F0' : '#4A5568' }]}>Apply target</Text>
-                                <Text style={styles.horizontalCardSub}>{t.transient ? 'Transient-aware profile' : 'Steady-noise profile'}</Text>
-                                {/* Option and chevron removed */}
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-
-                    {/* Latest Result Section */}
-                    {lastRecordingUri && (
-                        <View style={styles.playbackSection}>
-                            <View style={styles.sectionHeader}>
-                                <Text style={[styles.sectionTitle, { color: colors.text }]}>Latest Result</Text>
-                                <TouchableOpacity onPress={clearLastRecording}>
-                                    <Text style={[styles.sectionLink, { color: '#E53E3E' }]}>Clear</Text>
-                                </TouchableOpacity>
+                    {showTargets && availableTargets.map((t, idx) => (
+                        <TouchableOpacity
+                            key={t.id}
+                            style={[
+                                styles.targetRow,
+                                { borderTopColor: div, borderTopWidth: idx === 0 ? StyleSheet.hairlineWidth : StyleSheet.hairlineWidth }
+                            ]}
+                            onPress={() => setTarget(t.id)}
+                            activeOpacity={0.7}
+                        >
+                            <View style={[
+                                styles.targetDot,
+                                { backgroundColor: target === t.id ? primary : (isDarkMode ? '#334155' : '#E2E8F0') }
+                            ]}>
+                                <Ionicons name={t.icon as any} size={13} color={target === t.id ? '#FFF' : sub} />
                             </View>
-
-                            <View style={[styles.playbackCard, { backgroundColor: colors.card, borderLeftWidth: 4, borderLeftColor: colors.primary }]}>
-                                <View style={styles.playbackLeft}>
-                                    <View style={[styles.iconContainerBlue, { backgroundColor: isDarkMode ? '#4A5568' : '#EBF8FF' }]}>
-                                        <Ionicons name="musical-note" size={18} color={colors.primary} />
-                                    </View>
-                                    <View style={{ marginLeft: 15 }}>
-                                        <Text style={[styles.playbackTitle, { color: colors.text }]}>Processed Snippet</Text>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Text style={styles.playbackSub}>Saved to </Text>
-                                            <TouchableOpacity onPress={() => navigation.navigate('Recordings')}>
-                                                <Text style={[styles.playbackSub, { color: colors.primary, fontWeight: '700' }]}>Library</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                </View>
-                                <View style={{ flexDirection: 'row' }}>
-                                    <TouchableOpacity
-                                        style={[styles.playButton, { backgroundColor: colors.primary, marginRight: 8 }]}
-                                        onPress={isPlaying ? stopPlayback : playRecording}
-                                    >
-                                        <Ionicons name={isPlaying ? "stop" : "play"} size={20} color="#FFF" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.playButton, { backgroundColor: isDarkMode ? '#4A5568' : '#EDF2F7' }]}
-                                        onPress={() => navigation.navigate('Recordings')}
-                                    >
-                                        <Ionicons name="list" size={20} color={colors.text} />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </View>
-
-                    )}
-
-                    {/* Runtime Section */}
-
-                    {(runtimeInfo || debugInfo) && (
-                        <View style={styles.playbackSection}>
-                            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 15 }]}>Live Runtime</Text>
-
-                            <View style={[styles.playbackCard, { backgroundColor: colors.card }]}>
-                                <View style={styles.playbackLeft}>
-                                    <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#22543D' : '#C6F6D5' }]}>
-                                        <Ionicons name="hardware-chip-outline" size={16} color={isDarkMode ? '#9AE6B4' : '#38A169'} />
-                                    </View>
-                                    <View style={{ marginLeft: 15 }}>
-                                        <Text style={[styles.playbackTitle, { color: colors.text }]}>Runtime</Text>
-                                        <Text style={styles.playbackSub}>
-                                            {runtimeInfo?.displayName ?? runtimeInfo?.provider ?? 'pending'} / {runtimeInfo?.modelVersion ?? 'unloaded'}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={[styles.playBadge, { backgroundColor: isDarkMode ? '#4A5568' : '#FFF0E5' }]}>
-                                    <Text style={[styles.playBadgeText, { color: colors.primary }]}>
-                                        {runtimeInfo?.sampleRate ?? '--'} Hz
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={[styles.playbackCard, { backgroundColor: colors.card }]}>
-                                <View style={styles.playbackLeft}>
-                                    <View style={[styles.iconContainerGreen, { backgroundColor: isDarkMode ? '#2C5282' : '#EBF8FF' }]}>
-                                        <Ionicons name="speedometer-outline" size={16} color={isDarkMode ? '#90CDF4' : '#3182CE'} />
-                                    </View>
-                                    <View style={{ marginLeft: 15 }}>
-                                        <Text style={[styles.playbackTitle, { color: colors.text }]}>Live Metrics</Text>
-                                        <Text style={styles.playbackSub}>
-                                            {liveStatus?.inferenceMs?.toFixed(1) ?? '--'} ms infer / {liveStatus?.queueDepthMs?.toFixed(1) ?? '--'} ms queue
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={[styles.playBadge, { backgroundColor: colors.primary }]}>
-                                    <Text style={[styles.playBadgeText, { color: '#FFF' }]}>
-                                        XR {liveStatus?.xruns ?? 0}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={[styles.playbackCard, { backgroundColor: colors.card, alignItems: 'flex-start' }]}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={[styles.playbackTitle, { color: colors.text, marginBottom: 6 }]}>Status</Text>
-                                    <Text style={styles.playbackSub}>{status}</Text>
-                                    <Text style={[styles.debugText, { color: colors.text, marginTop: 12 }]}>
-                                        {debugInfo}
-                                    </Text>
-                                    {meter && (
-                                        <Text style={styles.playbackSub}>
-                                            In peak {meter.peakIn.toFixed(3)} / Out peak {meter.peakOut.toFixed(3)}
-                                        </Text>
-                                    )}
-                                </View>
-                            </View>
-                        </View>
-                    )}
+                            <Text style={[
+                                styles.targetName,
+                                { color: target === t.id ? primary : txt, fontWeight: target === t.id ? '700' : '500' }
+                            ]}>
+                                {t.label}
+                            </Text>
+                            <Text style={[styles.targetTag, { color: sub, backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+                                {t.transient ? 'Transient' : 'Steady'}
+                            </Text>
+                            {target === t.id
+                                ? <Ionicons name="checkmark-circle" size={20} color={primary} />
+                                : <View style={[styles.targetCircle, { borderColor: div }]} />
+                            }
+                        </TouchableOpacity>
+                    ))}
                 </View>
 
-                <StatusBar style="light" />
+
+                {/* ── FILTER STRENGTH ── */}
+                <View style={[styles.card, { backgroundColor: card }]}>
+                    <View style={styles.filterHeader}>
+                        <Text style={[styles.cardLabel, { color: sub, marginBottom: 0 }]}>Filter Strength</Text>
+                        <Text style={[styles.filterPct, { color: primary }]}>{filterStrength}%</Text>
+                    </View>
+                    <View style={[styles.filterTrack, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+                        <View style={[styles.filterFill, { width: `${filterStrength}%`, backgroundColor: primary }]} />
+                    </View>
+                    <View style={styles.filterBtns}>
+                        <TouchableOpacity
+                            style={[styles.filterBtn, { borderColor: div }]}
+                            onPress={() => setFilterStrength(f => Math.max(0, f - 10))}
+                        >
+                            <Ionicons name="remove" size={20} color={txt} />
+                        </TouchableOpacity>
+                        <Text style={[styles.filterBtnLabel, { color: sub }]}>Adjust strength</Text>
+                        <TouchableOpacity
+                            style={[styles.filterBtn, { borderColor: div }]}
+                            onPress={() => setFilterStrength(f => Math.min(100, f + 10))}
+                        >
+                            <Ionicons name="add" size={20} color={txt} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* ── SOUND RECOGNITION ── */}
+                <View style={[styles.card, { backgroundColor: card }]}>
+                    <View style={styles.recogRow}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.cardLabel, { color: sub, marginBottom: 2 }]}>Sound Recognition</Text>
+                            <Text style={[styles.recogTitle, { color: txt }]}>
+                                {selectedTarget?.label ?? 'No target selected'}
+                            </Text>
+                        </View>
+                        <Switch
+                            value={isRecordEnabled}
+                            onValueChange={setIsRecordEnabled}
+                            trackColor={{ false: div, true: primary }}
+                            thumbColor="#FFF"
+                        />
+                    </View>
+                    {meter && isLive && (
+                        <View style={{ marginTop: 14 }}>
+                            <View style={styles.meterRow}>
+                                <Text style={[styles.meterLabel, { color: sub }]}>Input Level</Text>
+                                <Text style={[styles.meterPct, { color: primary }]}>{meterPct}%</Text>
+                            </View>
+                            <View style={[styles.meterTrack, { backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9' }]}>
+                                <View style={[
+                                    styles.meterFill,
+                                    { width: `${meterPct}%`, backgroundColor: meterPct > 70 ? '#EF4444' : primary }
+                                ]} />
+                            </View>
+                            <Text style={[styles.meterSub, { color: sub }]}>
+                                In {meter.peakIn.toFixed(3)} / Out {meter.peakOut.toFixed(3)}
+                            </Text>
+                        </View>
+                    )}
+                    <Text style={[styles.recogHint, { color: sub }]}>
+                        Identifies sounds in your environment using on-device analysis.
+                    </Text>
+                </View>
+
+                {/* ── LATEST RESULT ── */}
+                {lastRecordingUri && (
+                    <View style={[styles.card, { backgroundColor: card }]}>
+                        <View style={styles.latestHeader}>
+                            <Text style={[styles.cardLabel, { color: sub, marginBottom: 0 }]}>Latest Result</Text>
+                            <TouchableOpacity onPress={clearLastRecording}>
+                                <Text style={{ color: '#EF4444', fontSize: 13, fontWeight: '600' }}>Clear</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.latestRow}>
+                            <View style={[styles.latestIcon, { backgroundColor: isDarkMode ? '#1E293B' : '#EDE9FE' }]}>
+                                <Ionicons name="musical-note" size={20} color={primary} />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 14 }}>
+                                <Text style={[styles.latestTitle, { color: txt }]}>Processed Snippet</Text>
+                                <TouchableOpacity onPress={() => navigation.navigate('Recordings')}>
+                                    <Text style={[styles.latestLink, { color: primary }]}>View in Library →</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity
+                                style={[styles.playBtn, { backgroundColor: primary }]}
+                                onPress={isPlaying ? stopPlayback : playRecording}
+                            >
+                                <Ionicons name={isPlaying ? 'stop' : 'play'} size={18} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
+
+                {/* ── RUNTIME (collapsible) ── */}
+                {(runtimeInfo || debugInfo) && (
+                    <View style={[styles.card, { backgroundColor: card }]}>
+                        <TouchableOpacity
+                            style={styles.runtimeToggleRow}
+                            onPress={() => setShowRuntime(v => !v)}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={[styles.cardLabel, { color: sub, marginBottom: 0 }]}>Live Runtime</Text>
+                            <Ionicons name={showRuntime ? 'chevron-up' : 'chevron-down'} size={16} color={sub} />
+                        </TouchableOpacity>
+
+                        {showRuntime && (
+                            <View style={{ marginTop: 14 }}>
+                                {[
+                                    ['Provider', runtimeInfo?.displayName ?? runtimeInfo?.provider ?? '—'],
+                                    ['Model', runtimeInfo?.modelVersion ?? '—'],
+                                    ['Sample Rate', `${runtimeInfo?.sampleRate ?? '—'} Hz`],
+                                    ['Inference', `${liveStatus?.inferenceMs?.toFixed(1) ?? '—'} ms`],
+                                    ['Queue', `${liveStatus?.queueDepthMs?.toFixed(1) ?? '—'} ms`],
+                                    ['XRuns', String(liveStatus?.xruns ?? 0)],
+                                ].map(([k, v]) => (
+                                    <View key={k} style={[styles.runtimeRow, { borderBottomColor: div }]}>
+                                        <Text style={[styles.runtimeKey, { color: sub }]}>{k}</Text>
+                                        <Text style={[styles.runtimeVal, { color: txt }]}>{v}</Text>
+                                    </View>
+                                ))}
+                                {debugInfo && (
+                                    <Text style={[styles.debugText, { color: sub }]}>{debugInfo}</Text>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                <View style={{ height: 36 }} />
             </ScrollView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flexGrow: 1,
-        paddingBottom: 40,
+    // Header
+    header: {
+        paddingTop: 54,
+        paddingBottom: 20,
+        paddingHorizontal: 22,
     },
-    headerWrapper: {
-        width: '100%',
-        paddingTop: 50,
-        paddingHorizontal: 25,
-        paddingBottom: 90,
-        borderBottomLeftRadius: 35,
-        borderBottomRightRadius: 35,
-        overflow: 'hidden',
-        borderCurve: 'continuous',
-    },
-    headerBackground: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-    headerTopBar: {
+    headerRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 30,
+        justifyContent: 'space-between',
+        marginBottom: 6,
     },
-    headerTopText: {
-        color: 'rgba(255,255,255,0.8)',
+    headerTitle: {
+        color: '#FFF',
+        fontSize: 28,
+        fontWeight: '800',
+        letterSpacing: -0.5,
+    },
+    headerSub: {
+        color: 'rgba(255,255,255,0.75)',
+        fontSize: 13,
+        fontWeight: '500',
+    },
+    headerIcons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    iconBtn: {
+        padding: 6,
+    },
+    avatarBtn: {},
+    avatarImg: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+    },
+    avatarFallback: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    // Scroll
+    scroll: {
+        paddingTop: 28,
+        paddingHorizontal: 16,
+        paddingBottom: 20,
+    },
+
+    // Live button
+    liveSection: {
+        alignItems: 'center',
+        marginBottom: 28,
+    },
+    liveRing: {
+        width: 110,
+        height: 110,
+        borderRadius: 55,
+        borderWidth: 3,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    liveCore: {
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 10,
+    },
+    livePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EF4444',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
+        marginBottom: 8,
+        gap: 5,
+    },
+    liveDot: {
+        width: 7,
+        height: 7,
+        borderRadius: 4,
+        backgroundColor: '#FFF',
+    },
+    livePillText: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '800',
+        letterSpacing: 1,
+    },
+    liveCta: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
+
+    // Generic card
+    card: {
+        borderRadius: 18,
+        padding: 18,
+        marginBottom: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    cardLabel: {
         fontSize: 12,
         fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 14,
     },
-    headerTopRight: {
+
+    // Suggestions
+    suggestionRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    avatarPlaceholder: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#FFF',
+    suggIcon: {
+        width: 38,
+        height: 38,
+        borderRadius: 11,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    headerGreeting: {
-        marginBottom: 10,
+    suggText: {
+        fontSize: 14,
+        fontWeight: '600',
+        lineHeight: 20,
     },
-    greetingTitle: {
-        color: '#FFF',
-        fontSize: 26,
-        fontWeight: '700',
+    suggSub: {
+        fontSize: 12,
+        marginTop: 2,
     },
-    greetingSubtitle: {
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: 16,
-        fontWeight: '500',
-        marginTop: 4,
+
+    // Targets
+    targetRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 13,
+        gap: 10,
     },
-    contentWrapper: {
-        paddingHorizontal: 20,
-        marginTop: -65,
+    targetDot: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    mainCard: {
-        borderRadius: 24,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.05,
-        shadowRadius: 15,
-        elevation: 8,
-        marginBottom: 25,
-        borderCurve: 'continuous',
+    targetName: {
+        flex: 1,
+        fontSize: 15,
     },
-    mainCardTop: {
+    targetTag: {
+        fontSize: 11,
+        fontWeight: '600',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginRight: 4,
+    },
+    targetCircle: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 1.5,
+    },
+
+    // Filter Strength
+    filterHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingBottom: 15,
+        marginBottom: 14,
     },
-    mainCardTopLeft: {
+    filterPct: {
+        fontSize: 26,
+        fontWeight: '800',
+    },
+    filterTrack: {
+        height: 6,
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginBottom: 14,
+    },
+    filterFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    filterBtns: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    filterBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        borderWidth: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    filterBtnLabel: {
+        fontSize: 13,
+        fontWeight: '500',
+    },
+
+    // Sound Recognition
+    recogRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    iconContainerBlue: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
+    recogTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    meterRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    meterLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+    },
+    meterPct: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    meterTrack: {
+        height: 5,
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
+    meterFill: {
+        height: '100%',
+        borderRadius: 3,
+    },
+    meterSub: {
+        fontSize: 11,
+        marginTop: 5,
+        fontFamily: 'monospace',
+    },
+    recogHint: {
+        fontSize: 12,
+        marginTop: 12,
+        lineHeight: 17,
+    },
+
+    // Latest result
+    latestHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 14,
+    },
+    latestRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    latestIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 13,
         justifyContent: 'center',
         alignItems: 'center',
-        borderCurve: 'continuous',
     },
-    statusLabelText: {
-        fontSize: 12,
-        color: '#A0AEC0',
-    },
-    statusValueText: {
+    latestTitle: {
         fontSize: 14,
-        fontWeight: 'bold',
+        fontWeight: '700',
+        marginBottom: 3,
     },
-    topUpButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-        borderCurve: 'continuous',
-    },
-    topUpButtonText: {
-        color: '#FFF',
+    latestLink: {
         fontSize: 13,
         fontWeight: '600',
     },
-    divider: {
-        height: 1,
-        marginHorizontal: -20,
-        marginBottom: 15,
+    playBtn: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    mainCardBottom: {
+
+    // Runtime
+    runtimeToggleRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
     },
-    mainCardBottomLeft: {
-        flex: 1,
-    },
-    tagsRow: {
+    runtimeRow: {
         flexDirection: 'row',
-        marginBottom: 15,
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 9,
+        borderBottomWidth: StyleSheet.hairlineWidth,
     },
-    tag: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-        marginRight: 8,
-        borderCurve: 'continuous',
+    runtimeKey: {
+        fontSize: 13,
+        fontWeight: '500',
     },
-    tagText: {
-        fontSize: 10,
+    runtimeVal: {
+        fontSize: 13,
         fontWeight: '600',
-    },
-    targetInfoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    iconContainerGreen: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    activeTargetTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    activeTargetSubtitle: {
-        fontSize: 12,
-        color: '#A0AEC0',
-    },
-    activeUntilText: {
-        fontSize: 11,
-        color: '#A0AEC0',
-        marginTop: 5,
-    },
-    mainCardBottomRight: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: 80,
-    },
-    circularProgressWrap: {
-        width: 76,
-        height: 76,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    circularProgressInner: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 2,
-    },
-    circleBorder: {
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
-        borderWidth: 6,
-        borderRadius: 38,
-        borderTopColor: 'transparent',
-        borderLeftColor: 'transparent',
-        zIndex: 1,
-    },
-    circleBorderTrack: {
-        position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
-        borderWidth: 6,
-        borderRadius: 38,
-        zIndex: 0,
-    },
-    circleValueText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    circleSubText: {
-        fontSize: 10,
-        color: '#A0AEC0',
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 15,
-        paddingHorizontal: 4,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-    },
-    sectionLink: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    horizontalScroll: {
-        paddingRight: 20,
-        paddingBottom: 10,
-    },
-    horizontalCard: {
-        width: 140,
-        borderRadius: 20,
-        padding: 16,
-        marginRight: 15,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.03,
-        shadowRadius: 8,
-        elevation: 3,
-        borderWidth: 2,
-        borderColor: 'transparent',
-        borderCurve: 'continuous',
-    },
-    horizontalCardTop: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    horizontalCardTitle: {
-        fontWeight: 'bold',
-        fontSize: 14,
-        marginLeft: 8,
-        flex: 1,
-    },
-    horizontalCardDesc: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    horizontalCardSub: {
-        fontSize: 11,
-        color: '#A0AEC0',
-        marginBottom: 15,
-    },
-    cardPriceRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    cardPrice: {
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    playbackSection: {
-        marginTop: 15,
-    },
-    playbackCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
-        borderRadius: 20,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.03,
-        shadowRadius: 8,
-        elevation: 3,
-        borderCurve: 'continuous',
-    },
-    playbackLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    playbackTitle: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        marginBottom: 2,
-    },
-    playbackSub: {
-        fontSize: 12,
-        color: '#A0AEC0',
-    },
-    playBadge: {
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: 16,
-        borderCurve: 'continuous',
-    },
-    playBadgeText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    path: {
-        fontSize: 11,
-        textAlign: 'center',
-        marginTop: 5,
     },
     debugText: {
-        fontSize: 12,
-        marginBottom: 10,
+        fontSize: 11,
         fontFamily: 'monospace',
-    },
-    recordToggle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#EDF2F7',
-    },
-    recordToggleText: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginLeft: 6,
-    },
-    playButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
+        marginTop: 10,
+        lineHeight: 17,
     },
 });
-
