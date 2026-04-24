@@ -95,6 +95,14 @@ class TestWienerDDMasking:
 
         assert _rms(mix - out_soft) < _rms(mix - out_default)
 
+    def test_short_tail_chunk_uses_valid_stft_window(self):
+        masking = WienerDDMasking(nperseg=2048)
+        mix = np.random.randn(1297).astype(np.float32) * 0.1
+        unwanted = mix * 0.4
+        out = masking.apply(mix, unwanted, aggressiveness=1.0, sample_rate=24000)
+        assert out.shape == mix.shape
+        assert np.isfinite(out).all()
+
 
 # ---------------------------------------------------------------------------
 # CIRMMasking
@@ -203,6 +211,14 @@ class TestCIRMMasking:
         )
 
         assert _rms(mix - out_limited) < _rms(mix - out_hard)
+
+    def test_short_tail_chunk_uses_valid_stft_window(self):
+        masking = CIRMMasking(nperseg=2048)
+        mix = np.random.randn(1297).astype(np.float32) * 0.1
+        unwanted = mix * 0.4
+        out = masking.apply(mix, unwanted, aggressiveness=1.0, sample_rate=24000)
+        assert out.shape == mix.shape
+        assert np.isfinite(out).all()
 
 
 # ---------------------------------------------------------------------------
