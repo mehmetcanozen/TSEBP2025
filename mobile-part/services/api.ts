@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // The EXPO_PUBLIC_ prefix is important for Expo to expose it to the app
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
