@@ -18,9 +18,9 @@ The desktop app provides two main flows:
 1. Offline suppression
    Give the app an audio file, choose one or more exact-15 categories, and export a cleaned WAV.
 2. Live monitor suppression
-   Capture the user's microphone, suppress the selected categories in a buffered native pipeline, and play the cleaned result back to a selected output device inside the app.
+   Capture the user's microphone, suppress the selected categories in a buffered native pipeline, and play the cleaned result back to a selected output device or a VB-CABLE virtual microphone route.
 
-The current desktop runtime is Windows-only and intentionally scoped to app-local monitoring. It does not currently expose a system-wide virtual microphone.
+The current desktop runtime is Windows-only. It does not ship or develop a virtual audio driver; virtual microphone routing uses an optional existing VB-CABLE installation.
 
 ## What Was Added
 
@@ -34,6 +34,7 @@ Major additions:
   - ONNX model session management
   - offline audio decoding and WAV export
   - live microphone capture and monitor playback
+  - optional VB-CABLE virtual microphone routing
   - Wiener decision-directed masking
   - desktop command/state orchestration
 - Added model-backed frontend integration:
@@ -106,7 +107,7 @@ Important backend pieces:
 - `src-tauri/src/audio/io.rs`
   Symphonia decode and float32 WAV export
 - `src-tauri/src/audio/devices.rs`
-  Device enumeration and stream config resolution
+  Device enumeration, VB-CABLE detection, and stream config resolution
 - `src-tauri/src/audio/live.rs`
   Buffered live monitor pipeline
 - `src-tauri/src/engine/mod.rs`
@@ -180,12 +181,91 @@ Current live design:
 - capture mic input in a native Rust stream
 - convert callback frames to mono and push into a lock-free ring buffer
 - maintain a rolling `5.0 s` context
-- run suppression every `1.0 s`
+- run Waveformer suppression every `100 ms` when the streaming model is active
 - push the latest cleaned hop into the render buffer
-- play cleaned output to the selected output device
+- play cleaned output to the selected monitor device or `CABLE Input (VB-Audio Virtual Cable)`
 - optionally record the cleaned live signal to a WAV file
 
 This is designed to avoid adding avoidable latency in the desktop glue. The model itself is still the main bottleneck.
+
+### Virtual microphone flow
+
+Virtual Mic mode depends on VB-CABLE because Windows applications need a capture endpoint to see audio as a microphone. The app detects the VB-CABLE playback endpoint, renders cleaned audio into `CABLE Input`, and tells the user to select `CABLE Output` as the microphone in the target app.
+
+This is intentionally not a driver, APO, or global microphone interceptor. If VB-CABLE is missing, Virtual Mic mode stays disabled and local monitor mode remains available.
+
+Developer setup:
+
+1. Install VB-CABLE from the official VB-Audio site:
+
+```text
+https://vb-audio.com/Cable/
+```
+
+2. Reboot if the installer asks for it.
+3. Start the desktop app and click **Refresh devices**.
+4. Confirm the app reports VB-CABLE ready.
+
+Expected Windows device pair:
+
+```text
+CABLE Input  - playback endpoint the desktop app writes cleaned audio into
+CABLE Output - recording endpoint the target app selects as its microphone
+```
+
+Without VB-CABLE, developers can still test offline rendering and live **Listen locally** mode. They cannot validate the target-app microphone handoff until `CABLE Input` and `CABLE Output` are available.
+
+### Testing Virtual Mic with a WAV source
+
+For the reliable one-machine Virtual Mic test, use the desktop app's **Debug WAV mic source** control in live mode. This makes the desktop live pipeline read a WAV as if it were microphone input while still rendering the cleaned result to VB-CABLE Virtual Mic output. This test needs one VB-CABLE pair and does not need a second virtual cable.
+
+Start the app from PowerShell:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\desktop
+$env:Path += ";$env:USERPROFILE\.cargo\bin"
+npm run tauri:dev
+```
+
+Tested route:
+
+```text
+desktop Debug WAV mic source
+-> desktop live suppression
+-> CABLE Input
+-> CABLE Output
+-> target app microphone selection
+```
+
+Set the debug WAV path to a source file such as:
+
+```text
+C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav
+```
+
+Use these live settings:
+
+```text
+Mode: Virtual mic
+Clean audio sink: CABLE Input (VB-Audio Virtual Cable)
+Debug WAV mic source: ON
+Debug WAV path: C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav
+Category: dog barking
+```
+
+Start the session, then record from `CABLE Output (VB-Audio Virtual Cable)` in the target app. This validates the full desktop Virtual Mic route with one VB-CABLE pair and without speakers, headset microphone bleed, or a second virtual cable.
+
+If the target app does not list `CABLE Output`, open Windows Sound settings and confirm the VB-CABLE recording endpoint is enabled. If the desktop app does not report VB-CABLE ready, reinstall or repair VB-CABLE, reboot if prompted, then click **Refresh devices**.
+
+The Python reference side also includes a pure feeder for lower-level cable playback checks. It plays a WAV into a virtual cable playback endpoint and does not run suppression, inference, or cleanup itself:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+python -m ai.scripts.demos.virtual_mic_streamer --list-devices
+python -m ai.scripts.demos.virtual_mic_streamer --input C:\path\to\test.wav --device-name "CABLE Input"
+```
+
+Do not use the Python feeder for the full one-cable Virtual Mic validation path above; use the in-app Debug WAV mic source.
 
 ## Public Native API
 
@@ -196,6 +276,7 @@ Commands:
 - `get_model_categories`
 - `get_hive15_presets`
 - `list_audio_devices`
+- `get_virtual_mic_status`
 - `get_runtime_metrics`
 - `start_offline_job`
 - `cancel_offline_job`
@@ -279,10 +360,10 @@ This is an important section because the desktop app is functional, but not ever
 Current boundaries:
 
 - Windows-only runtime
-- app-local mic monitoring only
-- no virtual microphone driver
+- virtual microphone routing requires a user-installed VB-CABLE device
+- no bundled or custom virtual microphone driver
 - CPU-first ONNX inference
-- live processing is buffered, not ultra-low-latency voice-chat grade
+- live processing is buffered; Waveformer uses a lower-latency voice-chat profile, but device and model timing still matter
 - multi-category live suppression can become slow on CPU
 - live path currently uses CPAL-based native streams rather than a fully hand-written `IAudioClient3` path
 
