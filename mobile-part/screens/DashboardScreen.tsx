@@ -20,12 +20,13 @@ export default function DashboardScreen() {
     const { userInfo, userToken } = useAuth();
     const {
         startLive, stopLive,
-        status, isLive,
+        status, phase, isLive,
         target, setTarget,
         debugInfo, runtimeInfo, liveStatus, meter,
         availableTargets,
         isRecordEnabled, setIsRecordEnabled,
-        lastRecordingUri, clearLastRecording,
+        lastRecordingUri, lastRecordingFileName, lastRecordingFilePath,
+        lastRecordingFileSizeBytes, clearLastRecording,
     } = useSuppressionDemo({ accessToken: userToken });
 
     const { colors, isDarkMode } = useTheme();
@@ -87,6 +88,14 @@ export default function DashboardScreen() {
 
     // ── Derived ──────────────────────────────────────────────────
     const selectedTarget = availableTargets.find(t => t.id === target);
+    const liveButtonDisabled = phase === 'preparing' || phase === 'stopping';
+    const liveButtonLabel = phase === 'preparing'
+        ? 'Preparing audio...'
+        : phase === 'stopping'
+            ? 'Saving output...'
+            : isLive
+                ? 'Tap to stop'
+                : 'Tap to start listening';
     const meterPct = meter
         ? Math.min(Math.round(Math.abs(meter.peakIn) * 300), 100)
         : 0;
@@ -147,8 +156,15 @@ export default function DashboardScreen() {
                 {/* ── BIG LIVE BUTTON ── */}
                 <View style={styles.liveSection}>
                     <TouchableOpacity
-                        style={[styles.liveRing, { borderColor: isLive ? '#EF4444' : primary }]}
+                        style={[
+                            styles.liveRing,
+                            {
+                                borderColor: isLive ? '#EF4444' : primary,
+                                opacity: liveButtonDisabled ? 0.55 : 1,
+                            }
+                        ]}
                         onPress={isLive ? stopLive : startLive}
+                        disabled={liveButtonDisabled}
                         activeOpacity={0.85}
                     >
                         <View style={[styles.liveCore, { backgroundColor: isLive ? '#EF4444' : primary }]}>
@@ -162,7 +178,7 @@ export default function DashboardScreen() {
                         </View>
                     )}
                     <Text style={[styles.liveCta, { color: sub }]}>
-                        {isLive ? 'Tap to stop' : 'Tap to start listening'}
+                        {liveButtonLabel}
                     </Text>
                 </View>
 
@@ -326,9 +342,19 @@ export default function DashboardScreen() {
                                 <Ionicons name="musical-note" size={20} color={primary} />
                             </View>
                             <View style={{ flex: 1, marginLeft: 14 }}>
-                                <Text style={[styles.latestTitle, { color: txt }]}>Processed Snippet</Text>
+                                <Text style={[styles.latestTitle, { color: txt }]}>
+                                    {lastRecordingFileName ?? 'Processed Snippet'}
+                                </Text>
+                                <Text style={[styles.latestPath, { color: sub }]} numberOfLines={2}>
+                                    {lastRecordingFilePath ?? lastRecordingUri}
+                                </Text>
+                                {lastRecordingFileSizeBytes != null && (
+                                    <Text style={[styles.latestMeta, { color: sub }]}>
+                                        {(lastRecordingFileSizeBytes / 1024).toFixed(1)} KB
+                                    </Text>
+                                )}
                                 <TouchableOpacity onPress={() => navigation.navigate('Recordings')}>
-                                    <Text style={[styles.latestLink, { color: primary }]}>View in Library →</Text>
+                                    <Text style={[styles.latestLink, { color: primary }]}>{'View in Library ->'}</Text>
                                 </TouchableOpacity>
                             </View>
                             <TouchableOpacity
@@ -362,6 +388,14 @@ export default function DashboardScreen() {
                                     ['Inference', `${liveStatus?.inferenceMs?.toFixed(1) ?? '—'} ms`],
                                     ['Queue', `${liveStatus?.queueDepthMs?.toFixed(1) ?? '—'} ms`],
                                     ['XRuns', String(liveStatus?.xruns ?? 0)],
+                                    ['AudioTrack Underruns', String(liveStatus?.audioTrackUnderruns ?? 0)],
+                                    ['Limiter Hits', String(liveStatus?.limiterHits ?? 0)],
+                                    ['Fail-open', String(liveStatus?.failOpenCount ?? 0)],
+                                    ['Boundary Repairs', String(liveStatus?.boundaryRepairHits ?? 0)],
+                                    ['Startup Blend', `${liveStatus?.startupBlendMs ?? 0} ms`],
+                                    ['Post-filter', liveStatus?.waveformerPostFilter ?? 'off'],
+                                    ['Raw Peak', meter?.rawOutPeak?.toFixed(3) ?? '--'],
+                                    ['Final Peak', meter?.finalOutPeak?.toFixed(3) ?? meter?.peakOut?.toFixed(3) ?? '--'],
                                 ].map(([k, v]) => (
                                     <View key={k} style={[styles.runtimeRow, { borderBottomColor: div }]}>
                                         <Text style={[styles.runtimeKey, { color: sub }]}>{k}</Text>
@@ -665,6 +699,15 @@ const styles = StyleSheet.create({
     latestTitle: {
         fontSize: 14,
         fontWeight: '700',
+        marginBottom: 3,
+    },
+    latestPath: {
+        fontSize: 11,
+        lineHeight: 15,
+        marginBottom: 3,
+    },
+    latestMeta: {
+        fontSize: 11,
         marginBottom: 3,
     },
     latestLink: {

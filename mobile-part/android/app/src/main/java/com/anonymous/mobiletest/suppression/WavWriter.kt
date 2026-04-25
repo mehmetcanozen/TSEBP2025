@@ -12,26 +12,38 @@ class WavWriter(private val file: File, private val sampleRate: Int) : AutoClose
     private val raf = RandomAccessFile(file, "rw")
     private var totalPcmBytes = 0L
     private var maxAmplitude = 0f
+    private var nonZeroSamples = 0L
 
 
     init {
+        file.parentFile?.mkdirs()
+        raf.setLength(0)
         writeHeader(0) // Write initial dummy header
     }
 
     fun write(buffer: FloatArray, length: Int) = synchronized(this) {
         if (!raf.channel.isOpen) return
-        val pcm = ByteBuffer.allocate(length * 2).order(ByteOrder.LITTLE_ENDIAN)
-        for (i in 0 until length) {
+        val safeLength = kotlin.math.min(length, buffer.size)
+        if (safeLength <= 0) return
+
+        val pcm = ByteBuffer.allocate(safeLength * 2).order(ByteOrder.LITTLE_ENDIAN)
+        for (i in 0 until safeLength) {
           val valFloat = buffer[i]
-          val absValue = if (valFloat < 0) -valFloat else valFloat
+          val safeFloat = if (valFloat.isNaN() || valFloat.isInfinite()) 0f else valFloat
+          val absValue = if (safeFloat < 0) -safeFloat else safeFloat
           if (absValue > maxAmplitude) maxAmplitude = absValue
+          if (absValue > 1.0e-5f) nonZeroSamples += 1
           
-          val sample = valFloat.coerceIn(-1f, 1f)
+          val sample = safeFloat.coerceIn(-1f, 1f)
           pcm.putShort((sample * 32767.0f).toInt().toShort())
         }
 
         raf.write(pcm.array())
-        totalPcmBytes += length * 2
+        totalPcmBytes += safeLength * 2L
+
+        val endPosition = raf.filePointer
+        writeHeader(totalPcmBytes)
+        raf.seek(endPosition)
     }
 
     override fun close() = synchronized(this) {
@@ -39,7 +51,10 @@ class WavWriter(private val file: File, private val sampleRate: Int) : AutoClose
             raf.seek(0)
             writeHeader(totalPcmBytes)
             raf.close()
-            android.util.Log.d("WavWriter", "Closed WAV file. Total bytes: $totalPcmBytes, rate: $sampleRate, maxAmp: $maxAmplitude")
+            android.util.Log.d(
+                "WavWriter",
+                "Closed WAV file. Total bytes: $totalPcmBytes, rate: $sampleRate, maxAmp: $maxAmplitude, nonZeroSamples: $nonZeroSamples, path: ${file.absolutePath}"
+            )
         }
     }
 
