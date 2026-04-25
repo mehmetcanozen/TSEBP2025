@@ -26,6 +26,7 @@ pub struct AudioDevice {
     pub name: String,
     pub direction: AudioDeviceDirection,
     pub default: bool,
+    pub virtual_cable: Option<VirtualCableEndpoint>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -37,14 +38,47 @@ pub enum AudioDeviceDirection {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct VirtualCableEndpoint {
+    pub provider: String,
+    pub role: VirtualCableEndpointRole,
+    pub paired_device_name: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VirtualCableEndpointRole {
+    Playback,
+    Recording,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualMicStatus {
+    pub provider: String,
+    pub installed: bool,
+    pub playback_device_id: Option<String>,
+    pub playback_device_name: Option<String>,
+    pub recording_device_name: Option<String>,
+    pub setup_url: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RuntimeMetrics {
     pub provider: String,
     pub available_providers: Vec<String>,
     pub warmed: bool,
+    pub model_id: String,
+    pub model_family: String,
+    pub display_name: String,
+    pub suppression_strategy: String,
+    pub runtime_kind: String,
     pub category_count: usize,
     pub active_live_sessions: usize,
     pub active_jobs: usize,
     pub model_path: Option<String>,
+    pub runtime_metadata_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -67,10 +101,26 @@ pub struct CancelOfflineJobRequest {
 pub struct StartLiveMonitorRequest {
     pub input_device_id: Option<String>,
     pub output_device_id: Option<String>,
+    #[serde(default)]
+    pub output_mode: LiveOutputMode,
+    pub debug_input_path: Option<String>,
     pub categories: Vec<String>,
     pub aggressiveness: f32,
     pub lookahead_ms: u32,
     pub record_output_path: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum LiveOutputMode {
+    Monitor,
+    VirtualMic,
+}
+
+impl Default for LiveOutputMode {
+    fn default() -> Self {
+        Self::Monitor
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -131,13 +181,42 @@ pub struct LiveStatusEvent {
     pub state: LiveSessionState,
     pub xruns: u32,
     pub provider: String,
+    pub output_mode: LiveOutputModeEvent,
     pub lookahead_ms: u32,
     pub inference_ms: Option<f32>,
     pub queue_depth_ms: Option<f32>,
+    pub estimated_latency_ms: Option<f32>,
+    pub realtime_health: LiveRealtimeHealth,
     pub sample_rate: Option<u32>,
     pub input_device_id: Option<String>,
     pub output_device_id: Option<String>,
+    pub output_device_name: Option<String>,
     pub message: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LiveOutputModeEvent {
+    Monitor,
+    VirtualMic,
+}
+
+impl From<&LiveOutputMode> for LiveOutputModeEvent {
+    fn from(value: &LiveOutputMode) -> Self {
+        match value {
+            LiveOutputMode::Monitor => Self::Monitor,
+            LiveOutputMode::VirtualMic => Self::VirtualMic,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LiveRealtimeHealth {
+    Idle,
+    Ok,
+    Warning,
+    Overloaded,
 }
 
 #[derive(Clone, Debug, Serialize)]

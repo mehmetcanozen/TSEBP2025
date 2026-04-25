@@ -29,6 +29,11 @@ pub fn list_audio_devices(state: SharedState<'_>) -> Result<Vec<crate::models::A
 }
 
 #[tauri::command]
+pub fn get_virtual_mic_status(state: SharedState<'_>) -> Result<crate::models::VirtualMicStatus, String> {
+    state.get_virtual_mic_status().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn get_runtime_metrics(state: SharedState<'_>) -> Result<RuntimeMetrics, String> {
     state.runtime_metrics().map_err(|error| error.to_string())
 }

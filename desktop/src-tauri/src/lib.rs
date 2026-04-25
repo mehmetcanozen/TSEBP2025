@@ -35,6 +35,7 @@ pub fn run() {
             commands::get_model_categories,
             commands::get_hive15_presets,
             commands::list_audio_devices,
+            commands::get_virtual_mic_status,
             commands::get_runtime_metrics,
             commands::start_offline_job,
             commands::cancel_offline_job,

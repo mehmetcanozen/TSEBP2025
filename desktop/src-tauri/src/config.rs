@@ -49,8 +49,6 @@ struct PackageManifest {
     model_id: String,
     family: String,
     display_name: String,
-    #[serde(default)]
-    description: Option<String>,
     suppression_strategy: SuppressionStrategy,
     categories: Vec<ModelCategory>,
     #[serde(default)]
