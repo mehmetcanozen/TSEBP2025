@@ -371,6 +371,194 @@ python -m ai.ai_runtime.batch.batch_processor `
   --universal "boat engine, water noise"
 ```
 
+### Mobile app on Android emulator
+
+The mobile app lives in `mobile-part/` and the mobile API lives in
+`mobile-backend/`. The app is an Expo development-client/native Android build
+because it uses native audio and model-runtime modules. It cannot run in the
+standard Expo Go app.
+
+Use two terminals: one for the FastAPI backend and one for the mobile app.
+
+#### 1. Prepare the mobile backend once
+
+Create `mobile-backend/.env` if it does not already exist:
+
+```env
+DATABASE_URL=sqlite:///./audioapp.db
+SECRET_KEY=dev-local-secret-change-me
+DEBUG=True
+MODELS_DIR=./models_store
+```
+
+Install backend dependencies from `mobile-backend/`:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-backend
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+`onnxruntime` is required by the `/separation` route and is listed in
+`mobile-backend/requirements.txt`.
+
+#### 2. Start the mobile backend
+
+From `mobile-backend/`:
+
+```powershell
+.\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Leave this terminal open. Confirm the API is reachable from Windows:
+
+```text
+http://localhost:8000/docs
+http://localhost:8000/
+```
+
+#### 3. Start an Android emulator
+
+Use Android Studio Device Manager and start an emulator, for example:
+
+```text
+Medium_Phone_API_36.1
+```
+
+If running from PowerShell, make sure Android SDK tools are on PATH for that
+terminal:
+
+```powershell
+$env:Path = "$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:Path"
+```
+
+The Android emulator reaches the Windows host through `10.0.2.2`, not
+`localhost`.
+
+#### 4. Configure the mobile app for the emulator
+
+Create `mobile-part/.env` if it does not already exist:
+
+```env
+EXPO_PUBLIC_API_URL=http://10.0.2.2:8000
+```
+
+If Gradle cannot find the Android SDK, create
+`mobile-part/android/local.properties`:
+
+```properties
+sdk.dir=C:\\Users\\omehm\\AppData\\Local\\Android\\Sdk
+```
+
+These files are local machine settings and are intentionally ignored by Git.
+
+#### 5. Build and run the mobile app
+
+Open a second terminal and run:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-part
+npm run android
+```
+
+The first run builds the native Android app, so it can take a while. A successful
+build should end with `BUILD SUCCESSFUL`, then install/open the app named `SNC`
+on the emulator.
+
+If the build succeeds but the app does not open, start the Expo dev-client
+server from `mobile-part/`:
+
+```powershell
+npx expo start --dev-client
+```
+
+Then press `a` to open the installed Android app.
+
+#### 6. Basic checks
+
+- Keep the backend terminal running while using the mobile app.
+- In the app, allow microphone permission.
+- If login/register or model checks work, the backend terminal should show
+  requests such as `/auth/register`, `/auth/login`, `/model/latest`, or
+  `/separation/separate`.
+- If the app cannot reach the backend, confirm `EXPO_PUBLIC_API_URL` is
+  `http://10.0.2.2:8000` and that `http://localhost:8000/docs` still works on
+  Windows.
+- If emulator recording is silent, check the emulator microphone setting in
+  Android Emulator extended controls.
+
+#### 7. Test mobile live suppression with `speech_barking.wav`
+
+Use this workflow when you want the mobile app to receive a local WAV file as
+live microphone input through VB-CABLE. It is intended for the Android emulator
+on the Windows host. The app workflow is the same on a physical phone, but
+changing the Windows default recording device only affects the emulator, not a
+real phone microphone.
+
+The signal path is:
+
+```text
+speech_barking.wav
+-> CABLE Input
+-> CABLE Output
+-> Android emulator host microphone
+-> mobile app live suppression
+-> saved recording
+```
+
+VB-CABLE exposes two endpoints:
+
+```text
+CABLE Input  - playback endpoint that receives the WAV stream
+CABLE Output - recording endpoint that Windows and the emulator use as a mic
+```
+
+Use three terminals/windows while testing.
+
+Terminal 1: stream the WAV into VB-CABLE from the repository root:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\mobile-backend\venv\Scripts\python.exe -m ai.scripts.demos.virtual_mic_streamer --input C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav --device-name "CABLE Input"
+```
+
+The streamer loops the file. Stop it with `Ctrl+C` when you are done.
+
+Terminal 2: start the mobile backend:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-backend
+.\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Windows sound settings: open the Recording tab:
+
+```powershell
+Start-Process control.exe -ArgumentList 'mmsys.cpl,,1'
+```
+
+In the Recording tab, set `CABLE Output (VB-Audio Virtual Cable)` as the default
+recording device. Write down the previous default device first. After the test,
+switch the default recording device back to the original microphone.
+
+In the Android Emulator, open **Extended Controls -> Microphone** and enable
+host microphone input. The emulator should now receive the audio coming through
+`CABLE Output`.
+
+In the mobile app:
+
+1. Make sure the recording toggle is enabled.
+1. Choose the target category `dog`.
+1. Tap **Tap to start listening**.
+1. Let the sample play for a few seconds.
+1. Tap stop to finish the session and save the processed WAV.
+1. Open the app's recordings/library view to play or locate the saved output.
+
+The active mobile Waveformer package exposes barking as `dog`, not
+`dog barking`. If the app hears silence, check that the streamer is still
+running, Windows input is set to `CABLE Output`, and the emulator microphone is
+using host audio input.
+
 ### Desktop UI
 
 ```powershell
