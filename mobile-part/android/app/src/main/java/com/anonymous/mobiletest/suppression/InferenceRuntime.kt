@@ -590,8 +590,6 @@ private class WaveformerExecuTorchRuntime(
       decBuf = FloatArray(runtime.decShape.product()),
       outBuf = FloatArray(runtime.outShape.product()),
     )
-    private val masker = WienerMasker()
-
     override fun preferredHopSamples(): Int = preferredHopSamples
 
     override fun processChunk(chunk: FloatArray): FloatArray {
@@ -611,48 +609,19 @@ private class WaveformerExecuTorchRuntime(
       }
 
       val target = runtime.runCategoryChunk(resampled, category.id, state)
-      val isSpeechCat = category.id.contains("speech", ignoreCase = true)
-      val isSustained = !isSpeechCat && !category.transient
-
-      // For sustained non-speech sounds (music, background noise etc.) the model
-      // tends to underestimate the target amplitude. Boost the subtraction scale
-      // so residuals are minimised without needing over-suppression on the voice.
-      val baseScale = max(config.aggressiveness, category.defaultAggressiveness).coerceIn(0.5f, 2.0f)
-      val scale = if (isSustained) (baseScale * 1.65f).coerceIn(0.5f, 2.0f) else baseScale
-
+      val scale = max(config.aggressiveness, category.defaultAggressiveness).coerceIn(0.5f, 2.0f)
       val cleanResampled = FloatArray(target.size) { index ->
-        (resampled[index] - scale * target[index]).coerceIn(-1f, 1f)
+        resampled[index] - scale * target[index]
       }
       val clean = linearResample(cleanResampled, runtime.manifest.sampleRate, nativeSampleRate)
-      val targetResampled = linearResample(target, runtime.manifest.sampleRate, nativeSampleRate)
-
-      // Second pass: Wiener masking on top of subtraction output.
-      // Subtraction alone leaves residuals when the model separation is imperfect.
-      // Wiener uses the model's target estimate as a noise reference to further
-      // suppress what subtraction missed, without introducing new artefacts.
-      val nFft = if (category.transient) 1024 else 2048
-      val maskFloor  = if (isSpeechCat || category.transient) 0.07f else 0.02f
-      val maxRatio   = if (isSpeechCat) 0.82f else 0.99f
-      val dominanceT = if (isSpeechCat) 2.5f else 12.0f
-      val wienerClean = masker.apply(
-        mix      = clean.copyOf(chunk.size),
-        unwanted = targetResampled.copyOf(chunk.size),
-        sampleRate = nativeSampleRate,
-        nFft     = nFft,
-        options  = MaskingOptions(
-          aggressiveness         = scale,
-          ddAlpha                = if (category.transient) 0.92f else 0.98f,
-          maskFloor              = maskFloor,
-          maxSuppressionRatio    = maxRatio,
-          speechDominanceThreshold = dominanceT,
-        )
-      )
-      return if (wienerClean.size == chunk.size) {
-        wienerClean
-      } else {
-        wienerClean.copyOf(chunk.size)
-      }
+      return clean.copyOf(chunk.size)
     }
+
+    override fun diagnostics(): ProcessorDiagnostics =
+      ProcessorDiagnostics(
+        waveformerPostFilter = config.waveformerPostFilter,
+        wienerBypassed = config.waveformerPostFilter.equals("off", ignoreCase = true),
+      )
 
     override fun close() = Unit
   }

@@ -26,6 +26,8 @@ export interface EngineRuntimeInfo {
   availableProviders: string[];
 }
 
+export type LivePhase = 'idle' | 'preparing' | 'running' | 'stopping' | 'error';
+
 export interface EnginePrepareOptions {
   bundleDownloadUrl?: string;
   accessToken?: string;
@@ -58,6 +60,13 @@ export interface EngineStatusEvent {
   inferenceMs: number | null;
   queueDepthMs: number | null;
   xruns: number;
+  audioTrackUnderruns?: number;
+  limiterHits?: number;
+  failOpenCount?: number;
+  boundaryRepairHits?: number;
+  startupBlendMs?: number;
+  waveformerPostFilter?: string | null;
+  wienerBypassed?: boolean;
   hopMs: number;
   lookaheadMs: number;
   sampleRate: number;
@@ -70,6 +79,8 @@ export interface EngineMeterEvent {
   rmsOut: number;
   peakIn: number;
   peakOut: number;
+  rawOutPeak?: number;
+  finalOutPeak?: number;
   capturedFrames: number;
   renderedFrames: number;
   timestampMs: number;

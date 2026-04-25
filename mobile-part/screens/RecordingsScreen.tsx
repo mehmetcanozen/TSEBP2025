@@ -68,6 +68,13 @@ export default function RecordingsScreen() {
         return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
+    const formatSize = (bytes?: number | null) => {
+        if (bytes == null) {
+            return null;
+        }
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    };
+
     return (
         <View style={{ flex: 1, backgroundColor: colors.background }}>
             <StatusBar style={isDarkMode ? 'light' : 'dark'} />
@@ -111,7 +118,16 @@ export default function RecordingsScreen() {
                                     <Ionicons name="musical-note" size={24} color={colors.primary} />
                                 </View>
                                 <View style={styles.metaContainer}>
+                                    <Text style={[styles.fileNameText, { color: colors.text }]}>
+                                        {recording.fileName ?? 'Suppression recording'}
+                                    </Text>
                                     <Text style={[styles.categoryText, { color: colors.text }]}>{recording.categoryLabel}</Text>
+                                    <Text style={styles.pathText} numberOfLines={2}>
+                                        {recording.filePath ?? recording.uri}
+                                    </Text>
+                                    {formatSize(recording.fileSizeBytes) && (
+                                        <Text style={styles.sizeText}>{formatSize(recording.fileSizeBytes)}</Text>
+                                    )}
                                     <Text style={styles.dateText}>{formatDate(recording.createdAt)}</Text>
                                 </View>
                             </View>
@@ -227,10 +243,26 @@ const styles = StyleSheet.create({
     metaContainer: {
         flex: 1,
     },
-    categoryText: {
-        fontSize: 16,
+    fileNameText: {
+        fontSize: 15,
         fontWeight: '700',
+        marginBottom: 3,
+    },
+    categoryText: {
+        fontSize: 13,
+        fontWeight: '600',
         marginBottom: 4,
+    },
+    pathText: {
+        fontSize: 11,
+        lineHeight: 15,
+        color: '#718096',
+        marginBottom: 3,
+    },
+    sizeText: {
+        fontSize: 11,
+        color: '#718096',
+        marginBottom: 3,
     },
     dateText: {
         fontSize: 12,

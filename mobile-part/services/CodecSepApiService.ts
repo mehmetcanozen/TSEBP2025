@@ -6,13 +6,14 @@
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
+import { API_BASE_URL } from './api';
 
 export class CodecSepApiService {
     // API URL is read from EXPO_PUBLIC_API_URL env variable (.env file).
     // For emulator: http://10.0.2.2:8000
     // For physical device: http://<your-pc-wifi-ip>:8000  (e.g. http://192.168.1.50:8000)
     // Ensure the FastAPI server is running with: uvicorn main:app --host 0.0.0.0 --port 8000
-    private readonly API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.50:8000';
+    private readonly API_URL = API_BASE_URL;
 
     public isInitialized: boolean = true; // API is always ready to accept requests
 

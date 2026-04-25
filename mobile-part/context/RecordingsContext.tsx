@@ -6,6 +6,9 @@ const RECORDINGS_KEY = 'SNS_RECORDINGS_V1';
 export interface RecordingEntry {
   id: string;
   uri: string;
+  fileName?: string;
+  filePath?: string;
+  fileSizeBytes?: number | null;
   category: string;
   categoryLabel: string;
   createdAt: number;

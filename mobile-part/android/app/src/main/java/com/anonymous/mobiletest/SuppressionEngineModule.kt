@@ -12,6 +12,7 @@ import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import android.util.Log
+import android.os.Environment
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -69,7 +70,9 @@ class SuppressionEngineModule(
             f
           }
           recordEnabled == true -> {
-            val dir = reactApplicationContext.cacheDir
+            val root = reactApplicationContext.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+              ?: reactApplicationContext.filesDir
+            val dir = File(root, "suppression-recordings")
             dir.mkdirs()
             File(dir, "suppression_${System.currentTimeMillis()}.wav")
           }
@@ -87,7 +90,8 @@ class SuppressionEngineModule(
             categoryId = categoryId,
             aggressiveness = config.getDoubleOrDefault("aggressiveness", category.defaultAggressiveness.toDouble()).toFloat(),
             hopMs = config.getIntOrDefault("hopMs", 500),
-            lookaheadMs = config.getIntOrDefault("lookaheadMs", 250),
+            lookaheadMs = config.getIntOrDefault("lookaheadMs", 350),
+            waveformerPostFilter = "off",
           ),
           recordFile = recordFile,
           onStatus = { snapshot -> emitEvent("SuppressionEngineStatus", snapshot.toWritableMap()) },
@@ -247,6 +251,13 @@ private fun StatusSnapshot.toWritableMap(): WritableMap {
     if (inferenceMs != null) putDouble("inferenceMs", inferenceMs) else putNull("inferenceMs")
     if (queueDepthMs != null) putDouble("queueDepthMs", queueDepthMs) else putNull("queueDepthMs")
     putInt("xruns", xruns)
+    putInt("audioTrackUnderruns", audioTrackUnderruns)
+    putInt("limiterHits", limiterHits)
+    putInt("failOpenCount", failOpenCount)
+    putInt("boundaryRepairHits", boundaryRepairHits)
+    putInt("startupBlendMs", startupBlendMs)
+    if (waveformerPostFilter != null) putString("waveformerPostFilter", waveformerPostFilter) else putNull("waveformerPostFilter")
+    putBoolean("wienerBypassed", wienerBypassed)
     putInt("hopMs", hopMs)
     putInt("lookaheadMs", lookaheadMs)
     putInt("sampleRate", sampleRate)
@@ -261,6 +272,8 @@ private fun MeterSnapshot.toWritableMap(): WritableMap {
     putDouble("rmsOut", rmsOut)
     putDouble("peakIn", peakIn)
     putDouble("peakOut", peakOut)
+    putDouble("rawOutPeak", rawOutPeak)
+    putDouble("finalOutPeak", finalOutPeak)
     putDouble("capturedFrames", capturedFrames.toDouble())
     putDouble("renderedFrames", renderedFrames.toDouble())
     putDouble("timestampMs", timestampMs.toDouble())

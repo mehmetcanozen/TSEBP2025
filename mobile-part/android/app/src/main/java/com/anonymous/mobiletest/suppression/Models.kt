@@ -45,6 +45,12 @@ data class LiveConfig(
   val aggressiveness: Float,
   val hopMs: Int,
   val lookaheadMs: Int,
+  val waveformerPostFilter: String = "off",
+)
+
+data class ProcessorDiagnostics(
+  val waveformerPostFilter: String? = null,
+  val wienerBypassed: Boolean = false,
 )
 
 data class RuntimeInfo(
@@ -69,6 +75,13 @@ data class StatusSnapshot(
   val inferenceMs: Double?,
   val queueDepthMs: Double?,
   val xruns: Int,
+  val audioTrackUnderruns: Int,
+  val limiterHits: Int,
+  val failOpenCount: Int,
+  val boundaryRepairHits: Int,
+  val startupBlendMs: Int,
+  val waveformerPostFilter: String?,
+  val wienerBypassed: Boolean,
   val hopMs: Int,
   val lookaheadMs: Int,
   val sampleRate: Int,
@@ -81,6 +94,8 @@ data class MeterSnapshot(
   val rmsOut: Double,
   val peakIn: Double,
   val peakOut: Double,
+  val rawOutPeak: Double,
+  val finalOutPeak: Double,
   val capturedFrames: Long,
   val renderedFrames: Long,
   val timestampMs: Long,
@@ -90,6 +105,8 @@ interface LiveSuppressionProcessor : AutoCloseable {
   fun preferredHopSamples(): Int
 
   fun processChunk(chunk: FloatArray): FloatArray
+
+  fun diagnostics(): ProcessorDiagnostics = ProcessorDiagnostics()
 }
 
 interface SuppressionRuntime : AutoCloseable {

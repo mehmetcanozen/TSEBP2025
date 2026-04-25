@@ -2,17 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRecordings } from '../context/RecordingsContext';
-
-
-
-
-
 import { modelBundleService } from '../services/ModelBundleService';
 import {
   EngineCategoryInfo,
   EngineMeterEvent,
   EngineRuntimeInfo,
   EngineStatusEvent,
+  LivePhase,
   suppressionEngineService,
 } from '../services/SuppressionEngineService';
 
@@ -24,6 +20,7 @@ interface UseSuppressionDemoResult {
   startLive: () => Promise<void>;
   stopLive: () => Promise<void>;
   status: string;
+  phase: LivePhase;
   isLive: boolean;
   target: string;
   setTarget: (target: string) => void;
@@ -35,9 +32,11 @@ interface UseSuppressionDemoResult {
   isRecordEnabled: boolean;
   setIsRecordEnabled: (enabled: boolean) => void;
   lastRecordingUri: string | null;
+  lastRecordingFileName: string | null;
+  lastRecordingFilePath: string | null;
+  lastRecordingFileSizeBytes: number | null;
   clearLastRecording: () => void;
 }
-
 
 interface SuppressionTarget {
   id: string;
@@ -53,8 +52,8 @@ interface CategoryDecoration {
   transient?: boolean;
 }
 
-// UI-only decorations stay separate from the packaged runtime contract so the
-// native layer remains the source of truth for whichever model is active.
+const STOP_FINISHED_TIMEOUT_MS = 12000;
+
 const CATEGORY_DECORATIONS: Record<string, CategoryDecoration> = {
   alarm: { icon: 'alarm-outline', transient: true },
   alarm_clock: { icon: 'alarm-outline', transient: true },
@@ -162,11 +161,16 @@ async function requestMicrophonePermission(): Promise<void> {
   }
 }
 
+function filenameFromPath(path: string | null): string {
+  return path?.split('/').pop() || `suppression_${Date.now()}.wav`;
+}
+
 export const useSuppressionDemo = ({
   accessToken,
 }: UseSuppressionDemoOptions): UseSuppressionDemoResult => {
   const nativeEngineAvailable = suppressionEngineService.isAvailable();
   const [status, setStatus] = useState<string>('Idle');
+  const [phase, setPhaseState] = useState<LivePhase>('idle');
   const [isLive, setIsLive] = useState(false);
   const [target, setTarget] = useState<string>('');
   const [runtimeInfo, setRuntimeInfo] = useState<EngineRuntimeInfo | null>(null);
@@ -175,14 +179,50 @@ export const useSuppressionDemo = ({
   const [nativeCategories, setNativeCategories] = useState<SuppressionTarget[]>([]);
   const [isRecordEnabled, setIsRecordEnabled] = useState(true);
   const [lastRecordingUri, setLastRecordingUri] = useState<string | null>(null);
+  const [lastRecordingFileName, setLastRecordingFileName] = useState<string | null>(null);
+  const [lastRecordingFilePath, setLastRecordingFilePath] = useState<string | null>(null);
+  const [lastRecordingFileSizeBytes, setLastRecordingFileSizeBytes] = useState<number | null>(null);
   const activeRecordUri = useRef<string | null>(null);
+  const activeRecordPath = useRef<string | null>(null);
+  const activeCategory = useRef<SuppressionTarget | null>(null);
   const sessionIntendedToRecord = useRef(false);
   const currentSessionId = useRef<string | null>(null);
+  const releasedSessionId = useRef<string | null>(null);
+  const phaseRef = useRef<LivePhase>('idle');
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { addRecording } = useRecordings();
 
+  const setPhase = useCallback((next: LivePhase) => {
+    phaseRef.current = next;
+    setPhaseState(next);
+    setIsLive(next === 'running');
+  }, []);
 
+  const clearStopTimeout = useCallback(() => {
+    if (stopTimeoutRef.current) {
+      clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
+  }, []);
 
+  const resetLastRecording = useCallback(() => {
+    setLastRecordingUri(null);
+    setLastRecordingFileName(null);
+    setLastRecordingFilePath(null);
+    setLastRecordingFileSizeBytes(null);
+  }, []);
 
+  const isCurrentSessionEvent = useCallback((sessionId: string | null | undefined) => {
+    const current = currentSessionId.current;
+    if (!sessionId) {
+      return current == null;
+    }
+    return current != null && sessionId === current;
+  }, []);
+
+  useEffect(() => () => {
+    clearStopTimeout();
+  }, [clearStopTimeout]);
 
   const syncEngine = useCallback(async () => {
     if (!nativeEngineAvailable) {
@@ -196,7 +236,7 @@ export const useSuppressionDemo = ({
 
     setStatus('Preparing on-device model...');
     const prepared = await modelBundleService.ensurePrepared(accessToken);
-    setRuntimeInfo(prepared);
+    setRuntimeInfo(prepared.runtimeInfo);
 
     const categories = await suppressionEngineService.getCategories().catch(() => []);
     if (categories.length > 0) {
@@ -207,8 +247,8 @@ export const useSuppressionDemo = ({
       ));
     }
 
-    setStatus(prepared.warmed ? 'Engine ready' : 'Engine loaded');
-    return prepared;
+    setStatus(prepared.message ?? (prepared.runtimeInfo.warmed ? 'Engine ready' : 'Engine loaded'));
+    return prepared.runtimeInfo;
   }, [accessToken, nativeEngineAvailable]);
 
   useEffect(() => {
@@ -218,71 +258,88 @@ export const useSuppressionDemo = ({
     }
 
     const statusSub = suppressionEngineService.addStatusListener((event) => {
+      if (!isCurrentSessionEvent(event.sessionId)) {
+        return;
+      }
       setLiveStatus(event);
       setStatus(event.message || event.state);
-      setIsLive(event.state === 'running' || event.state === 'warming');
+      if (event.state === 'running') {
+        setPhase('running');
+      } else if (event.state === 'stopping') {
+        setPhase('stopping');
+      } else if (event.state === 'stopped' && currentSessionId.current == null) {
+        setPhase('idle');
+      }
     });
 
     const meterSub = suppressionEngineService.addMeterListener((event) => {
+      if (!isCurrentSessionEvent(event.sessionId)) {
+        return;
+      }
       setMeter(event);
     });
 
     const finishedSub = suppressionEngineService.addFinishedListener(async (event) => {
       console.log('[useSuppressionDemo] Native engine finished draining:', event.sessionId);
 
-      // Only process if it's the session we are tracking
-      if (event.sessionId !== currentSessionId.current) {
+      const matchesCurrent = event.sessionId === currentSessionId.current;
+      const matchesReleased = event.sessionId === releasedSessionId.current;
+      if (!matchesCurrent && !matchesReleased) {
         console.log('[useSuppressionDemo] Ignoring finished event for old/mismatched session:', event.sessionId);
         return;
       }
 
+      clearStopTimeout();
+
       if (activeRecordUri.current && sessionIntendedToRecord.current) {
         const uri = activeRecordUri.current;
+        const path = activeRecordPath.current;
+        const fileName = filenameFromPath(path);
 
-        // Add a small cache buster to the URI to force UI refresh
-        const busterUri = `${uri}?t=${Date.now()}`;
-        setLastRecordingUri(busterUri);
+        setLastRecordingUri(uri);
+        setLastRecordingFileName(fileName);
+        setLastRecordingFilePath(path);
 
-        // Auto-save to library
-        const category = nativeCategories.find((v) => v.id === target);
+        const category = activeCategory.current ?? nativeCategories.find((value) => value.id === target);
         try {
-          // Verify file exists and has size
           const fileInfo = await FileSystem.getInfoAsync(uri);
-          console.log(`[useSuppressionDemo] Recording file info: exists=${fileInfo.exists}, size=${(fileInfo as any).size} bytes`);
+          const size = fileInfo.exists ? ((fileInfo as any).size ?? null) : null;
+          console.log(`[useSuppressionDemo] Recording file info: exists=${fileInfo.exists}, size=${size} bytes`);
+          setLastRecordingFileSizeBytes(size);
 
           await addRecording({
-
             id: Date.now().toString(),
-            uri: uri,
+            uri,
+            fileName,
+            filePath: path ?? uri,
+            fileSizeBytes: size,
             category: target,
             categoryLabel: category?.label ?? target,
             createdAt: Date.now(),
           });
           console.log('[useSuppressionDemo] Successfully saved to library after background drain:', uri);
-        } catch (err) {
-          console.error('[useSuppressionDemo] Failed to save library after background drain', err);
+        } catch (error) {
+          console.error('[useSuppressionDemo] Failed to save library after background drain', error);
         }
-        activeRecordUri.current = null;
-        sessionIntendedToRecord.current = false;
-        currentSessionId.current = null;
       } else {
-        console.log('[useSuppressionDemo] Session ended but no recording saved. activeUri:', !!activeRecordUri.current, 'intended:', sessionIntendedToRecord.current);
-        activeRecordUri.current = null;
-        sessionIntendedToRecord.current = false;
-        currentSessionId.current = null;
+        console.log('[useSuppressionDemo] Session ended but no recording saved.');
       }
+
+      activeRecordUri.current = null;
+      activeRecordPath.current = null;
+      activeCategory.current = null;
+      sessionIntendedToRecord.current = false;
+      currentSessionId.current = null;
+      releasedSessionId.current = null;
+      setPhase('idle');
     });
-
-
 
     return () => {
       statusSub.remove();
       meterSub.remove();
       finishedSub.remove();
     };
-  }, [nativeEngineAvailable, target, nativeCategories, addRecording]);
-
-
+  }, [addRecording, clearStopTimeout, isCurrentSessionEvent, nativeCategories, nativeEngineAvailable, setPhase, target]);
 
   useEffect(() => {
     if (!accessToken || !nativeEngineAvailable) {
@@ -292,8 +349,9 @@ export const useSuppressionDemo = ({
     syncEngine().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : 'Failed to prepare the engine';
       setStatus(`Error: ${message}`);
+      setPhase('error');
     });
-  }, [accessToken, nativeEngineAvailable, syncEngine]);
+  }, [accessToken, nativeEngineAvailable, setPhase, syncEngine]);
 
   useEffect(() => {
     if (!nativeEngineAvailable) {
@@ -310,78 +368,112 @@ export const useSuppressionDemo = ({
       setStatus('Live suppression requires a native Android build.');
       return;
     }
-    await requestMicrophonePermission();
-    const prepared = runtimeInfo ?? (await syncEngine());
-    if (!prepared) {
-      throw new Error('The suppression engine is not ready');
-    }
-
-    const category = nativeCategories.find((value) => value.id === target);
-    if (!category) {
-      setStatus('Loading Waveformer categories...');
+    if (phaseRef.current === 'preparing' || phaseRef.current === 'running' || phaseRef.current === 'stopping') {
+      setStatus(phaseRef.current === 'stopping' ? 'Finishing previous session...' : status);
       return;
     }
 
-    setStatus(`Starting live suppression for ${category.label}...`);
+    if (currentSessionId.current || releasedSessionId.current) {
+      setStatus('Saving previous recording...');
+      return;
+    }
 
+    setPhase('preparing');
     try {
+      await requestMicrophonePermission();
+      const prepared = runtimeInfo ?? (await syncEngine());
+      if (!prepared) {
+        setPhase('idle');
+        throw new Error('The suppression engine is not ready');
+      }
+
+      const category = nativeCategories.find((value) => value.id === target);
+      if (!category) {
+        setStatus('Loading Waveformer categories...');
+        setPhase('idle');
+        return;
+      }
+
+      setStatus(`Starting live suppression for ${category.label}...`);
+      activeCategory.current = category;
       console.log(`[useSuppressionDemo] Starting live, recordEnabled: ${isRecordEnabled}`);
       const result = await suppressionEngineService.startLive({
         categoryId: category.id,
         aggressiveness: category.defaultAggressiveness,
         hopMs: 200,
-        lookaheadMs: 100,
+        lookaheadMs: 350,
         recordEnabled: isRecordEnabled,
       });
 
       console.log(`[useSuppressionDemo] Starting session: ${result.sessionId}`);
       currentSessionId.current = result.sessionId;
+      setPhase('running');
 
-      // Native returns the actual record path it created
       if (result.recordPath) {
-        // Force absolute path for playback
         const uri = Platform.OS === 'android' ? `file://${result.recordPath}` : result.recordPath;
         console.log(`[useSuppressionDemo] Native recording to: ${uri}`);
         activeRecordUri.current = uri;
+        activeRecordPath.current = result.recordPath;
         sessionIntendedToRecord.current = true;
-        setLastRecordingUri(null);
+        resetLastRecording();
       } else {
         console.log('[useSuppressionDemo] No recording path returned (recording disabled).');
         activeRecordUri.current = null;
+        activeRecordPath.current = null;
         sessionIntendedToRecord.current = false;
       }
-
     } catch (error: any) {
       console.error('[useSuppressionDemo] startLive failed:', error);
       setStatus(`Error: ${error.message || 'Failed to start'}`);
-      setIsLive(false);
+      setPhase('error');
       activeRecordUri.current = null;
+      activeRecordPath.current = null;
+      activeCategory.current = null;
       sessionIntendedToRecord.current = false;
       currentSessionId.current = null;
-      setLastRecordingUri(null); // Clear card on start error
+      releasedSessionId.current = null;
+      resetLastRecording();
       throw error;
     }
-
-  }, [nativeCategories, nativeEngineAvailable, runtimeInfo, syncEngine, target, isRecordEnabled]);
-
-
+  }, [
+    isRecordEnabled,
+    nativeCategories,
+    nativeEngineAvailable,
+    resetLastRecording,
+    runtimeInfo,
+    setPhase,
+    status,
+    syncEngine,
+    target,
+  ]);
 
   const stopLive = useCallback(async () => {
-    if (!nativeEngineAvailable) {
+    if (!nativeEngineAvailable || phaseRef.current !== 'running') {
       return;
     }
 
-    // Optimistically set UI to not-live so button changes immediately
-    setIsLive(false);
+    setPhase('stopping');
     setStatus('Stopping and preserving recording...');
 
-    await suppressionEngineService.stopLive();
-
-    console.log('[useSuppressionDemo] stopLive request sent to native');
-    // Note: The actual file saving now happens in the finishedListener
-  }, [nativeEngineAvailable]);
-
-
+    try {
+      await suppressionEngineService.stopLive();
+      clearStopTimeout();
+      stopTimeoutRef.current = setTimeout(() => {
+        console.warn('[useSuppressionDemo] Timed out waiting for native finished event; releasing UI.');
+        releasedSessionId.current = currentSessionId.current;
+        currentSessionId.current = null;
+        setPhase('idle');
+        setStatus('Stopped; saving may finish in the background.');
+      }, STOP_FINISHED_TIMEOUT_MS);
+      console.log('[useSuppressionDemo] stopLive request sent to native');
+    } catch (error: any) {
+      console.error('[useSuppressionDemo] stopLive failed:', error);
+      clearStopTimeout();
+      setPhase('error');
+      setStatus(`Error: ${error.message || 'Failed to stop'}`);
+      throw error;
+    }
+  }, [clearStopTimeout, nativeEngineAvailable, setPhase]);
 
   const debugInfo = useMemo(() => {
     const lines = [
@@ -391,8 +483,17 @@ export const useSuppressionDemo = ({
       `Latency: ${liveStatus?.inferenceMs?.toFixed(1) ?? '--'} ms`,
       `Queue: ${liveStatus?.queueDepthMs?.toFixed(1) ?? '--'} ms`,
       `XRuns: ${liveStatus?.xruns ?? 0}`,
+      `AudioTrack underruns: ${liveStatus?.audioTrackUnderruns ?? 0}`,
+      `Limiter hits: ${liveStatus?.limiterHits ?? 0}`,
+      `Fail-open: ${liveStatus?.failOpenCount ?? 0}`,
+      `Boundary repairs: ${liveStatus?.boundaryRepairHits ?? 0}`,
+      `Startup blend: ${liveStatus?.startupBlendMs ?? 0} ms`,
+      `Waveformer post-filter: ${liveStatus?.waveformerPostFilter ?? '--'}`,
+      `Wiener bypassed: ${liveStatus?.wienerBypassed ? 'yes' : 'no'}`,
       `Input RMS: ${meter?.rmsIn?.toFixed(3) ?? '--'}`,
       `Output RMS: ${meter?.rmsOut?.toFixed(3) ?? '--'}`,
+      `Raw out peak: ${meter?.rawOutPeak?.toFixed(3) ?? '--'}`,
+      `Final out peak: ${meter?.finalOutPeak?.toFixed(3) ?? '--'}`,
     ];
     return lines.join('\n');
   }, [liveStatus, meter, runtimeInfo]);
@@ -401,6 +502,7 @@ export const useSuppressionDemo = ({
     startLive,
     stopLive,
     status,
+    phase,
     isLive,
     target,
     setTarget,
@@ -412,7 +514,9 @@ export const useSuppressionDemo = ({
     isRecordEnabled,
     setIsRecordEnabled,
     lastRecordingUri,
-    clearLastRecording: () => setLastRecordingUri(null),
+    lastRecordingFileName,
+    lastRecordingFilePath,
+    lastRecordingFileSizeBytes,
+    clearLastRecording: resetLastRecording,
   };
 };
-

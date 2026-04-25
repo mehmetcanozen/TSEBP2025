@@ -15,6 +15,12 @@ export interface LatestAndroidModelResponse {
   filename: string | null;
 }
 
+export interface ModelPrepareResult {
+  runtimeInfo: EngineRuntimeInfo;
+  usedBundledFallback: boolean;
+  message?: string;
+}
+
 function resolveAbsoluteUrl(downloadUrl: string): string {
   const baseUrl = api.defaults.baseURL;
   if (!baseUrl) {
@@ -29,7 +35,7 @@ function resolveAbsoluteUrl(downloadUrl: string): string {
 }
 
 class ModelBundleService {
-  async ensurePrepared(accessToken: string): Promise<EngineRuntimeInfo> {
+  async ensurePrepared(accessToken: string): Promise<ModelPrepareResult> {
     const runtime = await suppressionEngineService.getRuntimeInfo().catch(() => null);
     const currentVersion = runtime?.modelVersion ?? undefined;
 
@@ -42,7 +48,7 @@ class ModelBundleService {
       });
 
       const latest = response.data;
-      return suppressionEngineService.prepare({
+      const runtimeInfo = await suppressionEngineService.prepare({
         bundleDownloadUrl:
           latest.has_update && latest.download_url
             ? resolveAbsoluteUrl(latest.download_url)
@@ -52,10 +58,20 @@ class ModelBundleService {
         expectedChecksum: latest.checksum ?? undefined,
         forceRefresh: latest.has_update,
       });
-    } catch {
-      return suppressionEngineService.prepare({
+      return {
+        runtimeInfo,
+        usedBundledFallback: false,
+      };
+    } catch (error) {
+      console.warn('[ModelBundleService] Backend model update check failed; using bundled model.', error);
+      const runtimeInfo = await suppressionEngineService.prepare({
         forceRefresh: false,
       });
+      return {
+        runtimeInfo,
+        usedBundledFallback: true,
+        message: 'Using bundled model; backend update check is unavailable.',
+      };
     }
   }
 }
