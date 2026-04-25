@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "ai/**"
+      - "desktop/**"
+      - "mobile-backend/**"
+      - "mobile-part/**"
+      - "pyproject.toml"
+      - "README.md"
+  push:
+    branches:
+      - main
+      - master
+      - develop
+    paths:
+      - ".github/workflows/**"
+      - "ai/**"
+      - "desktop/**"
+      - "mobile-backend/**"
+      - "mobile-part/**"
+      - "pyproject.toml"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  python-static:
+    name: Python syntax and model manifest checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Check first-party Python syntax
+        run: |
+          python - <<'PY'
+          import ast
+          import tokenize
+          from pathlib import Path
+
+          roots = [
+              Path("ai/ai_runtime"),
+              Path("ai/scripts"),
+              Path("mobile-backend"),
+          ]
+          ignored_parts = {
+              "__pycache__",
+              ".pytest_cache",
+              ".mypy_cache",
+              ".venv",
+              "venv",
+              "env",
+              "node_modules",
+          }
+
+          for root in roots:
+              for path in root.rglob("*.py"):
+                  if ignored_parts.intersection(path.parts):
+                      continue
+                  with tokenize.open(path) as handle:
+                      ast.parse(handle.read(), filename=str(path))
+          PY
+
+      - name: Validate packaged model selection
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path.cwd()
+          selection_path = root / "ai" / "models" / "model_selection.json"
+          selection = json.loads(selection_path.read_text(encoding="utf-8"))
+
+          default_model = selection["default_model_id"]
+          models = selection["models"]
+          assert default_model in models, f"default_model_id {default_model!r} is not registered"
+
+          for model_id, manifest_relpath in models.items():
+              manifest_path = root / "ai" / "models" / manifest_relpath
+              assert manifest_path.exists(), f"missing manifest for {model_id}: {manifest_relpath}"
+              manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+              assert manifest["model_id"] == model_id, (
+                  f"model_selection id {model_id!r} does not match {manifest_path}"
+              )
+              assert manifest.get("categories"), f"{model_id} has no categories"
+              assert manifest.get("platforms"), f"{model_id} has no platform artifacts"
+              assert manifest.get("suppression_strategy", {}).get("kind"), (
+                  f"{model_id} has no suppression strategy"
+              )
+          PY
+
+  mobile-backend:
+    name: Mobile backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile-backend
+
+    env:
+      DATABASE_URL: sqlite:///./ci_audioapp.db
+      SECRET_KEY: ci-secret-key
+      DEBUG: "false"
+      MODELS_DIR: ./models_store
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: mobile-backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+
+      - name: Run backend tests
+        run: python -m pytest tests -q
+
+  desktop-web:
+    name: Desktop web lint, tests, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: desktop
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install desktop dependencies
+        run: npm ci
+
+      - name: Lint desktop app
+        run: npm run lint
+
+      - name: Test desktop app
+        run: npm test -- --passWithNoTests
+
+      - name: Build desktop web app
+        run: npm run build
+
+  mobile-typescript:
+    name: Mobile app TypeScript check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: mobile-part
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile-part/package-lock.json
+
+      - name: Install mobile dependencies
+        run: npm ci
+
+      - name: Type-check mobile app
+        run: npx tsc --noEmit --pretty false
