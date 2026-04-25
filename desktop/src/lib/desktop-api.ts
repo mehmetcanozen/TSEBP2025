@@ -17,16 +17,39 @@ export interface AudioDevice {
   name: string;
   direction: "input" | "output";
   default: boolean;
+  virtualCable?: VirtualCableEndpoint | null;
+}
+
+export interface VirtualCableEndpoint {
+  provider: string;
+  role: "playback" | "recording";
+  pairedDeviceName?: string | null;
+}
+
+export interface VirtualMicStatus {
+  provider: string;
+  installed: boolean;
+  playbackDeviceId?: string | null;
+  playbackDeviceName?: string | null;
+  recordingDeviceName?: string | null;
+  setupUrl: string;
+  message: string;
 }
 
 export interface RuntimeMetrics {
   provider: string;
   availableProviders: string[];
   warmed: boolean;
+  modelId: string;
+  modelFamily: string;
+  displayName: string;
+  suppressionStrategy: string;
+  runtimeKind: string;
   categoryCount: number;
   activeLiveSessions: number;
   activeJobs: number;
   modelPath?: string | null;
+  runtimeMetadataPaths: string[];
 }
 
 export interface StartOfflineJobRequest {
@@ -43,6 +66,8 @@ export interface CancelOfflineJobRequest {
 export interface StartLiveMonitorRequest {
   inputDeviceId?: string | null;
   outputDeviceId?: string | null;
+  outputMode: "monitor" | "virtualMic";
+  debugInputPath?: string | null;
   categories: string[];
   aggressiveness: number;
   lookaheadMs: number;
@@ -75,12 +100,16 @@ export interface LiveStatusEvent {
   state: "starting" | "running" | "stopping" | "stopped" | "error";
   xruns: number;
   provider: string;
+  outputMode: "monitor" | "virtualMic";
   lookaheadMs: number;
   inferenceMs?: number | null;
   queueDepthMs?: number | null;
+  estimatedLatencyMs?: number | null;
+  realtimeHealth: "idle" | "ok" | "warning" | "overloaded";
   sampleRate?: number | null;
   inputDeviceId?: string | null;
   outputDeviceId?: string | null;
+  outputDeviceName?: string | null;
   message?: string | null;
 }
 
@@ -145,10 +174,26 @@ const FALLBACK_RUNTIME_METRICS: RuntimeMetrics = {
   provider: "web-fallback",
   availableProviders: ["web-fallback"],
   warmed: false,
+  modelId: "web-fallback",
+  modelFamily: "fallback",
+  displayName: "Web fallback",
+  suppressionStrategy: "mock",
+  runtimeKind: "web_fallback",
   categoryCount: FALLBACK_CATEGORIES.length,
   activeLiveSessions: 0,
   activeJobs: 0,
   modelPath: null,
+  runtimeMetadataPaths: [],
+};
+
+const FALLBACK_VIRTUAL_MIC_STATUS: VirtualMicStatus = {
+  provider: "VB-CABLE",
+  installed: false,
+  playbackDeviceId: null,
+  playbackDeviceName: null,
+  recordingDeviceName: null,
+  setupUrl: "https://vb-audio.com/Cable/",
+  message: "Desktop bridge unavailable; VB-CABLE status can only be checked in the Tauri app.",
 };
 
 const isTauriDesktop = () =>
@@ -226,6 +271,15 @@ export async function listAudioDevices(): Promise<AudioDevice[]> {
   return invoke<AudioDevice[]>("list_audio_devices");
 }
 
+export async function getVirtualMicStatus(): Promise<VirtualMicStatus> {
+  if (!isTauriDesktop()) {
+    return FALLBACK_VIRTUAL_MIC_STATUS;
+  }
+
+  const { invoke } = await loadTauriCore();
+  return invoke<VirtualMicStatus>("get_virtual_mic_status");
+}
+
 export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {
   if (!isTauriDesktop()) {
     return FALLBACK_RUNTIME_METRICS;
@@ -283,7 +337,10 @@ export async function startLiveMonitor(
       state: "error",
       xruns: 0,
       provider: "web-fallback",
+      outputMode: request.outputMode,
       lookaheadMs: request.lookaheadMs,
+      estimatedLatencyMs: null,
+      realtimeHealth: "overloaded",
       message: "Desktop bridge unavailable in browser mode.",
     });
     return { sessionId };

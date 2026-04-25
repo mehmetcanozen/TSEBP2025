@@ -8,6 +8,8 @@ const RealTimeMode = ({ compact = false }: { compact?: boolean }) => {
     categories,
     presets,
     selectedCategories,
+    outputMode,
+    virtualMicStatus,
     liveStatus,
     liveMeter,
     lookaheadMs,
@@ -19,6 +21,7 @@ const RealTimeMode = ({ compact = false }: { compact?: boolean }) => {
     startLive,
     stopLive,
   } = useDesktopRuntime();
+  const virtualMicBlocked = outputMode === "virtualMic" && !virtualMicStatus?.installed;
 
   return (
     <div className={compact ? "space-y-3 p-3" : "space-y-4 p-5"}>
@@ -44,9 +47,15 @@ const RealTimeMode = ({ compact = false }: { compact?: boolean }) => {
         </div>
 
         <div className="mt-3 text-xs text-muted-foreground">
-          lookahead {lookaheadMs} ms / inference {liveStatus?.inferenceMs?.toFixed(0) ?? "--"} ms / xruns{" "}
-          {liveStatus?.xruns ?? 0}
+          {outputMode === "virtualMic" ? "virtual mic" : "local monitor"} / lookahead {lookaheadMs} ms / inference{" "}
+          {liveStatus?.inferenceMs?.toFixed(0) ?? "--"} ms / xruns {liveStatus?.xruns ?? 0}
         </div>
+
+        {outputMode === "virtualMic" && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            Target mic: {virtualMicStatus?.recordingDeviceName ?? "CABLE Output"}
+          </div>
+        )}
 
         {error && (
           <div className="mt-3 rounded-xl border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -85,7 +94,7 @@ const RealTimeMode = ({ compact = false }: { compact?: boolean }) => {
             <button
               type="button"
               onClick={() => void startLive()}
-              disabled={isStartingLive}
+              disabled={isStartingLive || virtualMicBlocked}
               className="flex-1 rounded-xl border border-primary/35 bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
               {isStartingLive ? "Starting..." : "Start processing"}
