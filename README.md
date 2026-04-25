@@ -2,7 +2,7 @@
 
 Semantic Noise Mixer is a desktop-first audio suppression project built around
 semantic detection, source separation, spectral masking, and profile-driven
-control. The repository contains the active AI runtime, a Python desktop UI,
+control. The repository contains the active AI runtime, a Tauri desktop app,
 setup scripts, tests, and local model layouts for multiple separator backends.
 
 For detailed operator guidance, see the
@@ -14,7 +14,7 @@ For detailed operator guidance, see the
 - Multiple separator backends behind one runtime interface
 - Profile-based control and backend-specific suppression settings
 - Local model asset management under `ai/models/`
-- Desktop UI, command-line tools, tests, and research documentation
+- Desktop app, command-line tools, tests, and research documentation
 
 ## Main Components
 
@@ -78,7 +78,8 @@ TSEBP2025/
 |   |-- tests/          # Runtime and integration tests
 |   `-- training/       # Training-side dependencies and related code
 |-- desktop/
-|   |-- src/            # Desktop UI and settings layer
+|   |-- src/            # React desktop UI
+|   |-- src-tauri/      # Tauri host and native Rust audio runtime
 |   `-- tests/          # Desktop-side tests
 |-- docs/               # Project documentation and research notes
 |-- shared/
@@ -254,6 +255,91 @@ python ai\scripts\demos\demo_custom_realtime.py --list-categories
 python ai\scripts\demos\demo_custom_realtime.py --list-devices
 ```
 
+### Virtual Mic developer setup
+
+Virtual Mic mode needs a Windows recording endpoint that other apps can select
+as a microphone. The project does not ship or create an audio driver. For local
+development, install VB-CABLE from the official VB-Audio site, then reboot if
+the installer asks for it:
+
+```text
+https://vb-audio.com/Cable/
+```
+
+After installation, Windows and the desktop app should show this pair:
+
+```text
+CABLE Input  - playback endpoint the desktop app writes cleaned audio into
+CABLE Output - recording endpoint the target app selects as its microphone
+```
+
+If VB-CABLE is not installed, the desktop app still supports offline rendering
+and live **Listen locally** mode. Virtual Mic mode stays disabled until
+`CABLE Input` and `CABLE Output` are detected.
+
+### Test Virtual Mic with a WAV source
+
+Use the desktop app's **Debug WAV mic source** control for the reliable
+one-machine Virtual Mic test. The desktop app reads the WAV as live input,
+runs the normal live suppression path, and sends the cleaned stream to
+VB-CABLE. This does not require a second virtual cable pair.
+
+Start the desktop app:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\desktop
+$env:Path += ";$env:USERPROFILE\.cargo\bin"
+npm run tauri:dev
+```
+
+This is the tested route:
+
+```text
+desktop Debug WAV mic source
+-> desktop live suppression
+-> CABLE Input
+-> CABLE Output
+-> target app microphone selection
+```
+
+For the barking sample, set the desktop debug WAV path to:
+
+```text
+C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav
+```
+
+Desktop live settings:
+
+```text
+Mode: Virtual mic
+Clean audio sink: CABLE Input (VB-Audio Virtual Cable)
+Debug WAV mic source: ON
+Debug WAV path: C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav
+Category: dog barking
+```
+
+Start the session, then record from this microphone in the target app:
+
+```text
+CABLE Output (VB-Audio Virtual Cable)
+```
+
+This test does not use speakers, a headset microphone, or a second cable pair.
+
+If the app says VB-CABLE is missing, install VB-CABLE, reboot if prompted, then
+click **Refresh devices** in the desktop app. If the target app does not see
+`CABLE Output`, open Windows Sound settings and confirm the VB-CABLE recording
+device is enabled.
+
+The Python feeder remains available for cable-routing checks. It plays a WAV
+into a virtual cable playback endpoint and does not run suppression. Do not
+use it for the full one-cable Virtual Mic validation path above.
+
+```powershell
+python -m ai.scripts.demos.virtual_mic_streamer --list-devices
+python -m ai.scripts.demos.virtual_mic_streamer --input C:\path\to\test.wav --device-name "CABLE Input"
+```
+
 ### Fixed-category CodecSep example
 
 ```powershell
@@ -288,7 +374,8 @@ python -m ai.ai_runtime.batch.batch_processor `
 ### Desktop UI
 
 ```powershell
-python desktop\src\ui\app.py
+cd desktop
+npm run tauri:dev
 ```
 
 ## Tests

@@ -14,6 +14,7 @@ import {
   getHive15Presets,
   getModelCategories,
   getRuntimeMetrics,
+  getVirtualMicStatus,
   listAudioDevices,
   startLiveMonitor,
   startOfflineJob,
@@ -25,20 +26,27 @@ import {
   type ModelCategory,
   type OfflineProgressEvent,
   type RuntimeMetrics,
+  type VirtualMicStatus,
 } from "@/lib/desktop-api";
+
+type LiveOutputMode = "monitor" | "virtualMic";
 
 interface DesktopRuntimeContextValue {
   categories: ModelCategory[];
   presets: Hive15Preset[];
   devices: AudioDevice[];
   runtimeMetrics: RuntimeMetrics | null;
+  virtualMicStatus: VirtualMicStatus | null;
   selectedCategories: string[];
   aggressiveness: number;
   lookaheadMs: number;
+  outputMode: LiveOutputMode;
   inputDeviceId: string;
   outputDeviceId: string;
   inputPath: string;
   outputPath: string;
+  debugInputEnabled: boolean;
+  debugInputPath: string;
   recordEnabled: boolean;
   recordOutputPath: string;
   liveStatus: LiveStatusEvent | null;
@@ -55,16 +63,21 @@ interface DesktopRuntimeContextValue {
   applyPreset: (presetId: string) => void;
   setAggressiveness: (value: number) => void;
   setLookaheadMs: (value: number) => void;
+  setOutputMode: (value: LiveOutputMode) => void;
   setInputDeviceId: (value: string) => void;
   setOutputDeviceId: (value: string) => void;
   setInputPath: (value: string) => void;
   setOutputPath: (value: string) => void;
+  setDebugInputEnabled: (value: boolean) => void;
+  setDebugInputPath: (value: string) => void;
   setRecordEnabled: (value: boolean) => void;
   setRecordOutputPath: (value: string) => void;
   browseInputPath: () => Promise<void>;
   browseOutputPath: () => Promise<void>;
+  browseDebugInputPath: () => Promise<void>;
   browseRecordOutputPath: () => Promise<void>;
   refreshDevices: () => Promise<void>;
+  refreshVirtualMicStatus: () => Promise<void>;
   refreshRuntimeMetrics: () => Promise<void>;
   startOffline: () => Promise<void>;
   cancelOffline: () => Promise<void>;
@@ -80,7 +93,10 @@ const INITIAL_LIVE_STATUS: LiveStatusEvent = {
   state: "stopped",
   xruns: 0,
   provider: "idle",
-  lookaheadMs: 500,
+  outputMode: "monitor",
+  lookaheadMs: 150,
+  estimatedLatencyMs: 0,
+  realtimeHealth: "idle",
 };
 
 export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) => {
@@ -88,13 +104,17 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
   const [presets, setPresets] = useState<Hive15Preset[]>([]);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [runtimeMetrics, setRuntimeMetrics] = useState<RuntimeMetrics | null>(null);
+  const [virtualMicStatus, setVirtualMicStatus] = useState<VirtualMicStatus | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [aggressiveness, setAggressiveness] = useState(1.5);
-  const [lookaheadMs, setLookaheadMs] = useState(500);
+  const [lookaheadMs, setLookaheadMs] = useState(150);
+  const [outputMode, setOutputModeState] = useState<LiveOutputMode>("monitor");
   const [inputDeviceId, setInputDeviceId] = useState("");
   const [outputDeviceId, setOutputDeviceId] = useState("");
   const [inputPath, setInputPath] = useState("");
   const [outputPath, setOutputPath] = useState("");
+  const [debugInputEnabled, setDebugInputEnabled] = useState(false);
+  const [debugInputPath, setDebugInputPath] = useState("");
   const [recordEnabled, setRecordEnabled] = useState(false);
   const [recordOutputPath, setRecordOutputPath] = useState("");
   const [liveStatus, setLiveStatus] = useState<LiveStatusEvent | null>(INITIAL_LIVE_STATUS);
@@ -110,8 +130,12 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
 
   const refreshDevices = async () => {
     try {
-      const loadedDevices = await listAudioDevices();
+      const [loadedDevices, loadedVirtualMicStatus] = await Promise.all([
+        listAudioDevices(),
+        getVirtualMicStatus(),
+      ]);
       setDevices(loadedDevices);
+      setVirtualMicStatus(loadedVirtualMicStatus);
 
       const defaultInput = loadedDevices.find((device) => device.direction === "input" && device.default);
       const defaultOutput = loadedDevices.find((device) => device.direction === "output" && device.default);
@@ -122,6 +146,15 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       setOutputDeviceId((current) => current || defaultOutput?.id || firstOutput?.id || "");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to enumerate audio devices.");
+    }
+  };
+
+  const refreshVirtualMicStatus = async () => {
+    try {
+      const status = await getVirtualMicStatus();
+      setVirtualMicStatus(status);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to check virtual microphone status.");
     }
   };
 
@@ -139,11 +172,12 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
 
     const load = async () => {
       try {
-        const [loadedCategories, loadedPresets, loadedDevices, metrics] = await Promise.all([
+        const [loadedCategories, loadedPresets, loadedDevices, metrics, loadedVirtualMicStatus] = await Promise.all([
           getModelCategories(),
           getHive15Presets(),
           listAudioDevices(),
           getRuntimeMetrics(),
+          getVirtualMicStatus(),
         ]);
 
         if (cancelled) {
@@ -154,6 +188,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
         setPresets(loadedPresets);
         setDevices(loadedDevices);
         setRuntimeMetrics(metrics);
+        setVirtualMicStatus(loadedVirtualMicStatus);
 
         const defaultInput = loadedDevices.find((device) => device.direction === "input" && device.default);
         const defaultOutput = loadedDevices.find((device) => device.direction === "output" && device.default);
@@ -207,6 +242,24 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
     setSelectedCategories(preset.categories);
   };
 
+  const setOutputMode = (value: LiveOutputMode) => {
+    if (activeLiveSessionId) {
+      setError("Stop the current live session before changing the output mode.");
+      return;
+    }
+
+    if (value === "virtualMic") {
+      if (!virtualMicStatus?.installed || !virtualMicStatus.playbackDeviceId) {
+        setError(virtualMicStatus?.message ?? "VB-CABLE was not detected. Install it, then refresh devices.");
+        setOutputModeState("monitor");
+        return;
+      }
+    }
+
+    setOutputModeState(value);
+    setError(null);
+  };
+
   const browseInputPath = async () => {
     const nextPath = await browseForAudioInput();
     if (nextPath) {
@@ -218,6 +271,13 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
     const nextPath = await browseForOutputWav();
     if (nextPath) {
       setOutputPath(nextPath);
+    }
+  };
+
+  const browseDebugInputPath = async () => {
+    const nextPath = await browseForAudioInput();
+    if (nextPath) {
+      setDebugInputPath(nextPath);
     }
   };
 
@@ -301,8 +361,16 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       setError("Select at least one model category before starting live monitoring.");
       return;
     }
+    if (debugInputEnabled && !debugInputPath.trim()) {
+      setError("Choose a debug input WAV path or turn the debug WAV mic source off.");
+      return;
+    }
     if (recordEnabled && !recordOutputPath.trim()) {
       setError("Choose a record output WAV path or turn live recording off.");
+      return;
+    }
+    if (outputMode === "virtualMic" && (!virtualMicStatus?.installed || !virtualMicStatus.playbackDeviceId)) {
+      setError(virtualMicStatus?.message ?? "VB-CABLE was not detected. Install it, then refresh devices.");
       return;
     }
 
@@ -315,7 +383,12 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       const result = await startLiveMonitor(
         {
           inputDeviceId: inputDeviceId || null,
-          outputDeviceId: outputDeviceId || null,
+          outputDeviceId:
+            outputMode === "virtualMic"
+              ? virtualMicStatus?.playbackDeviceId ?? null
+              : outputDeviceId || null,
+          outputMode,
+          debugInputPath: debugInputEnabled ? debugInputPath : null,
           categories: selectedCategories,
           aggressiveness,
           lookaheadMs,
@@ -371,13 +444,17 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       presets,
       devices,
       runtimeMetrics,
+      virtualMicStatus,
       selectedCategories,
       aggressiveness,
       lookaheadMs,
+      outputMode,
       inputDeviceId,
       outputDeviceId,
       inputPath,
       outputPath,
+      debugInputEnabled,
+      debugInputPath,
       recordEnabled,
       recordOutputPath,
       liveStatus,
@@ -394,16 +471,21 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       applyPreset,
       setAggressiveness,
       setLookaheadMs,
+      setOutputMode,
       setInputDeviceId,
       setOutputDeviceId,
       setInputPath,
       setOutputPath,
+      setDebugInputEnabled,
+      setDebugInputPath,
       setRecordEnabled,
       setRecordOutputPath,
       browseInputPath,
       browseOutputPath,
+      browseDebugInputPath,
       browseRecordOutputPath,
       refreshDevices,
+      refreshVirtualMicStatus,
       refreshRuntimeMetrics,
       startOffline,
       cancelOffline: cancelCurrentOffline,
@@ -418,6 +500,8 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       categories,
       devices,
       error,
+      debugInputEnabled,
+      debugInputPath,
       inputDeviceId,
       inputPath,
       isLoading,
@@ -427,6 +511,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       liveStatus,
       lookaheadMs,
       offlineProgress,
+      outputMode,
       outputDeviceId,
       outputPath,
       presets,
@@ -434,6 +519,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       recordOutputPath,
       runtimeMetrics,
       selectedCategories,
+      virtualMicStatus,
     ],
   );
 

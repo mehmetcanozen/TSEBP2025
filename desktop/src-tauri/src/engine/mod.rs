@@ -36,7 +36,6 @@ pub struct SharedEngine {
 
 pub struct SuppressionProcessor {
     runtime: Arc<ModelRuntime>,
-    categories: Vec<ModelCategory>,
     category_by_id: HashMap<String, ModelCategory>,
     masker: WienerMasker,
     audiosep_live_buffer: Vec<f32>,
@@ -86,7 +85,13 @@ pub struct EngineRuntimeInfo {
     pub provider: String,
     pub available_providers: Vec<String>,
     pub warmed: bool,
+    pub model_id: String,
+    pub model_family: String,
+    pub display_name: String,
+    pub suppression_strategy: String,
+    pub runtime_kind: String,
     pub model_path: Option<String>,
+    pub runtime_metadata_paths: Vec<String>,
 }
 
 impl SharedEngine {
@@ -113,6 +118,10 @@ impl SharedEngine {
         self.assets.preferred_live_hop_ms
     }
 
+    pub fn is_streaming_live_runtime(&self) -> bool {
+        self.assets.runtime_kind == "onnx_streaming_target_extractor"
+    }
+
     pub fn display_name(&self) -> &str {
         &self.assets.display_name
     }
@@ -136,7 +145,6 @@ impl SharedEngine {
         let runtime = self.runtime()?;
         Ok(SuppressionProcessor {
             runtime,
-            categories: self.assets.categories.clone(),
             category_by_id: self.assets.category_by_id.clone(),
             masker: WienerMasker::default(),
             audiosep_live_buffer: Vec::new(),
@@ -150,7 +158,18 @@ impl SharedEngine {
             provider: "cpu".to_string(),
             available_providers: vec!["cpu".to_string()],
             warmed: runtime.is_some(),
+            model_id: self.assets.model_id.clone(),
+            model_family: self.assets.model_family.clone(),
+            display_name: self.assets.display_name.clone(),
+            suppression_strategy: self.assets.suppression_strategy.clone(),
+            runtime_kind: self.assets.runtime_kind.clone(),
             model_path: runtime.as_ref().map(|runtime| runtime.model_path().to_string()),
+            runtime_metadata_paths: self
+                .assets
+                .runtime_metadata_paths
+                .iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect(),
         }
     }
 

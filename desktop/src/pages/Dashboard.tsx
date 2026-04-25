@@ -11,19 +11,36 @@ const formatMillis = (value?: number | null) => {
   return `${value.toFixed(0)} ms`;
 };
 
+const healthTone = (health?: string | null) => {
+  switch (health) {
+    case "ok":
+      return "text-accent";
+    case "warning":
+      return "text-[hsl(var(--neon-orange))]";
+    case "overloaded":
+      return "text-destructive";
+    default:
+      return "text-muted-foreground";
+  }
+};
+
 const Dashboard = () => {
   const {
     categories,
     presets,
     devices,
     runtimeMetrics,
+    virtualMicStatus,
     selectedCategories,
     aggressiveness,
     lookaheadMs,
+    outputMode,
     inputDeviceId,
     outputDeviceId,
     inputPath,
     outputPath,
+    debugInputEnabled,
+    debugInputPath,
     recordEnabled,
     recordOutputPath,
     liveStatus,
@@ -39,16 +56,21 @@ const Dashboard = () => {
     applyPreset,
     setAggressiveness,
     setLookaheadMs,
+    setOutputMode,
     setInputDeviceId,
     setOutputDeviceId,
     setInputPath,
     setOutputPath,
+    setDebugInputEnabled,
+    setDebugInputPath,
     setRecordEnabled,
     setRecordOutputPath,
     browseInputPath,
     browseOutputPath,
+    browseDebugInputPath,
     browseRecordOutputPath,
     refreshDevices,
+    refreshVirtualMicStatus,
     refreshRuntimeMetrics,
     startOffline,
     cancelOffline,
@@ -59,6 +81,13 @@ const Dashboard = () => {
 
   const inputDevices = devices.filter((device) => device.direction === "input");
   const outputDevices = devices.filter((device) => device.direction === "output");
+  const virtualMicReady = Boolean(virtualMicStatus?.installed && virtualMicStatus.playbackDeviceId);
+  const virtualMicPlaybackName = virtualMicStatus?.playbackDeviceName ?? "CABLE Input";
+  const virtualMicRecordingName = virtualMicStatus?.recordingDeviceName ?? "CABLE Output";
+  const liveStartDisabled = isStartingLive || isLoading || (outputMode === "virtualMic" && !virtualMicReady);
+  const liveTitle = outputMode === "virtualMic"
+    ? "Mic -> suppress -> virtual mic"
+    : "Mic -> suppress -> monitor";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background transition-colors duration-300">
@@ -87,7 +116,10 @@ const Dashboard = () => {
                 {formatMillis(liveStatus?.queueDepthMs)}
               </div>
               <div className="mt-2 text-sm text-muted-foreground">
-                {liveStatus?.state ?? "stopped"} / xruns {liveStatus?.xruns ?? 0}
+                <span className={healthTone(liveStatus?.realtimeHealth)}>
+                  {liveStatus?.realtimeHealth ?? "idle"}
+                </span>{" "}
+                / xruns {liveStatus?.xruns ?? 0}
               </div>
             </div>
 
@@ -99,7 +131,7 @@ const Dashboard = () => {
                 {formatMillis(liveStatus?.inferenceMs)}
               </div>
               <div className="mt-2 text-sm text-muted-foreground">
-                lookahead {lookaheadMs} ms
+                estimated {formatMillis(liveStatus?.estimatedLatencyMs)} / lookahead {lookaheadMs} ms
               </div>
             </div>
 
@@ -205,9 +237,9 @@ const Dashboard = () => {
                   </div>
                   <input
                     type="range"
-                    min={250}
+                    min={120}
                     max={1000}
-                    step={50}
+                    step={10}
                     value={lookaheadMs}
                     onChange={(event) => setLookaheadMs(Number(event.target.value))}
                     className="w-full accent-[hsl(var(--accent))]"
@@ -217,6 +249,18 @@ const Dashboard = () => {
                 <div className="rounded-2xl border border-border bg-muted/30 p-4">
                   <div className="text-sm font-semibold text-foreground">Runtime health</div>
                   <div className="mt-3 grid gap-3 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between gap-4">
+                      <span>Model</span>
+                      <span className="text-right font-mono text-foreground/80">
+                        {runtimeMetrics?.displayName ?? "--"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span>Runtime</span>
+                      <span className="text-right font-mono text-foreground/80">
+                        {runtimeMetrics?.runtimeKind ?? "--"}
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between gap-4">
                       <span>Available providers</span>
                       <span className="text-right font-mono text-foreground/80">
@@ -249,7 +293,7 @@ const Dashboard = () => {
                     Live Monitor
                   </div>
                   <h2 className="mt-2 text-2xl font-semibold text-foreground">
-                    {"Mic -> suppress -> monitor"}
+                    {liveTitle}
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
                     Windows-only buffered live path. Audio threads stay lightweight while the active model runtime
@@ -267,12 +311,76 @@ const Dashboard = () => {
                 </div>
               </div>
 
+              <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-1">
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setOutputMode("monitor")}
+                    disabled={Boolean(activeLiveSessionId)}
+                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      outputMode === "monitor"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
+                    }`}
+                  >
+                    Listen locally
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOutputMode("virtualMic")}
+                    disabled={Boolean(activeLiveSessionId) || !virtualMicReady}
+                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      outputMode === "virtualMic"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
+                    }`}
+                  >
+                    Virtual mic
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {virtualMicReady ? `${virtualMicStatus?.provider} ready` : `${virtualMicStatus?.provider ?? "VB-CABLE"} not detected`}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {virtualMicReady
+                        ? `Rendering to ${virtualMicPlaybackName}; choose ${virtualMicRecordingName} as the mic in the target app.`
+                        : virtualMicStatus?.message ?? "Install VB-CABLE, then refresh devices."}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void refreshVirtualMicStatus()}
+                      className="rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10"
+                    >
+                      check
+                    </button>
+                    {!virtualMicReady && (
+                      <a
+                        href={virtualMicStatus?.setupUrl ?? "https://vb-audio.com/Cable/"}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl border border-primary/35 bg-primary/12 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary transition-colors hover:bg-primary/18"
+                      >
+                        setup
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <div className="mb-2 text-sm font-semibold text-foreground">Input device</div>
                   <select
                     value={inputDeviceId}
                     onChange={(event) => setInputDeviceId(event.target.value)}
+                    disabled={debugInputEnabled}
                     className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
                   >
                     <option value="">System default</option>
@@ -285,20 +393,69 @@ const Dashboard = () => {
                 </label>
 
                 <label className="block">
-                  <div className="mb-2 text-sm font-semibold text-foreground">Monitor device</div>
+                  <div className="mb-2 text-sm font-semibold text-foreground">
+                    {outputMode === "virtualMic" ? "Clean audio sink" : "Monitor device"}
+                  </div>
                   <select
-                    value={outputDeviceId}
+                    value={outputMode === "virtualMic" ? virtualMicStatus?.playbackDeviceId ?? "" : outputDeviceId}
                     onChange={(event) => setOutputDeviceId(event.target.value)}
+                    disabled={outputMode === "virtualMic"}
                     className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
                   >
                     <option value="">System default</option>
                     {outputDevices.map((device) => (
                       <option key={device.id} value={device.id}>
                         {device.name}
+                        {device.virtualCable?.role === "playback" ? " -> virtual mic" : ""}
                       </option>
                     ))}
                   </select>
+                  {outputMode === "virtualMic" && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {virtualMicPlaybackName}
+                    </div>
+                  )}
                 </label>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Debug WAV mic source</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {debugInputEnabled ? "Live input is the selected WAV." : "Live input is the selected device."}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDebugInputEnabled(!debugInputEnabled)}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
+                      debugInputEnabled
+                        ? "border-primary/35 bg-primary/15 text-primary"
+                        : "border-border bg-card text-muted-foreground"
+                    }`}
+                  >
+                    {debugInputEnabled ? "on" : "off"}
+                  </button>
+                </div>
+
+                {debugInputEnabled && (
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={debugInputPath}
+                      onChange={(event) => setDebugInputPath(event.target.value)}
+                      placeholder="C:\\path\\to\\debug_source.wav"
+                      className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void browseDebugInputPath()}
+                      className="rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10"
+                    >
+                      choose wav
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
@@ -354,10 +511,14 @@ const Dashboard = () => {
                   <button
                     type="button"
                     onClick={() => void startLive()}
-                    disabled={isStartingLive || isLoading}
+                    disabled={liveStartDisabled}
                     className="rounded-2xl border border-primary/35 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isStartingLive ? "Starting..." : "Start live monitor"}
+                    {isStartingLive
+                      ? "Starting..."
+                      : outputMode === "virtualMic"
+                        ? "Start virtual mic"
+                        : "Start live monitor"}
                   </button>
                 )}
                 <button

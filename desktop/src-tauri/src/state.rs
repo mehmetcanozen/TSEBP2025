@@ -20,7 +20,7 @@ use crate::{
     models::{
         AudioDevice, JobHandle, LiveMeterEvent, LiveSessionHandle, LiveStatusEvent,
         OfflineProgressEvent, OfflineProgressStage, RuntimeMetrics, StartLiveMonitorRequest,
-        StartOfflineJobRequest,
+        StartOfflineJobRequest, VirtualMicStatus,
     },
 };
 
@@ -53,16 +53,26 @@ impl AppState {
         devices::list_audio_devices()
     }
 
+    pub fn get_virtual_mic_status(&self) -> AppResult<VirtualMicStatus> {
+        devices::get_virtual_mic_status()
+    }
+
     pub fn runtime_metrics(&self) -> AppResult<RuntimeMetrics> {
         let runtime = self.engine.runtime_info();
         Ok(RuntimeMetrics {
             provider: runtime.provider,
             available_providers: runtime.available_providers,
             warmed: runtime.warmed,
+            model_id: runtime.model_id,
+            model_family: runtime.model_family,
+            display_name: runtime.display_name,
+            suppression_strategy: runtime.suppression_strategy,
+            runtime_kind: runtime.runtime_kind,
             category_count: self.engine.categories().len(),
             active_live_sessions: self.live_sessions.lock().len(),
             active_jobs: self.offline_jobs.lock().len(),
             model_path: runtime.model_path,
+            runtime_metadata_paths: runtime.runtime_metadata_paths,
         })
     }
 
