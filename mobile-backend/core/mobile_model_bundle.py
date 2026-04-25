@@ -225,17 +225,36 @@ def ensure_default_android_model_version(db: Session) -> models.ModelVersion | N
         .first()
     )
     if existing:
-        if not existing.is_active:
+        file_size_mb = round(artifact_path.stat().st_size / (1024 * 1024), 2)
+        checksum = compute_checksum(artifact_path)
+        stored_path = Path(existing.file_path)
+        needs_update = (
+            existing.file_path != str(artifact_path)
+            or not stored_path.exists()
+            or existing.platform != "android"
+            or existing.file_size_mb != file_size_mb
+            or existing.checksum != checksum
+            or not existing.is_active
+        )
+        if needs_update:
+            existing.description = (
+                f"Auto-registered packaged Android export for {packaged_model.display_name}."
+            )
+            existing.file_path = str(artifact_path)
+            existing.file_size_mb = file_size_mb
+            existing.checksum = checksum
+            existing.platform = "android"
             existing.is_active = True
             db.commit()
             db.refresh(existing)
         return existing
 
+    file_size_mb = round(artifact_path.stat().st_size / (1024 * 1024), 2)
     created = models.ModelVersion(
         version=version_string,
         description=f"Auto-registered packaged Android export for {packaged_model.display_name}.",
         file_path=str(artifact_path),
-        file_size_mb=round(artifact_path.stat().st_size / (1024 * 1024), 2),
+        file_size_mb=file_size_mb,
         checksum=compute_checksum(artifact_path),
         platform="android",
         is_active=True,

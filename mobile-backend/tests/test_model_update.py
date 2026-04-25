@@ -191,6 +191,44 @@ def test_latest_android_model_auto_registers_repository_export(
         db.close()
 
 
+def test_latest_android_model_repairs_stale_packaged_default_path(
+    client,
+    auth_headers,
+    tmp_path,
+    monkeypatch,
+):
+    packaged_model = _fake_packaged_model(tmp_path)
+    stale_path = tmp_path / "missing" / "semantic_hearing_100ms_portable.pte"
+    _create_model_version(stale_path, version=packaged_model.package_version)
+
+    monkeypatch.setattr(
+        mobile_model_bundle,
+        "load_active_packaged_model",
+        lambda platform_name="android": packaged_model,
+    )
+    monkeypatch.setattr(
+        mobile_model_bundle,
+        "resolve_packaged_model_for_artifact",
+        lambda artifact_path, platform_name="android": packaged_model,
+    )
+
+    response = client.get("/model/latest?platform=android", headers=auth_headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["latest_version"] == packaged_model.package_version
+    assert payload["bundle_kind"] == "suppression_model_bundle"
+
+    db = TestingSession()
+    try:
+        repaired = db.query(models.ModelVersion).filter_by(version=packaged_model.package_version).one()
+        assert repaired.file_path == str(packaged_model.artifact_path("android"))
+        assert repaired.platform == "android"
+        assert repaired.is_active is True
+        assert Path(repaired.file_path).exists()
+    finally:
+        db.close()
+
+
 def test_latest_android_model_prefers_active_db_version_over_packaged_default(
     client,
     auth_headers,

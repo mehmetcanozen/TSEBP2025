@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from core import mobile_model_bundle
 from core.config import settings
 from core.dependencies import get_admin_user, get_current_user
 from core.mobile_model_bundle import (
@@ -30,29 +31,49 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 BUNDLE_CACHE_DIR = MODELS_DIR / "android_bundles"
 
 
-def _query_latest_active_version(db: Session, platform: str) -> models.ModelVersion | None:
+def _query_active_versions(db: Session, platform: str) -> list[models.ModelVersion]:
     return (
         db.query(models.ModelVersion)
         .filter(models.ModelVersion.is_active == True)
         .filter(models.ModelVersion.platform.in_([platform, "all"]))
         .order_by(models.ModelVersion.created_at.desc())
-        .first()
+        .all()
     )
 
 
+def _default_android_version_string() -> str | None:
+    try:
+        packaged_model = mobile_model_bundle.load_active_packaged_model("android")
+    except (FileNotFoundError, KeyError):
+        return None
+    return mobile_model_bundle.default_android_model_version_string(packaged_model)
+
+
+def _artifact_exists(version: models.ModelVersion) -> bool:
+    return Path(version.file_path).exists()
+
+
 def _latest_active_version(db: Session, platform: str) -> models.ModelVersion:
-    version = _query_latest_active_version(db, platform)
-    if version:
-        return version
+    candidates = _query_active_versions(db, platform)
 
     if platform == "android":
-        version = ensure_default_android_model_version(db)
-        if version:
-            return version
+        default_version = _default_android_version_string()
+        for version in candidates:
+            if default_version and version.version == default_version:
+                continue
+            if _artifact_exists(version):
+                return version
 
-    if not version:
-        raise HTTPException(status_code=404, detail="No active model version was found")
-    return version
+        default_model = ensure_default_android_model_version(db)
+        if default_model and _artifact_exists(default_model):
+            return default_model
+
+    else:
+        for version in candidates:
+            if _artifact_exists(version):
+                return version
+
+    raise HTTPException(status_code=404, detail="No active model version was found")
 
 
 @router.get("/latest", response_model=LatestModelResponse)
@@ -62,10 +83,14 @@ def get_latest_version(
     db: Session = Depends(get_db),
     _: models.User = Depends(get_current_user),
 ):
+    platform = platform.strip().lower()
     version = _latest_active_version(db, platform)
     has_update = (current_version != version.version) if current_version else True
 
-    artifact = prepare_download_artifact(version, BUNDLE_CACHE_DIR, requested_platform=platform)
+    try:
+        artifact = prepare_download_artifact(version, BUNDLE_CACHE_DIR, requested_platform=platform)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     download_url = f"/model/download/{version.id}?platform={platform}" if has_update else None
 
     return LatestModelResponse(
