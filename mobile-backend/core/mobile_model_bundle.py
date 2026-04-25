@@ -96,8 +96,11 @@ def active_model_id() -> str:
 
 def iter_packaged_models() -> Iterable[PackagedModelSpec]:
     selection = _load_model_selection()
-    for model_id, relative_package in selection.get("models", {}).items():
-        yield load_packaged_model(str(model_id))
+    for model_id in selection.get("models", {}):
+        try:
+            yield load_packaged_model(str(model_id))
+        except FileNotFoundError:
+            continue
 
 
 def load_packaged_model(model_id: str | None = None) -> PackagedModelSpec:
@@ -180,6 +183,13 @@ def resolve_packaged_model_for_artifact(
     platform_name: str,
 ) -> PackagedModelSpec | None:
     resolved_artifact = artifact_path.resolve()
+    try:
+        active_model = load_active_packaged_model(platform_name)
+        if active_model.artifact_path(platform_name) == resolved_artifact:
+            return active_model
+    except (FileNotFoundError, KeyError):
+        pass
+
     for model in iter_packaged_models():
         try:
             candidate = model.artifact_path(platform_name)
