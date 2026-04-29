@@ -9,8 +9,11 @@ __all__ = [
     "CodecSepDNRv2_15CatSeparator",
     "CodecSepDNRv2_15CatExecuTorchSeparator",
     "CodecSepSeparator",
+    "ClearVoiceNativeBundle",
+    "ExportedTSExtractOnnx",
     "TARGET_SAMPLE_RATE",
     "TARGETS",
+    "TargetSpeakerSeparator",
     "UniversalSeparator",
     "WaveformerSeparator",
 ]
@@ -27,6 +30,21 @@ def __getattr__(name: str):
 
         globals()["UniversalSeparator"] = UniversalSeparator
         return UniversalSeparator
+    if name == "TargetSpeakerSeparator":
+        from .target_speaker_separator import TargetSpeakerSeparator
+
+        globals()["TargetSpeakerSeparator"] = TargetSpeakerSeparator
+        return TargetSpeakerSeparator
+    if name == "ExportedTSExtractOnnx":
+        from .exported_target_speaker import ExportedTSExtractOnnx
+
+        globals()["ExportedTSExtractOnnx"] = ExportedTSExtractOnnx
+        return ExportedTSExtractOnnx
+    if name == "ClearVoiceNativeBundle":
+        from .exported_target_speaker import ClearVoiceNativeBundle
+
+        globals()["ClearVoiceNativeBundle"] = ClearVoiceNativeBundle
+        return ClearVoiceNativeBundle
     if name == "AudioSepHive15CatSeparator":
         from .audiosep_hive15cat_separator import AudioSepHive15CatSeparator
 

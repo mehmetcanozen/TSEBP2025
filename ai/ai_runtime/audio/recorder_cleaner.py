@@ -54,6 +54,11 @@ from ai.ai_runtime.utils.codecsep import (
     build_codecsep_call_kwargs_from_args,
     build_suppressor_kwargs_from_args,
 )
+from ai.ai_runtime.utils.target_speaker import (
+    add_target_speaker_runtime_arguments,
+    build_target_speaker_call_kwargs_from_args,
+    build_target_speaker_suppressor_kwargs_from_args,
+)
 from ai.ai_runtime.utils.paths import get_data_audio_path
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
@@ -273,12 +278,17 @@ def build_parser() -> argparse.ArgumentParser:
         default_query_strategy="single_pass",
         default_multistep_steps=0,
     )
+    add_target_speaker_runtime_arguments(parser)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.target_speaker_reference and args.separator_backend == "waveformer":
+        args.separator_backend = "target_speaker"
+    if args.separator_backend == "target_speaker" and not args.target_speaker_reference:
+        parser.error("target_speaker requires --target-speaker-reference")
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = args.output if args.output else f"recording_{timestamp}_cleaned.wav"
 
@@ -294,7 +304,10 @@ def main(argv: list[str] | None = None) -> None:
     logger.info("Initializing engine...")
     manager = ProfileManager()
     suppressions = {cat.strip(): True for cat in args.suppress.split(",")}
-    codecsep_call_kwargs = build_codecsep_call_kwargs_from_args(args)
+    codecsep_call_kwargs = {
+        **build_codecsep_call_kwargs_from_args(args),
+        **build_target_speaker_call_kwargs_from_args(args),
+    }
     profile = manager.create_profile(
         name="Recorder Temp",
         description="Temp recording profile",
@@ -310,7 +323,10 @@ def main(argv: list[str] | None = None) -> None:
         },
     )
 
-    suppressor = SemanticSuppressor(**build_suppressor_kwargs_from_args(args))
+    suppressor = SemanticSuppressor(
+        **build_suppressor_kwargs_from_args(args),
+        **build_target_speaker_suppressor_kwargs_from_args(args),
+    )
     engine = ControlEngine(profile_manager=manager, suppressor=suppressor)
     engine.set_profile(profile)
     engine.set_mode(ControlMode.MANUAL)
@@ -337,7 +353,11 @@ def main(argv: list[str] | None = None) -> None:
 
     q = queue.Queue(maxsize=10)
     sample_rate = 44100
-    use_buffered_exact15 = args.separator_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}
+    use_buffered_exact15 = args.separator_backend in {
+        "audiosep_hive15cat",
+        "codecsep_dnrv2_15cat",
+        "target_speaker",
+    }
     if args.separator_backend == "audiosep_hive15cat":
         context_duration = 5.0
         realtime_hop_seconds = float(
@@ -353,6 +373,10 @@ def main(argv: list[str] | None = None) -> None:
             "CodecSepDNRv2_15Cat "
             f"({codecsep_call_kwargs.get('codecsep_dnrv2_15cat_runtime', 'onnx')})"
         )
+    elif args.separator_backend == "target_speaker":
+        context_duration = 3.0
+        realtime_hop_seconds = 0.5
+        buffered_backend_label = f"TargetSpeaker ({args.target_speaker_engine})"
     else:
         context_duration = 3.0
         realtime_hop_seconds = 0.0
@@ -425,8 +449,14 @@ def main(argv: list[str] | None = None) -> None:
 
                     targets = list(engine.current_profile.suppressions.keys()) if engine.current_profile else []
                     universal_targets = [p.strip() for p in args.universal.split(",")] if args.universal else []
+                    target_speaker_target = (
+                        args.separator_backend == "target_speaker"
+                        and bool(args.target_speaker_reference)
+                    )
 
-                    if use_buffered_exact15 and (targets or args.suppress_all or universal_targets):
+                    if use_buffered_exact15 and (
+                        targets or args.suppress_all or universal_targets or target_speaker_target
+                    ):
                         buffered_live.poll_results()
                         buffered_live.submit_if_due(
                             rolling_buffer,
@@ -444,7 +474,7 @@ def main(argv: list[str] | None = None) -> None:
                             chunk_len=chunk_len,
                             lookahead_seconds=args.lookahead,
                         )
-                    elif targets or args.suppress_all or universal_targets:
+                    elif targets or args.suppress_all or universal_targets or target_speaker_target:
                         clean_full_buffer = engine.suppressor.suppress(
                             audio=rolling_buffer,
                             sample_rate=sample_rate,
