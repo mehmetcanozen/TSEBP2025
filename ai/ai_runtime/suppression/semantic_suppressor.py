@@ -25,6 +25,10 @@ from ai.ai_runtime.utils.codecsep import (
     normalize_codecsep_prompt_map,
     normalize_codecsep_prompt_value,
 )
+from ai.ai_runtime.utils.target_speaker import (
+    DEFAULT_TARGET_SPEAKER_ENGINE,
+    normalize_target_speaker_engine,
+)
 from ai.ai_runtime.utils.paths import (
     get_audiosep_hive15cat_onnx_path,
     get_codecsep_dnrv2_15cat_executorch_path,
@@ -48,6 +52,7 @@ if TYPE_CHECKING:
         CodecSepDNRv2_15CatExecuTorchSeparator,
         CodecSepDNRv2_15CatSeparator,
         CodecSepSeparator,
+        TargetSpeakerSeparator,
         UniversalSeparator,
         WaveformerSeparator,
     )
@@ -70,7 +75,13 @@ CODECSEP_FIXEDSET_MAPPING_PATH = get_codecsep_runtime_fixed_category_mapping_pat
 CODECSEP_FIXEDSET_IDENTITY_PATH = get_codecsep_fixed_category_identity_path()
 CODECSEP_FIXEDSET_THRESHOLDS_PATH = get_codecsep_fixed_category_gate_thresholds_path()
 
-SEPARATOR_BACKENDS = ("waveformer", "codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat")
+SEPARATOR_BACKENDS = (
+    "waveformer",
+    "codecsep",
+    "audiosep_hive15cat",
+    "codecsep_dnrv2_15cat",
+    "target_speaker",
+)
 CODECSEP_DNRV2_15CAT_RUNTIMES = ("onnx", "executorch")
 MASKING_METHODS = ("wiener_dd", "cirm")
 
@@ -122,6 +133,7 @@ class SemanticSuppressor:
         audiosep_hive15cat: Optional[AudioSepHive15CatSeparator] = None,
         codecsep_dnrv2_15cat: Optional[CodecSepDNRv2_15CatSeparator] = None,
         codecsep_dnrv2_15cat_executorch: Optional[CodecSepDNRv2_15CatExecuTorchSeparator] = None,
+        target_speaker: Optional[TargetSpeakerSeparator] = None,
         *,
         separator_backend: str = "waveformer",
         masking_method: str = "wiener_dd",
@@ -132,6 +144,10 @@ class SemanticSuppressor:
         codecsep_dnrv2_15cat_device: Optional[str] = None,
         codecsep_checkpoint_path: Optional[Union[str, Path]] = None,
         codecsep_device: Optional[str] = None,
+        target_speaker_model_dir: Optional[Union[str, Path]] = None,
+        target_speaker_checkpoint_path: Optional[Union[str, Path]] = None,
+        target_speaker_device: Optional[str] = None,
+        target_speaker_engine: str = DEFAULT_TARGET_SPEAKER_ENGINE,
         codecsep_prompts: Optional[Dict[str, Sequence[str]]] = None,
     ) -> None:
         if separator_backend not in SEPARATOR_BACKENDS:
@@ -166,6 +182,14 @@ class SemanticSuppressor:
             Path(codecsep_checkpoint_path) if codecsep_checkpoint_path else None
         )
         self.codecsep_device = codecsep_device
+        self.target_speaker_model_dir = (
+            Path(target_speaker_model_dir) if target_speaker_model_dir else None
+        )
+        self.target_speaker_checkpoint_path = (
+            Path(target_speaker_checkpoint_path) if target_speaker_checkpoint_path else None
+        )
+        self.target_speaker_device = target_speaker_device
+        self.target_speaker_engine = normalize_target_speaker_engine(target_speaker_engine)
         self.codecsep_prompts = normalize_codecsep_prompt_map(
             codecsep_prompts or dict(DEFAULT_CODECSEP_PROMPTS)
         )
@@ -211,6 +235,24 @@ class SemanticSuppressor:
         )
         self._codecsep_separator: CodecSepSeparator | None = None
         self._codecsep_separator_key: tuple[str | None, str | None] | None = None
+        self._target_speaker_separator = target_speaker
+        self._target_speaker_separator_key: tuple[
+            str | None,
+            str | None,
+            str | None,
+            str,
+        ] | None = (
+            (
+                str(self.target_speaker_model_dir) if self.target_speaker_model_dir else None,
+                str(self.target_speaker_checkpoint_path)
+                if self.target_speaker_checkpoint_path
+                else None,
+                self.target_speaker_device,
+                self.target_speaker_engine,
+            )
+            if target_speaker is not None
+            else None
+        )
         self._enhancer = enhancer
         self._universal = universal
         self._overlap_save_tail = None
@@ -330,6 +372,11 @@ class SemanticSuppressor:
         return self._universal
 
     @property
+    def target_speaker_separator(self):
+        """Lazy-load the target-speaker extractor."""
+        return self._get_target_speaker_separator()
+
+    @property
     def audiosep_hive15cat_separator(self):
         """Lazy-load the exact-15 AudioSep ONNX separator."""
         return self._get_audiosep_hive15cat_separator()
@@ -393,6 +440,51 @@ class SemanticSuppressor:
         )
         self._codecsep_separator_key = cache_key
         return self._codecsep_separator
+
+    def _get_target_speaker_separator(
+        self,
+        model_dir: Optional[Union[str, Path]] = None,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        device: Optional[str] = None,
+        engine: Optional[str] = None,
+    ):
+        requested_model_dir = (
+            Path(model_dir)
+            if model_dir is not None
+            else self.target_speaker_model_dir
+        )
+        requested_checkpoint_path = (
+            Path(checkpoint_path)
+            if checkpoint_path is not None
+            else self.target_speaker_checkpoint_path
+        )
+        requested_device = device if device is not None else self.target_speaker_device
+        requested_engine = normalize_target_speaker_engine(
+            engine if engine is not None else self.target_speaker_engine,
+        )
+        cache_key = (
+            str(requested_model_dir) if requested_model_dir is not None else None,
+            str(requested_checkpoint_path) if requested_checkpoint_path is not None else None,
+            requested_device,
+            requested_engine,
+        )
+        if (
+            self._target_speaker_separator is not None
+            and self._target_speaker_separator_key == cache_key
+        ):
+            return self._target_speaker_separator
+
+        from ai.ai_runtime.separation import TargetSpeakerSeparator
+
+        logger.info("Initializing TargetSpeakerSeparator...")
+        self._target_speaker_separator = TargetSpeakerSeparator(
+            model_dir=requested_model_dir,
+            checkpoint_path=requested_checkpoint_path,
+            device=requested_device,
+            engine=requested_engine,
+        )
+        self._target_speaker_separator_key = cache_key
+        return self._target_speaker_separator
 
     def _get_audiosep_hive15cat_separator(
         self,
@@ -555,6 +647,15 @@ class SemanticSuppressor:
         codecsep_dnrv2_15cat_realtime_hop_seconds: Optional[float] = None,
         codecsep_checkpoint_path: Optional[Union[str, Path]] = None,
         codecsep_device: Optional[str] = None,
+        target_speaker_reference_audio: Optional[np.ndarray] = None,
+        target_speaker_reference_sample_rate: Optional[int] = None,
+        target_speaker_reference_path: Optional[Union[str, Path]] = None,
+        target_speaker_model_dir: Optional[Union[str, Path]] = None,
+        target_speaker_checkpoint_path: Optional[Union[str, Path]] = None,
+        target_speaker_device: Optional[str] = None,
+        target_speaker_engine: Optional[str] = None,
+        target_speaker_reconstruction: str = "direct_subtract",
+        target_speaker_scale: float = 1.0,
         codecsep_prompt_overrides: Optional[Dict[str, Sequence[str]]] = None,
         codecsep_negative_prompts: Optional[Sequence[str]] = None,
         codecsep_preserve_prompts: Optional[Sequence[str]] = None,
@@ -577,6 +678,9 @@ class SemanticSuppressor:
         effective_codecsep15_runtime = self._normalize_codecsep_dnrv2_15cat_runtime(
             codecsep_dnrv2_15cat_runtime or self.codecsep_dnrv2_15cat_runtime,
         )
+        effective_target_speaker_engine = normalize_target_speaker_engine(
+            target_speaker_engine or self.target_speaker_engine,
+        )
         resolved_codecsep_mode = self._resolve_codecsep_mode(codecsep_mode)
         self._last_codecsep_removed_audio = None
         if effective_backend not in SEPARATOR_BACKENDS:
@@ -597,10 +701,23 @@ class SemanticSuppressor:
             raise ValueError("codecsep_query_strategy must be one of: single_pass, slot_search")
         if codecsep_stereo_mode not in {"mono_shared", "per_channel"}:
             raise ValueError("codecsep_stereo_mode must be one of: mono_shared, per_channel")
+        if target_speaker_reconstruction not in {"direct_subtract", "spectral_mask"}:
+            raise ValueError(
+                "target_speaker_reconstruction must be one of: direct_subtract, spectral_mask"
+            )
         if resolved_codecsep_mode == "fixed_category" and universal_prompts:
             raise ValueError(
                 "universal_prompts are not supported in codecsep fixed_category mode. "
                 "Use compat or experimental_search with a prompt-conditioned checkpoint instead."
+            )
+        has_target_speaker_request = effective_backend == "target_speaker"
+        if has_target_speaker_request and (
+            target_speaker_reference_audio is None
+            and target_speaker_reference_path is None
+        ):
+            raise ValueError(
+                "target_speaker backend requires target_speaker_reference_audio "
+                "or target_speaker_reference_path."
             )
 
         if suppress_all:
@@ -622,6 +739,7 @@ class SemanticSuppressor:
             and not universal_prompts
             and not codecsep_product_categories
             and not codecsep_hive_class_ids
+            and not has_target_speaker_request
         ):
             self._overlap_save_tail = None
             return self._finalize_suppress_output(
@@ -634,6 +752,11 @@ class SemanticSuppressor:
 
         # --- Detection ---
         if (
+            effective_backend == "target_speaker"
+        ):
+            detections = None
+            smoothed_scores = {}
+        elif (
             effective_backend == "codecsep"
             and (suppress_categories or universal_prompts or codecsep_product_categories or codecsep_hive_class_ids)
         ):
@@ -660,64 +783,78 @@ class SemanticSuppressor:
         max_detection_confidence = 0.0
         has_transient_category = False
 
-        for category in suppress_categories:
-            if category not in self.category_map:
-                logger.warning("Unknown category '%s', skipping", category)
-                continue
+        if effective_backend == "target_speaker":
+            targets_to_suppress.append("target_speaker")
+            max_detection_confidence = 0.9
+            if suppress_categories:
+                logger.info(
+                    "target_speaker backend ignores suppress_categories=%s and uses the provided reference speaker.",
+                    list(suppress_categories),
+                )
+        else:
+            for category in suppress_categories:
+                if category not in self.category_map:
+                    logger.warning("Unknown category '%s', skipping", category)
+                    continue
 
-            cat_config = self.category_map[category]
+                cat_config = self.category_map[category]
 
-            if effective_backend == "codecsep":
-                if resolved_codecsep_mode == "fixed_category":
-                    cat_targets = self._get_codecsep_fixed_targets(category)
+                if effective_backend == "codecsep":
+                    if resolved_codecsep_mode == "fixed_category":
+                        cat_targets = self._get_codecsep_fixed_targets(category)
+                    else:
+                        cat_targets = self._get_codecsep_stems(category)
+                elif effective_backend == "audiosep_hive15cat":
+                    cat_targets = cat_config.get("audiosep15_targets", [])
+                elif effective_backend == "codecsep_dnrv2_15cat":
+                    cat_targets = cat_config.get("codecsep15_targets", [])
                 else:
-                    cat_targets = self._get_codecsep_stems(category)
-            elif effective_backend == "audiosep_hive15cat":
-                cat_targets = cat_config.get("audiosep15_targets", [])
-            elif effective_backend == "codecsep_dnrv2_15cat":
-                cat_targets = cat_config.get("codecsep15_targets", [])
-            else:
-                cat_targets = cat_config.get("waveformer_targets", [])
+                    cat_targets = cat_config.get("waveformer_targets", [])
 
-            if not cat_targets:
-                continue
+                if not cat_targets:
+                    continue
 
-            if effective_backend == "codecsep":
-                per_category_targets.append((category, cat_targets))
-                targets_to_suppress.extend(cat_targets)
-                max_detection_confidence = max(max_detection_confidence, 0.9)
-                if cat_config.get("transient", False):
-                    has_transient_category = True
-                continue
+                if effective_backend == "codecsep":
+                    per_category_targets.append((category, cat_targets))
+                    targets_to_suppress.extend(cat_targets)
+                    max_detection_confidence = max(max_detection_confidence, 0.9)
+                    if cat_config.get("transient", False):
+                        has_transient_category = True
+                    continue
 
-            if effective_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}:
-                per_category_targets.append((category, cat_targets))
-                targets_to_suppress.extend(cat_targets)
-                max_detection_confidence = max(max_detection_confidence, 0.9)
-                if cat_config.get("transient", False):
-                    has_transient_category = True
-                continue
+                if effective_backend in {"audiosep_hive15cat", "codecsep_dnrv2_15cat"}:
+                    per_category_targets.append((category, cat_targets))
+                    targets_to_suppress.extend(cat_targets)
+                    max_detection_confidence = max(max_detection_confidence, 0.9)
+                    if cat_config.get("transient", False):
+                        has_transient_category = True
+                    continue
 
-            confidence = smoothed_scores.get(category, 0.0)
-            effective_threshold = self._category_effective_threshold(
-                category, detection_threshold,
-            )
+                confidence = smoothed_scores.get(category, 0.0)
+                effective_threshold = self._category_effective_threshold(
+                    category, detection_threshold,
+                )
 
-            use_stability_gate = effective_threshold >= 0.4
-            meets_threshold = effective_threshold < 0 or confidence >= effective_threshold
-            is_stable = states.get(category, False) if use_stability_gate else True
+                use_stability_gate = effective_threshold >= 0.4
+                meets_threshold = effective_threshold < 0 or confidence >= effective_threshold
+                is_stable = states.get(category, False) if use_stability_gate else True
 
-            if effective_threshold < 0 or (meets_threshold and is_stable):
-                if effective_threshold < 0:
-                    confidence = max(confidence, 0.9)
-                per_category_targets.append((category, cat_targets))
-                targets_to_suppress.extend(cat_targets)
-                max_detection_confidence = max(max_detection_confidence, confidence)
-                if cat_config.get("transient", False):
-                    has_transient_category = True
+                if effective_threshold < 0 or (meets_threshold and is_stable):
+                    if effective_threshold < 0:
+                        confidence = max(confidence, 0.9)
+                    per_category_targets.append((category, cat_targets))
+                    targets_to_suppress.extend(cat_targets)
+                    max_detection_confidence = max(max_detection_confidence, confidence)
+                    if cat_config.get("transient", False):
+                        has_transient_category = True
 
         has_explicit_fixed_targets = bool(codecsep_product_categories or codecsep_hive_class_ids)
-        if not targets_to_suppress and not universal_prompts and not has_explicit_fixed_targets:
+        if (
+            not targets_to_suppress
+            and not universal_prompts
+            and not has_explicit_fixed_targets
+            and not has_target_speaker_request
+        ):
             self._overlap_save_tail = None
             return self._finalize_suppress_output(
                 original_audio=audio,
@@ -782,6 +919,39 @@ class SemanticSuppressor:
                 audio, sample_rate, universal_prompts,
             )
             max_detection_confidence = 0.9
+        elif effective_backend == "target_speaker":
+            unwanted_audio, separation_ratio = self._separate_target_speaker(
+                audio,
+                sample_rate,
+                reference_audio=target_speaker_reference_audio,
+                reference_sample_rate=target_speaker_reference_sample_rate,
+                reference_path=target_speaker_reference_path,
+                model_dir=target_speaker_model_dir,
+                checkpoint_path=target_speaker_checkpoint_path,
+                device=target_speaker_device,
+                engine=effective_target_speaker_engine,
+            )
+            target_scale = max(0.0, float(target_speaker_scale))
+            if target_scale != 1.0:
+                unwanted_audio = np.asarray(unwanted_audio, dtype=np.float32) * target_scale
+            if target_speaker_reconstruction == "direct_subtract":
+                clean_audio = (
+                    np.asarray(audio, dtype=np.float32)
+                    - np.asarray(unwanted_audio, dtype=np.float32)
+                )
+                self._last_codecsep_removed_audio = np.asarray(
+                    unwanted_audio,
+                    dtype=np.asarray(audio).dtype,
+                )
+                if audio.ndim == 1:
+                    clean_audio = clean_audio.flatten()
+                return self._finalize_suppress_output(
+                    original_audio=audio,
+                    clean_audio=clean_audio.astype(np.asarray(audio).dtype, copy=False),
+                    effective_backend=effective_backend,
+                    resolved_codecsep_mode=resolved_codecsep_mode,
+                    return_details=return_details,
+                )
         elif effective_backend == "audiosep_hive15cat":
             unwanted_audio, separation_ratio = self._separate_audiosep_hive15cat(
                 audio,
@@ -816,6 +986,9 @@ class SemanticSuppressor:
             # if we push the unwanted track too hard before masking.
             under_extract_threshold = 0.18
             under_extract_scale = min(self.under_extract_scale, 1.15)
+        elif effective_backend == "target_speaker":
+            under_extract_threshold = 0.15
+            under_extract_scale = min(self.under_extract_scale, 1.10)
         if (
             under_extract_scale > 1.0
             and 1e-6 < separation_ratio < under_extract_threshold
@@ -843,6 +1016,13 @@ class SemanticSuppressor:
                 effective_max_suppression_ratio = 0.82
             if effective_speech_dominance_threshold is None:
                 effective_speech_dominance_threshold = 2.5
+        elif effective_backend == "target_speaker":
+            if effective_mask_floor is None:
+                effective_mask_floor = 0.05
+            if effective_max_suppression_ratio is None:
+                effective_max_suppression_ratio = 0.90
+            if effective_speech_dominance_threshold is None:
+                effective_speech_dominance_threshold = 2.0
 
         # Transient categories: shorter STFT + faster alpha
         mask_nperseg = 1024 if has_transient_category else self.spectral_nperseg
@@ -1663,6 +1843,65 @@ class SemanticSuppressor:
         mix_rms = np.sqrt(np.mean(audio[:min_len] ** 2)) + 1e-8
         unwanted_rms = np.sqrt(np.mean(unwanted_audio[:min_len] ** 2)) + 1e-8
         return unwanted_audio, unwanted_rms / mix_rms
+
+    def _separate_target_speaker(
+        self,
+        audio: np.ndarray,
+        sample_rate: int,
+        *,
+        reference_audio: Optional[np.ndarray] = None,
+        reference_sample_rate: Optional[int] = None,
+        reference_path: Optional[Union[str, Path]] = None,
+        model_dir: Optional[Union[str, Path]] = None,
+        checkpoint_path: Optional[Union[str, Path]] = None,
+        device: Optional[str] = None,
+        engine: Optional[str] = None,
+    ) -> tuple[np.ndarray, float]:
+        if profiler:
+            profiler.start("target_speaker_separation")
+
+        separator = self._get_target_speaker_separator(
+            model_dir=model_dir,
+            checkpoint_path=checkpoint_path,
+            device=device,
+            engine=engine,
+        )
+        effective_engine = normalize_target_speaker_engine(engine or self.target_speaker_engine)
+        if reference_audio is None and effective_engine not in {"clearvoice", "clearvoice_bundle"}:
+            if reference_path is None:
+                raise ValueError(
+                    "target_speaker suppression needs reference_audio or reference_path."
+                )
+            reference_audio, reference_sample_rate = separator.load_reference_file(reference_path)
+        elif reference_sample_rate is None:
+            reference_sample_rate = sample_rate
+
+        target_audio = separator.extract(
+            audio=audio,
+            sample_rate=sample_rate,
+            reference_audio=(
+                np.asarray(reference_audio, dtype=np.float32)
+                if reference_audio is not None
+                else None
+            ),
+            reference_sample_rate=(
+                int(reference_sample_rate) if reference_sample_rate is not None else None
+            ),
+            reference_path=reference_path,
+        )
+        target_audio = np.asarray(target_audio, dtype=np.asarray(audio).dtype)
+        self._last_codecsep_removed_audio = target_audio
+
+        if profiler:
+            profiler.end("target_speaker_separation")
+
+        min_len = min(audio.shape[0], target_audio.shape[0])
+        mix_rms = np.sqrt(np.mean(np.asarray(audio[:min_len], dtype=np.float32) ** 2)) + 1e-8
+        target_rms = (
+            np.sqrt(np.mean(np.asarray(target_audio[:min_len], dtype=np.float32) ** 2))
+            + 1e-8
+        )
+        return target_audio, target_rms / mix_rms
 
     # ------------------------------------------------------------------
     # Config loaders

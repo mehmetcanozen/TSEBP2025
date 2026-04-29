@@ -30,6 +30,12 @@ from ai.ai_runtime.utils.codecsep import (
     build_codecsep_call_kwargs_from_args,
     build_suppressor_kwargs_from_args,
 )
+from ai.ai_runtime.utils.target_speaker import (
+    DEFAULT_TARGET_SPEAKER_ENGINE,
+    add_target_speaker_runtime_arguments,
+    build_target_speaker_call_kwargs_from_args,
+    build_target_speaker_suppressor_kwargs_from_args,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -66,7 +72,11 @@ class BatchProcessor:
         backend = getattr(self.suppressor, "separator_backend", "waveformer")
         if universal_prompts and backend != "codecsep":
             return False
-        return backend in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"}
+        return backend in {
+            "codecsep",
+            "audiosep_hive15cat",
+            "codecsep_dnrv2_15cat",
+        }
 
     def _suppress_mono_chunk(
         self,
@@ -85,6 +95,13 @@ class BatchProcessor:
         codecsep_dnrv2_15cat_runtime: str,
         codecsep_dnrv2_15cat_device: Optional[str],
         codecsep_dnrv2_15cat_realtime_hop_seconds: float,
+        target_speaker_reference_path: Optional[str],
+        target_speaker_model_dir: Optional[str],
+        target_speaker_checkpoint_path: Optional[str],
+        target_speaker_device: Optional[str],
+        target_speaker_engine: str,
+        target_speaker_reconstruction: str,
+        target_speaker_scale: float,
         codecsep_prompt_overrides: Optional[dict[str, list[str]]],
         codecsep_negative_prompts: Optional[list[str]],
         codecsep_preserve_prompts: Optional[list[str]],
@@ -111,6 +128,13 @@ class BatchProcessor:
             codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
             codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
             codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+            target_speaker_reference_path=target_speaker_reference_path,
+            target_speaker_model_dir=target_speaker_model_dir,
+            target_speaker_checkpoint_path=target_speaker_checkpoint_path,
+            target_speaker_device=target_speaker_device,
+            target_speaker_engine=target_speaker_engine,
+            target_speaker_reconstruction=target_speaker_reconstruction,
+            target_speaker_scale=target_speaker_scale,
             codecsep_prompt_overrides=codecsep_prompt_overrides,
             codecsep_negative_prompts=codecsep_negative_prompts,
             codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -169,6 +193,13 @@ class BatchProcessor:
         codecsep_dnrv2_15cat_runtime: str,
         codecsep_dnrv2_15cat_device: Optional[str],
         codecsep_dnrv2_15cat_realtime_hop_seconds: float,
+        target_speaker_reference_path: Optional[str],
+        target_speaker_model_dir: Optional[str],
+        target_speaker_checkpoint_path: Optional[str],
+        target_speaker_device: Optional[str],
+        target_speaker_engine: str,
+        target_speaker_reconstruction: str,
+        target_speaker_scale: float,
         codecsep_prompt_overrides: Optional[dict[str, list[str]]],
         codecsep_negative_prompts: Optional[list[str]],
         codecsep_preserve_prompts: Optional[list[str]],
@@ -210,6 +241,13 @@ class BatchProcessor:
                         codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
                         codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
                         codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+                        target_speaker_reference_path=target_speaker_reference_path,
+                        target_speaker_model_dir=target_speaker_model_dir,
+                        target_speaker_checkpoint_path=target_speaker_checkpoint_path,
+                        target_speaker_device=target_speaker_device,
+                        target_speaker_engine=target_speaker_engine,
+                        target_speaker_reconstruction=target_speaker_reconstruction,
+                        target_speaker_scale=target_speaker_scale,
                         codecsep_prompt_overrides=codecsep_prompt_overrides,
                         codecsep_negative_prompts=codecsep_negative_prompts,
                         codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -237,7 +275,7 @@ class BatchProcessor:
             mono_chunk = chunk.mean(axis=1)
             capture_removed = output_noise or (
                 getattr(self.suppressor, "separator_backend", "waveformer")
-                in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"}
+                in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat", "target_speaker"}
             )
             clean_mono, removed_mono = self._suppress_mono_chunk(
                 mono_chunk,
@@ -254,6 +292,13 @@ class BatchProcessor:
                 codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
                 codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
                 codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+                target_speaker_reference_path=target_speaker_reference_path,
+                target_speaker_model_dir=target_speaker_model_dir,
+                target_speaker_checkpoint_path=target_speaker_checkpoint_path,
+                target_speaker_device=target_speaker_device,
+                target_speaker_engine=target_speaker_engine,
+                target_speaker_reconstruction=target_speaker_reconstruction,
+                target_speaker_scale=target_speaker_scale,
                 codecsep_prompt_overrides=codecsep_prompt_overrides,
                 codecsep_negative_prompts=codecsep_negative_prompts,
                 codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -267,7 +312,7 @@ class BatchProcessor:
             )
             if (
                 getattr(self.suppressor, "separator_backend", "waveformer")
-                in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat"}
+                in {"codecsep", "audiosep_hive15cat", "codecsep_dnrv2_15cat", "target_speaker"}
                 and removed_mono is not None
             ):
                 removed_stereo = self._project_mono_removed_to_stereo(chunk, removed_mono)
@@ -298,6 +343,13 @@ class BatchProcessor:
             codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
             codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
             codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+            target_speaker_reference_path=target_speaker_reference_path,
+            target_speaker_model_dir=target_speaker_model_dir,
+            target_speaker_checkpoint_path=target_speaker_checkpoint_path,
+            target_speaker_device=target_speaker_device,
+            target_speaker_engine=target_speaker_engine,
+            target_speaker_reconstruction=target_speaker_reconstruction,
+            target_speaker_scale=target_speaker_scale,
             codecsep_prompt_overrides=codecsep_prompt_overrides,
             codecsep_negative_prompts=codecsep_negative_prompts,
             codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -368,6 +420,13 @@ class BatchProcessor:
         codecsep_dnrv2_15cat_runtime: str = "onnx",
         codecsep_dnrv2_15cat_device: Optional[str] = None,
         codecsep_dnrv2_15cat_realtime_hop_seconds: float = 0.5,
+        target_speaker_reference_path: Optional[str] = None,
+        target_speaker_model_dir: Optional[str] = None,
+        target_speaker_checkpoint_path: Optional[str] = None,
+        target_speaker_device: Optional[str] = None,
+        target_speaker_engine: str = DEFAULT_TARGET_SPEAKER_ENGINE,
+        target_speaker_reconstruction: str = "direct_subtract",
+        target_speaker_scale: float = 1.0,
         codecsep_prompt_overrides: Optional[dict[str, list[str]]] = None,
         codecsep_negative_prompts: Optional[list[str]] = None,
         codecsep_preserve_prompts: Optional[list[str]] = None,
@@ -389,6 +448,12 @@ class BatchProcessor:
                 "CodecSep fixed class-id targets: %s",
                 ", ".join(str(value) for value in codecsep_hive_class_ids),
             )
+        if target_speaker_reference_path:
+            logger.info(
+                "Suppressing selected speaker using reference: %s (engine=%s)",
+                target_speaker_reference_path,
+                target_speaker_engine,
+            )
 
         audio, sample_rate = sf.read(input_path, dtype="float32")
         logger.info("Loaded audio: %s, %s Hz", audio.shape, sample_rate)
@@ -407,6 +472,13 @@ class BatchProcessor:
                 "to avoid long first-chunk stalls."
             )
             effective_chunk_size_seconds = 2.0
+        elif backend == "target_speaker":
+            duration_seconds = len(audio) / float(sample_rate)
+            if effective_chunk_size_seconds < duration_seconds:
+                logger.info(
+                    "target_speaker offline mode uses full-file inference to preserve extractor quality."
+                )
+                effective_chunk_size_seconds = duration_seconds
 
         chunk_size = int(effective_chunk_size_seconds * sample_rate)
         use_overlap_add = self._uses_overlap_add_chunking(
@@ -456,6 +528,13 @@ class BatchProcessor:
                     codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
                     codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
                     codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+                    target_speaker_reference_path=target_speaker_reference_path,
+                    target_speaker_model_dir=target_speaker_model_dir,
+                    target_speaker_checkpoint_path=target_speaker_checkpoint_path,
+                    target_speaker_device=target_speaker_device,
+                    target_speaker_engine=target_speaker_engine,
+                    target_speaker_reconstruction=target_speaker_reconstruction,
+                    target_speaker_scale=target_speaker_scale,
                     codecsep_prompt_overrides=codecsep_prompt_overrides,
                     codecsep_negative_prompts=codecsep_negative_prompts,
                     codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -520,6 +599,13 @@ class BatchProcessor:
                 codecsep_dnrv2_15cat_runtime=codecsep_dnrv2_15cat_runtime,
                 codecsep_dnrv2_15cat_device=codecsep_dnrv2_15cat_device,
                 codecsep_dnrv2_15cat_realtime_hop_seconds=codecsep_dnrv2_15cat_realtime_hop_seconds,
+                target_speaker_reference_path=target_speaker_reference_path,
+                target_speaker_model_dir=target_speaker_model_dir,
+                target_speaker_checkpoint_path=target_speaker_checkpoint_path,
+                target_speaker_device=target_speaker_device,
+                target_speaker_engine=target_speaker_engine,
+                target_speaker_reconstruction=target_speaker_reconstruction,
+                target_speaker_scale=target_speaker_scale,
                 codecsep_prompt_overrides=codecsep_prompt_overrides,
                 codecsep_negative_prompts=codecsep_negative_prompts,
                 codecsep_preserve_prompts=codecsep_preserve_prompts,
@@ -597,6 +683,7 @@ def build_parser() -> argparse.ArgumentParser:
         default_query_strategy="single_pass",
         default_multistep_steps=0,
     )
+    add_target_speaker_runtime_arguments(parser)
     return parser
 
 
@@ -604,12 +691,23 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
     has_fixed_codecsep_targets = bool(args.codecsep_product_category or args.codecsep_hive_class_id)
-    if not any([args.suppress, args.suppress_all, args.universal, has_fixed_codecsep_targets]):
+    has_target_speaker_target = bool(args.target_speaker_reference)
+    if has_target_speaker_target and args.separator_backend == "waveformer":
+        args.separator_backend = "target_speaker"
+    if not any(
+        [
+            args.suppress,
+            args.suppress_all,
+            args.universal,
+            has_fixed_codecsep_targets,
+            has_target_speaker_target,
+        ],
+    ):
         parser.print_help()
         print(
             "\nERROR: You must specify at least one suppression mode: "
             "--suppress, --suppress-all, --universal, --codecsep-product-category, "
-            "or --codecsep-hive-class-id"
+            "--codecsep-hive-class-id, or --target-speaker-reference"
         )
         sys.exit(1)
     if args.debug:
@@ -617,13 +715,19 @@ def main(argv: Optional[list[str]] = None) -> None:
 
     suppress_categories = [cat.strip() for cat in args.suppress.split(",")] if args.suppress else []
     universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
-    codecsep_kwargs = build_codecsep_call_kwargs_from_args(args)
+    runtime_call_kwargs = {
+        **build_codecsep_call_kwargs_from_args(args),
+        **build_target_speaker_call_kwargs_from_args(args),
+    }
 
     logger.info(
         "Initializing suppression engine (backend=%s)...",
         getattr(args, "separator_backend", "waveformer"),
     )
-    suppressor = SemanticSuppressor(**build_suppressor_kwargs_from_args(args))
+    suppressor = SemanticSuppressor(
+        **build_suppressor_kwargs_from_args(args),
+        **build_target_speaker_suppressor_kwargs_from_args(args),
+    )
     processor = BatchProcessor(suppressor=suppressor)
     stats = processor.process_file(
         input_path=args.input,
@@ -635,7 +739,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         suppress_all=args.suppress_all,
         universal_prompts=universal_prompts,
         output_noise=args.output_noise,
-        **codecsep_kwargs,
+        **runtime_call_kwargs,
     )
 
     print("\n=== Processing Complete ===")

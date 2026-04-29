@@ -20,6 +20,7 @@ env/
 
 # Models (large files - use Git LFS / Checkpoints)
 ai/models/exports/
+ai/models/SpeakerSeperator/
 ai/models/AudioSep/
 ai/models/AudioSepHive15Cat/
 ai/models/ClapSepHive15Cat/

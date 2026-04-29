@@ -140,6 +140,11 @@ def get_audiosep_hive15cat_model_path() -> Path:
     return get_models_path() / "AudioSepHive15Cat"
 
 
+def get_speaker_separator_model_path() -> Path:
+    """Return the target-speaker separator model directory."""
+    return get_models_path() / "SpeakerSeperator"
+
+
 def get_codecsep_dnrv2_15cat_model_path() -> Path:
     """Return the CodecSepDNRv2_15Cat model directory (ai/models/CodecSepDNRv2_15Cat/)."""
     return get_models_path() / "CodecSepDNRv2_15Cat"
