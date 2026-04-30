@@ -122,9 +122,7 @@ export default function RecordingsScreen() {
                                         {recording.fileName ?? 'Suppression recording'}
                                     </Text>
                                     <Text style={[styles.categoryText, { color: colors.text }]}>{recording.categoryLabel}</Text>
-                                    <Text style={styles.pathText} numberOfLines={2}>
-                                        {recording.filePath ?? recording.uri}
-                                    </Text>
+                                    {/* Path display removed to clean up UI */}
                                     {formatSize(recording.fileSizeBytes) && (
                                         <Text style={styles.sizeText}>{formatSize(recording.fileSizeBytes)}</Text>
                                     )}
