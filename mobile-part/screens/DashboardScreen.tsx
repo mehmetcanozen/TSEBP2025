@@ -345,9 +345,7 @@ export default function DashboardScreen() {
                                 <Text style={[styles.latestTitle, { color: txt }]}>
                                     {lastRecordingFileName ?? 'Processed Snippet'}
                                 </Text>
-                                <Text style={[styles.latestPath, { color: sub }]} numberOfLines={2}>
-                                    {lastRecordingFilePath ?? lastRecordingUri}
-                                </Text>
+                                {/* Path display removed to clean up UI */}
                                 {lastRecordingFileSizeBytes != null && (
                                     <Text style={[styles.latestMeta, { color: sub }]}>
                                         {(lastRecordingFileSizeBytes / 1024).toFixed(1)} KB
