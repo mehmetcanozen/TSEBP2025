@@ -29,14 +29,17 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from ai.ai_runtime.batch.batch_processor import BatchProcessor
 from ai.ai_runtime.suppression import SemanticSuppressor
+from ai.ai_runtime.separation.waveformer_onnx_stream import WaveformerOnnxStream
 from ai.ai_runtime.utils.paths import (
     get_audiosep_hive15cat_onnx_path,
     get_codecsep_dnrv2_15cat_executorch_path,
     get_codecsep_dnrv2_15cat_onnx_path,
     get_data_audio_path,
+    get_waveformer_desktop_onnx_path,
     get_waveformer_checkpoint_path,
     get_waveformer_config_path,
     get_waveformer_model_path,
+    get_waveformer_model_package_path,
     iter_existing_codecsep_checkpoints,
 )
 
@@ -78,13 +81,51 @@ class ModelSpec:
     runnable: bool = True
 
 
+class WaveformerOnnxBatchProcessor:
+    """BatchProcessor-shaped wrapper around the desktop Waveformer ONNX graph."""
+
+    def __init__(self) -> None:
+        self.runner = WaveformerOnnxStream(get_waveformer_model_package_path())
+
+    def process_file(
+        self,
+        *,
+        input_path: Path,
+        output_path: Path,
+        suppress_categories: list[str],
+        chunk_size_seconds: float,
+        detection_threshold: float,
+        aggressiveness: float,
+        universal_prompts: list[str],
+        output_noise: bool,
+        **_: Any,
+    ) -> dict[str, Any]:
+        del chunk_size_seconds, detection_threshold, universal_prompts
+        target = suppress_categories[0] if suppress_categories else "dog"
+        audio, sample_rate = sf.read(input_path, dtype="float32")
+        cleaned_mono, runtime_stats = self.runner.suppress(
+            audio,
+            int(sample_rate),
+            [target],
+            aggressiveness=aggressiveness,
+        )
+        original_mono = _mono(np.asarray(audio, dtype=np.float32))
+        residual = original_mono[: cleaned_mono.shape[0]] - cleaned_mono
+        cleaned = _project_residual_back(np.asarray(audio, dtype=np.float32), residual)
+        sf.write(output_path, cleaned, int(sample_rate))
+
+        stats = {
+            "sample_rate": int(sample_rate),
+            "duration_seconds": float(original_mono.shape[0] / max(float(sample_rate), 1.0)),
+            "rms_reduction_db": _db_ratio(_rms(original_mono), _rms(cleaned_mono)),
+            "noise_audio": residual.astype(np.float32) if output_noise else None,
+        }
+        stats.update(runtime_stats)
+        return stats
+
+
 def _model_specs() -> dict[str, ModelSpec]:
-    waveformer_onnx = (
-        get_waveformer_model_path()
-        / "WFExports"
-        / "windows_desktop_onnx"
-        / "semantic_hearing_100ms_windows.onnx"
-    )
+    waveformer_onnx = get_waveformer_desktop_onnx_path()
     waveformer_pte = (
         get_waveformer_model_path()
         / "WFExports"
@@ -167,11 +208,11 @@ def _model_specs() -> dict[str, ModelSpec]:
             model_id="waveformer_onnx_export",
             display_name="Waveformer 100 ms ONNX export",
             backend="waveformer",
-            target_surface="legacy",
+            target_surface="waveformer20",
             runtime="onnx",
             artifact_paths=(waveformer_onnx,),
-            notes="Exported streaming artifact exists, but ai_runtime has no batch adapter for this stateful graph yet.",
-            runnable=False,
+            notes="Desktop-equivalent stateful ONNX target extractor with residual subtraction.",
+            runnable=True,
         ),
         ModelSpec(
             model_id="waveformer_executorch_export",
@@ -237,6 +278,20 @@ def _mono(audio: np.ndarray) -> np.ndarray:
     if array.ndim == 1:
         return array
     return np.mean(array, axis=1)
+
+
+def _project_residual_back(original: np.ndarray, residual_mono: np.ndarray) -> np.ndarray:
+    original = np.asarray(original, dtype=np.float32)
+    residual = np.asarray(residual_mono, dtype=np.float32)
+    if original.ndim == 1:
+        length = min(original.shape[0], residual.shape[0])
+        cleaned = original.copy()
+        cleaned[:length] = cleaned[:length] - residual[:length]
+        return np.clip(cleaned, -1.0, 1.0)
+    length = min(original.shape[0], residual.shape[0])
+    cleaned = original.copy()
+    cleaned[:length, :] = cleaned[:length, :] - residual[:length, None]
+    return np.clip(cleaned, -1.0, 1.0)
 
 
 def _correlation(a: np.ndarray, b: np.ndarray) -> float | None:
@@ -322,10 +377,33 @@ def _infer_legacy_target(path: Path) -> str:
     return "misc"
 
 
+def _infer_waveformer20_target(path: Path) -> str:
+    name = path.stem.casefold()
+    if "keyboard" in name or "typing" in name:
+        return "computer_typing"
+    if "bark" in name or "dog" in name:
+        return "dog"
+    if "cat" in name:
+        return "cat"
+    if "siren" in name:
+        return "siren"
+    if "alarm" in name:
+        return "alarm_clock"
+    if "bird" in name:
+        return "birds_chirping"
+    if "music" in name:
+        return "music"
+    if "speech" in name:
+        return "speech"
+    return "dog"
+
+
 def _target_for_file(spec: ModelSpec, path: Path, args: argparse.Namespace) -> str:
     if args.target:
         return args.target
     if spec.target_surface == "legacy" and args.legacy_target:
+        return args.legacy_target
+    if spec.target_surface == "waveformer20" and args.legacy_target:
         return args.legacy_target
     if spec.target_surface == "exact15" and args.exact15_target:
         return args.exact15_target
@@ -333,10 +411,14 @@ def _target_for_file(spec: ModelSpec, path: Path, args: argparse.Namespace) -> s
         return args.universal_prompt or _infer_exact15_target(path)
     if spec.target_surface == "legacy":
         return _infer_legacy_target(path)
+    if spec.target_surface == "waveformer20":
+        return _infer_waveformer20_target(path)
     return _infer_exact15_target(path)
 
 
-def _build_processor(spec: ModelSpec) -> BatchProcessor:
+def _build_processor(spec: ModelSpec) -> BatchProcessor | WaveformerOnnxBatchProcessor:
+    if spec.model_id == "waveformer_onnx_export":
+        return WaveformerOnnxBatchProcessor()
     suppressor = SemanticSuppressor(**spec.suppressor_kwargs)
     return BatchProcessor(suppressor=suppressor)
 

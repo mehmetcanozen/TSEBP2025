@@ -1,8 +1,8 @@
 {
   "format": "onnx",
-  "checkpoint": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\39.pt",
-  "config": "C:\\SoftwareProjects\\SemanticHearing-main\\experiments\\dc_waveformer\\config.json",
-  "output": "C:\\SoftwareProjects\\SemanticHearing-main\\outputs\\windows_desktop_onnx\\semantic_hearing_100ms_windows.onnx",
+  "checkpoint": "ai/models/Waveformer/assets/checkpoints/default_ckpt.pt",
+  "config": "ai/models/Waveformer/assets/config/default_config.json",
+  "output": "ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
   "sample_rate": 44100,
   "chunk_samples": 4416,
   "chunk_ms": 100.1360544217687,
@@ -32,9 +32,10 @@
   ],
   "notes": {
     "runtime_task": "extract target chunk",
-    "suppression_recipe": "subtract target_chunk from mixture in the desktop runtime",
-    "desktop_runtime": "Use ONNX Runtime on Windows desktop now; use Windows ML later if you wrap this in a Windows App SDK app.",
-    "resampling": "capture 48 kHz if needed, resample to 44.1 kHz for inference, then resample output back"
+    "suppression_recipe": "clean = mixture - aggressiveness * target_chunk",
+    "desktop_runtime": "ONNX Runtime CPU is the default edge desktop runtime.",
+    "resampling": "capture at the device rate, sinc-resample to 44.1 kHz for inference, then sinc-resample output back",
+    "audit_script": "ai/scripts/audit_waveformer_onnx.py"
   },
   "inputs": [
     {
@@ -98,6 +99,8 @@
     }
   ],
   "check": {
-    "ok": true
+    "ok": true,
+    "contract_source": "ai/models/Waveformer/model_package.json",
+    "python_adapter": "ai/ai_runtime/separation/waveformer_onnx_stream.py"
   }
 }

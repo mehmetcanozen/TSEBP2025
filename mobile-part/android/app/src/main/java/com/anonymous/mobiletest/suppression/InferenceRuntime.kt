@@ -20,6 +20,7 @@ fun createSuppressionRuntime(
 ): SuppressionRuntime {
   return when (manifest.runtimeKind) {
     "onnx_category_separator" -> AudioSepOnnxRuntime(manifest, modelFile)
+    "onnx_streaming_target_extractor" -> WaveformerOnnxRuntime(manifest, modelFile)
     "executorch_category_separator" -> CodecSepExecuTorchRuntime(manifest, modelFile)
     "executorch_streaming_target_extractor" -> WaveformerExecuTorchRuntime(manifest, modelFile)
     else -> throw IllegalArgumentException("Unsupported runtime kind: ${manifest.runtimeKind}")
@@ -444,6 +445,238 @@ private class CodecSepExecuTorchRuntime(
   }
 }
 
+private class WaveformerOnnxRuntime(
+  private val manifest: ModelBundleManifest,
+  private val modelFile: File,
+) : SuppressionRuntime {
+  private val environment = OrtEnvironment.getEnvironment()
+  private val sessionOptions = OrtSession.SessionOptions()
+  private val session: OrtSession
+  private val lock = Any()
+  private val categoryOrder = manifest.categories.map { it.id }
+  private val chunkSamples =
+    manifest.chunkSamples ?: error("Waveformer manifest is missing chunkSamples")
+  private val mixChannels = max(1, manifest.mixChannels)
+  private val encShape =
+    manifest.stateTensors["enc_buf"] ?: error("Waveformer manifest is missing enc_buf shape")
+  private val decShape =
+    manifest.stateTensors["dec_buf"] ?: error("Waveformer manifest is missing dec_buf shape")
+  private val outShape =
+    manifest.stateTensors["out_buf"] ?: error("Waveformer manifest is missing out_buf shape")
+
+  init {
+    try {
+      Log.d("WaveformerOnnxRuntime", "Loading ONNX model from: ${modelFile.absolutePath}")
+      sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+      sessionOptions.setIntraOpNumThreads(2)
+      session = environment.createSession(modelFile.absolutePath, sessionOptions)
+      Log.d(
+        "WaveformerOnnxRuntime",
+        "ONNX model loaded. inputs=${session.inputNames} outputs=${session.outputNames}"
+      )
+      warmup()
+      Log.d("WaveformerOnnxRuntime", "Warmup complete.")
+    } catch (e: Exception) {
+      Log.e("WaveformerOnnxRuntime", "Failed to initialize ONNX runtime: ${e.message}", e)
+      throw e
+    }
+  }
+
+  override fun runtimeInfo(bundlePath: String): RuntimeInfo {
+    return RuntimeInfo(
+      provider = "onnxruntime-cpu",
+      warmed = true,
+      modelId = manifest.modelId,
+      modelFamily = manifest.modelFamily,
+      displayName = manifest.displayName,
+      runtimeKind = manifest.runtimeKind,
+      modelVersion = manifest.version,
+      modelPath = modelFile.absolutePath,
+      bundlePath = bundlePath,
+      sampleRate = manifest.sampleRate,
+      categoryCount = manifest.categories.size,
+      availableProviders = listOf("onnxruntime-cpu", "cpu"),
+    )
+  }
+
+  override fun categories(): List<CategoryProfile> = manifest.categories
+
+  override fun createLiveProcessor(
+    category: CategoryProfile,
+    nativeSampleRate: Int,
+    config: LiveConfig,
+  ): LiveSuppressionProcessor {
+    return WaveformerOnnxLiveProcessor(
+      runtime = this,
+      category = category,
+      nativeSampleRate = nativeSampleRate,
+      config = config,
+    )
+  }
+
+  override fun close() {
+    session.close()
+  }
+
+  private fun warmup() {
+    if (categoryOrder.isEmpty()) {
+      return
+    }
+    runCategoryChunk(FloatArray(chunkSamples), categoryOrder.first(), newState())
+  }
+
+  private fun newState(): WaveformerOnnxState =
+    WaveformerOnnxState(
+      encBuf = FloatArray(encShape.product()),
+      decBuf = FloatArray(decShape.product()),
+      outBuf = FloatArray(outShape.product()),
+    )
+
+  private fun categoryIndex(categoryId: String): Int {
+    val index = categoryOrder.indexOf(categoryId)
+    require(index >= 0) { "Unknown model category: $categoryId" }
+    return index
+  }
+
+  private fun runCategoryChunk(
+    chunk: FloatArray,
+    categoryId: String,
+    state: WaveformerOnnxState,
+  ): FloatArray {
+    val preparedChunk = fixedLengthCopy(chunk, chunkSamples)
+
+    val stereo = FloatArray(mixChannels * chunkSamples)
+    for (channel in 0 until mixChannels) {
+      val offset = channel * chunkSamples
+      preparedChunk.copyInto(stereo, destinationOffset = offset)
+    }
+
+    val labelVector = FloatArray(categoryOrder.size)
+    labelVector[categoryIndex(categoryId)] = 1f
+
+    val tensors = linkedMapOf<String, OnnxTensor>()
+    try {
+      tensors["mixture"] = OnnxTensor.createTensor(
+        environment,
+        FloatBuffer.wrap(stereo),
+        longArrayOf(1, mixChannels.toLong(), chunkSamples.toLong()),
+      )
+      tensors["label_vector"] = OnnxTensor.createTensor(
+        environment,
+        FloatBuffer.wrap(labelVector),
+        longArrayOf(1, categoryOrder.size.toLong()),
+      )
+      tensors["enc_buf"] = OnnxTensor.createTensor(
+        environment,
+        FloatBuffer.wrap(state.encBuf),
+        encShape.toLongArray(),
+      )
+      tensors["dec_buf"] = OnnxTensor.createTensor(
+        environment,
+        FloatBuffer.wrap(state.decBuf),
+        decShape.toLongArray(),
+      )
+      tensors["out_buf"] = OnnxTensor.createTensor(
+        environment,
+        FloatBuffer.wrap(state.outBuf),
+        outShape.toLongArray(),
+      )
+
+      var target = FloatArray(chunkSamples * mixChannels)
+      synchronized(lock) {
+        session.run(tensors).use { result ->
+          target = flattenFloatTensor(
+            ortResultValue(result, "target_chunk"),
+            chunkSamples * mixChannels,
+            "target_chunk",
+          )
+          state.encBuf = flattenFloatTensor(
+            ortResultValue(result, "enc_buf_out"),
+            encShape.product(),
+            "enc_buf_out",
+          )
+          state.decBuf = flattenFloatTensor(
+            ortResultValue(result, "dec_buf_out"),
+            decShape.product(),
+            "dec_buf_out",
+          )
+          state.outBuf = flattenFloatTensor(
+            ortResultValue(result, "out_buf_out"),
+            outShape.product(),
+            "out_buf_out",
+          )
+        }
+      }
+
+      val monoTarget = FloatArray(chunkSamples)
+      for (index in monoTarget.indices) {
+        var sum = 0f
+        for (channel in 0 until mixChannels) {
+          sum += finiteOrZero(target[channel * chunkSamples + index])
+        }
+        monoTarget[index] = sum / mixChannels.toFloat()
+      }
+      return monoTarget
+    } finally {
+      tensors.values.forEach { it.close() }
+    }
+  }
+
+  private class WaveformerOnnxLiveProcessor(
+    private val runtime: WaveformerOnnxRuntime,
+    private val category: CategoryProfile,
+    private val nativeSampleRate: Int,
+    private val config: LiveConfig,
+  ) : LiveSuppressionProcessor {
+    private val preferredHopSamples =
+      max(
+        1,
+        (nativeSampleRate.toDouble() * runtime.chunkSamples.toDouble() / runtime.manifest.sampleRate.toDouble())
+          .roundToInt()
+      )
+    private val state = runtime.newState()
+
+    override fun preferredHopSamples(): Int = preferredHopSamples
+
+    override fun processChunk(chunk: FloatArray): FloatArray {
+      if (chunk.isEmpty()) {
+        return FloatArray(0)
+      }
+
+      val peakValue = max(peak(chunk).toFloat(), 1f)
+      val normalized = FloatArray(chunk.size) { index ->
+        (finiteOrZero(chunk[index]) / peakValue).coerceIn(-1f, 1f)
+      }
+      val resampled = sincResampleToLength(normalized, runtime.chunkSamples)
+      val target = runtime.runCategoryChunk(resampled, category.id, state)
+      val scale = max(config.aggressiveness, category.defaultAggressiveness).coerceIn(0.5f, 2.0f)
+      val cleanResampled = FloatArray(runtime.chunkSamples) { index ->
+        val extracted = if (index < target.size) finiteOrZero(target[index]) else 0f
+        (resampled[index] - scale * extracted).coerceIn(-1f, 1f)
+      }
+      val clean = sincResampleToLength(cleanResampled, chunk.size)
+      for (index in clean.indices) {
+        clean[index] = (finiteOrZero(clean[index]) * peakValue).coerceIn(-1f, 1f)
+      }
+      return clean
+    }
+
+    override fun diagnostics(): ProcessorDiagnostics =
+      ProcessorDiagnostics(
+        waveformerPostFilter = config.waveformerPostFilter,
+        wienerBypassed = config.waveformerPostFilter.equals("off", ignoreCase = true),
+      )
+
+    override fun close() = Unit
+  }
+
+  private data class WaveformerOnnxState(
+    var encBuf: FloatArray,
+    var decBuf: FloatArray,
+    var outBuf: FloatArray,
+  )
+}
+
 private class WaveformerExecuTorchRuntime(
   private val manifest: ModelBundleManifest,
   private val modelFile: File,
@@ -597,24 +830,22 @@ private class WaveformerExecuTorchRuntime(
         return FloatArray(0)
       }
 
-      val clipped = FloatArray(chunk.size) { index -> chunk[index].coerceIn(-1f, 1f) }
-      var resampled = linearResample(clipped, nativeSampleRate, runtime.manifest.sampleRate)
-      if (resampled.size != runtime.chunkSamples) {
-        resampled = when {
-          resampled.size < runtime.chunkSamples -> FloatArray(runtime.chunkSamples).also { padded ->
-            resampled.copyInto(padded, endIndex = resampled.size)
-          }
-          else -> resampled.copyOf(runtime.chunkSamples)
-        }
+      val peakValue = max(peak(chunk).toFloat(), 1f)
+      val normalized = FloatArray(chunk.size) { index ->
+        (finiteOrZero(chunk[index]) / peakValue).coerceIn(-1f, 1f)
       }
-
+      val resampled = sincResampleToLength(normalized, runtime.chunkSamples)
       val target = runtime.runCategoryChunk(resampled, category.id, state)
       val scale = max(config.aggressiveness, category.defaultAggressiveness).coerceIn(0.5f, 2.0f)
-      val cleanResampled = FloatArray(target.size) { index ->
-        resampled[index] - scale * target[index]
+      val cleanResampled = FloatArray(runtime.chunkSamples) { index ->
+        val extracted = if (index < target.size) finiteOrZero(target[index]) else 0f
+        (resampled[index] - scale * extracted).coerceIn(-1f, 1f)
       }
-      val clean = linearResample(cleanResampled, runtime.manifest.sampleRate, nativeSampleRate)
-      return clean.copyOf(chunk.size)
+      val clean = sincResampleToLength(cleanResampled, chunk.size)
+      for (index in clean.indices) {
+        clean[index] = (finiteOrZero(clean[index]) * peakValue).coerceIn(-1f, 1f)
+      }
+      return clean
     }
 
     override fun diagnostics(): ProcessorDiagnostics =
@@ -634,6 +865,76 @@ private class WaveformerExecuTorchRuntime(
 }
 
 private fun Int?.orDefault(defaultValue: Int): Int = this ?: defaultValue
+
+private fun fixedLengthCopy(input: FloatArray, targetLength: Int): FloatArray {
+  return when {
+    input.size == targetLength -> input.copyOf()
+    input.size < targetLength -> FloatArray(targetLength).also { padded ->
+      input.copyInto(padded, endIndex = input.size)
+    }
+    else -> input.copyOf(targetLength)
+  }
+}
+
+private fun finiteOrZero(value: Float): Float =
+  if (value.isNaN() || value.isInfinite()) 0f else value
+
+private fun ortResultValue(result: OrtSession.Result, name: String): Any {
+  val value = result.get(name)
+  if (!value.isPresent) {
+    throw IllegalStateException("Missing ONNX output tensor: $name")
+  }
+  return value.get().value
+}
+
+private fun flattenFloatTensor(value: Any?, expectedSize: Int, tensorName: String): FloatArray {
+  val output = FloatArray(expectedSize)
+  var offset = 0
+
+  fun appendFloats(node: Any?) {
+    when (node) {
+      null -> throw IllegalStateException("ONNX tensor $tensorName was null")
+      is OnnxTensor -> appendFloats(node.value)
+      is FloatArray -> {
+        if (offset + node.size > expectedSize) {
+          throw IllegalStateException("ONNX tensor $tensorName had more than $expectedSize floats")
+        }
+        node.copyInto(output, destinationOffset = offset)
+        offset += node.size
+      }
+      is FloatBuffer -> {
+        val buffer = node.duplicate()
+        val count = buffer.remaining()
+        if (offset + count > expectedSize) {
+          throw IllegalStateException("ONNX tensor $tensorName had more than $expectedSize floats")
+        }
+        buffer.get(output, offset, count)
+        offset += count
+      }
+      is Array<*> -> {
+        for (item in node) {
+          appendFloats(item)
+        }
+      }
+      is Number -> {
+        if (offset >= expectedSize) {
+          throw IllegalStateException("ONNX tensor $tensorName had more than $expectedSize floats")
+        }
+        output[offset] = node.toFloat()
+        offset += 1
+      }
+      else -> throw IllegalStateException(
+        "Unsupported ONNX tensor $tensorName value type: ${node.javaClass.name}"
+      )
+    }
+  }
+
+  appendFloats(value)
+  if (offset != expectedSize) {
+    throw IllegalStateException("ONNX tensor $tensorName had $offset floats, expected $expectedSize")
+  }
+  return output
+}
 
 private fun List<Int>.product(): Int =
   fold(1) { total, value -> total * max(1, value) }

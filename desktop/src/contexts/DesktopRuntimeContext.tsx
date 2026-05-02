@@ -11,13 +11,18 @@ import {
   browseForAudioInput,
   browseForOutputWav,
   cancelOfflineJob,
+  deleteSpeakerProfile as deleteSpeakerProfileApi,
   getHive15Presets,
   getModelCategories,
   getRuntimeMetrics,
+  getTargetSpeakerRuntimeInfo,
   getVirtualMicStatus,
+  listSpeakerProfiles,
   listAudioDevices,
+  saveSpeakerProfile as saveSpeakerProfileApi,
   startLiveMonitor,
   startOfflineJob,
+  startTargetSpeakerJob,
   stopLiveMonitor,
   type AudioDevice,
   type Hive15Preset,
@@ -26,19 +31,35 @@ import {
   type ModelCategory,
   type OfflineProgressEvent,
   type RuntimeMetrics,
+  type SpeakerProfile,
+  type TargetSpeakerEngine,
+  type TargetSpeakerOutputMode,
+  type TargetSpeakerRuntimeInfo,
   type VirtualMicStatus,
 } from "@/lib/desktop-api";
 
 type LiveOutputMode = "monitor" | "virtualMic";
+type DesktopMode = "semanticSuppression" | "speakerSuppression";
 
 interface DesktopRuntimeContextValue {
   categories: ModelCategory[];
   presets: Hive15Preset[];
   devices: AudioDevice[];
   runtimeMetrics: RuntimeMetrics | null;
+  targetSpeakerInfo: TargetSpeakerRuntimeInfo | null;
+  speakerProfiles: SpeakerProfile[];
   virtualMicStatus: VirtualMicStatus | null;
+  desktopMode: DesktopMode;
   selectedCategories: string[];
   aggressiveness: number;
+  speakerInputPath: string;
+  speakerReferencePath: string;
+  speakerOutputPath: string;
+  speakerEngine: TargetSpeakerEngine;
+  speakerOutputMode: TargetSpeakerOutputMode;
+  speakerRemovalScale: number;
+  selectedSpeakerProfileId: string;
+  speakerProfileName: string;
   lookaheadMs: number;
   outputMode: LiveOutputMode;
   inputDeviceId: string;
@@ -58,10 +79,19 @@ interface DesktopRuntimeContextValue {
   isStartingLive: boolean;
   isOfflineRunning: boolean;
   error: string | null;
+  setDesktopMode: (value: DesktopMode) => void;
   setSelectedCategories: (categories: string[]) => void;
   toggleCategory: (categoryId: string) => void;
   applyPreset: (presetId: string) => void;
   setAggressiveness: (value: number) => void;
+  setSpeakerInputPath: (value: string) => void;
+  setSpeakerReferencePath: (value: string) => void;
+  setSpeakerOutputPath: (value: string) => void;
+  setSpeakerEngine: (value: TargetSpeakerEngine) => void;
+  setSpeakerOutputMode: (value: TargetSpeakerOutputMode) => void;
+  setSpeakerRemovalScale: (value: number) => void;
+  setSelectedSpeakerProfileId: (value: string) => void;
+  setSpeakerProfileName: (value: string) => void;
   setLookaheadMs: (value: number) => void;
   setOutputMode: (value: LiveOutputMode) => void;
   setInputDeviceId: (value: string) => void;
@@ -74,12 +104,20 @@ interface DesktopRuntimeContextValue {
   setRecordOutputPath: (value: string) => void;
   browseInputPath: () => Promise<void>;
   browseOutputPath: () => Promise<void>;
+  browseSpeakerInputPath: () => Promise<void>;
+  browseSpeakerReferencePath: () => Promise<void>;
+  browseSpeakerOutputPath: () => Promise<void>;
   browseDebugInputPath: () => Promise<void>;
   browseRecordOutputPath: () => Promise<void>;
   refreshDevices: () => Promise<void>;
   refreshVirtualMicStatus: () => Promise<void>;
   refreshRuntimeMetrics: () => Promise<void>;
+  refreshTargetSpeakerInfo: () => Promise<void>;
+  refreshSpeakerProfiles: () => Promise<void>;
   startOffline: () => Promise<void>;
+  startSpeakerSuppression: () => Promise<void>;
+  saveCurrentSpeakerProfile: () => Promise<void>;
+  deleteSelectedSpeakerProfile: () => Promise<void>;
   cancelOffline: () => Promise<void>;
   startLive: () => Promise<void>;
   stopLive: () => Promise<void>;
@@ -104,9 +142,20 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
   const [presets, setPresets] = useState<Hive15Preset[]>([]);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [runtimeMetrics, setRuntimeMetrics] = useState<RuntimeMetrics | null>(null);
+  const [targetSpeakerInfo, setTargetSpeakerInfo] = useState<TargetSpeakerRuntimeInfo | null>(null);
+  const [speakerProfiles, setSpeakerProfiles] = useState<SpeakerProfile[]>([]);
   const [virtualMicStatus, setVirtualMicStatus] = useState<VirtualMicStatus | null>(null);
+  const [desktopMode, setDesktopMode] = useState<DesktopMode>("semanticSuppression");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [aggressiveness, setAggressiveness] = useState(1.5);
+  const [speakerInputPath, setSpeakerInputPath] = useState("");
+  const [speakerReferencePath, setSpeakerReferencePath] = useState("");
+  const [speakerOutputPath, setSpeakerOutputPath] = useState("");
+  const [speakerEngine, setSpeakerEngine] = useState<TargetSpeakerEngine>("tsextract_onnx");
+  const [speakerOutputMode, setSpeakerOutputMode] = useState<TargetSpeakerOutputMode>("remove_target");
+  const [speakerRemovalScale, setSpeakerRemovalScale] = useState(1.0);
+  const [selectedSpeakerProfileId, setSelectedSpeakerProfileIdState] = useState("");
+  const [speakerProfileName, setSpeakerProfileName] = useState("");
   const [lookaheadMs, setLookaheadMs] = useState(150);
   const [outputMode, setOutputModeState] = useState<LiveOutputMode>("monitor");
   const [inputDeviceId, setInputDeviceId] = useState("");
@@ -167,16 +216,48 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
     }
   };
 
+  const refreshTargetSpeakerInfo = async () => {
+    try {
+      const info = await getTargetSpeakerRuntimeInfo();
+      setTargetSpeakerInfo(info);
+      setSpeakerEngine((current) => (info.availableEngines.includes(current) ? current : info.defaultEngine));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to fetch target speaker runtime info.");
+    }
+  };
+
+  const refreshSpeakerProfiles = async () => {
+    try {
+      const profiles = await listSpeakerProfiles();
+      setSpeakerProfiles(profiles);
+      setSelectedSpeakerProfileIdState((current) =>
+        profiles.some((profile) => profile.id === current) ? current : "",
+      );
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load speaker profiles.");
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       try {
-        const [loadedCategories, loadedPresets, loadedDevices, metrics, loadedVirtualMicStatus] = await Promise.all([
+        const [
+          loadedCategories,
+          loadedPresets,
+          loadedDevices,
+          metrics,
+          loadedTargetSpeakerInfo,
+          loadedSpeakerProfiles,
+          loadedVirtualMicStatus,
+        ] = await Promise.all([
           getModelCategories(),
           getHive15Presets(),
           listAudioDevices(),
           getRuntimeMetrics(),
+          getTargetSpeakerRuntimeInfo(),
+          listSpeakerProfiles(),
           getVirtualMicStatus(),
         ]);
 
@@ -188,6 +269,11 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
         setPresets(loadedPresets);
         setDevices(loadedDevices);
         setRuntimeMetrics(metrics);
+        setTargetSpeakerInfo(loadedTargetSpeakerInfo);
+        setSpeakerProfiles(loadedSpeakerProfiles);
+        setSpeakerEngine((current) =>
+          loadedTargetSpeakerInfo.availableEngines.includes(current) ? current : loadedTargetSpeakerInfo.defaultEngine,
+        );
         setVirtualMicStatus(loadedVirtualMicStatus);
 
         const defaultInput = loadedDevices.find((device) => device.direction === "input" && device.default);
@@ -242,6 +328,27 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
     setSelectedCategories(preset.categories);
   };
 
+  const updateSpeakerReferencePath = (value: string) => {
+    setSpeakerReferencePath(value);
+    setSelectedSpeakerProfileIdState((current) => {
+      if (!current) {
+        return current;
+      }
+      const profile = speakerProfiles.find((item) => item.id === current);
+      return profile?.referencePath === value ? current : "";
+    });
+  };
+
+  const setSelectedSpeakerProfileId = (profileId: string) => {
+    setSelectedSpeakerProfileIdState(profileId);
+    const profile = speakerProfiles.find((item) => item.id === profileId);
+    if (profile) {
+      setSpeakerReferencePath(profile.referencePath);
+      setSpeakerProfileName(profile.name);
+      setError(null);
+    }
+  };
+
   const setOutputMode = (value: LiveOutputMode) => {
     if (activeLiveSessionId) {
       setError("Stop the current live session before changing the output mode.");
@@ -271,6 +378,27 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
     const nextPath = await browseForOutputWav();
     if (nextPath) {
       setOutputPath(nextPath);
+    }
+  };
+
+  const browseSpeakerInputPath = async () => {
+    const nextPath = await browseForAudioInput();
+    if (nextPath) {
+      setSpeakerInputPath(nextPath);
+    }
+  };
+
+  const browseSpeakerReferencePath = async () => {
+    const nextPath = await browseForAudioInput();
+    if (nextPath) {
+      updateSpeakerReferencePath(nextPath);
+    }
+  };
+
+  const browseSpeakerOutputPath = async () => {
+    const nextPath = await browseForOutputWav();
+    if (nextPath) {
+      setSpeakerOutputPath(nextPath);
     }
   };
 
@@ -335,6 +463,103 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
     }
   };
 
+  const startSpeakerSuppression = async () => {
+    if (!speakerInputPath.trim()) {
+      setError("Choose a mixture audio file before starting speaker suppression.");
+      return;
+    }
+    if (!speakerReferencePath.trim()) {
+      setError("Choose a reference speaker clip before starting speaker suppression.");
+      return;
+    }
+    if (!speakerOutputPath.trim()) {
+      setError("Choose an output WAV path before starting speaker suppression.");
+      return;
+    }
+    if (speakerEngine === "clearvoice_bundle" && targetSpeakerInfo && !targetSpeakerInfo.clearvoiceReady) {
+      setError("The ClearVoice quality bundle is present but its Python runtime is not installed yet.");
+      return;
+    }
+
+    setError(null);
+    setIsOfflineRunning(true);
+    setOfflineProgress(null);
+
+    try {
+      let finishedBeforeResolve = false;
+      const result = await startTargetSpeakerJob(
+        {
+          inputPath: speakerInputPath,
+          referencePath: speakerReferencePath,
+          outputPath: speakerOutputPath,
+          engine: speakerEngine,
+          outputMode: speakerOutputMode,
+          removalScale: speakerRemovalScale,
+        },
+        (event) => {
+          setOfflineProgress(event);
+          if (event.stage === "completed" || event.stage === "failed" || event.stage === "cancelled") {
+            finishedBeforeResolve = true;
+            setIsOfflineRunning(false);
+            setActiveOfflineJobId(null);
+          }
+        },
+      );
+      if (!finishedBeforeResolve) {
+        setActiveOfflineJobId(result.jobId);
+      }
+    } catch (jobError) {
+      setIsOfflineRunning(false);
+      setError(jobError instanceof Error ? jobError.message : "Speaker suppression failed to start.");
+    } finally {
+      await Promise.all([refreshRuntimeMetrics(), refreshTargetSpeakerInfo()]);
+    }
+  };
+
+  const saveCurrentSpeakerProfile = async () => {
+    if (!speakerProfileName.trim()) {
+      setError("Enter a speaker profile name before saving.");
+      return;
+    }
+    if (!speakerReferencePath.trim()) {
+      setError("Choose a reference speaker clip before saving a profile.");
+      return;
+    }
+
+    try {
+      const profile = await saveSpeakerProfileApi({
+        name: speakerProfileName,
+        referencePath: speakerReferencePath,
+      });
+      setSpeakerProfiles((current) => {
+        const withoutExisting = current.filter((item) => item.id !== profile.id);
+        return [...withoutExisting, profile].sort((left, right) => left.name.localeCompare(right.name));
+      });
+      setSelectedSpeakerProfileIdState(profile.id);
+      setSpeakerReferencePath(profile.referencePath);
+      setSpeakerProfileName(profile.name);
+      setError(null);
+    } catch (profileError) {
+      setError(profileError instanceof Error ? profileError.message : "Unable to save speaker profile.");
+    }
+  };
+
+  const deleteSelectedSpeakerProfile = async () => {
+    if (!selectedSpeakerProfileId) {
+      setError("Choose a saved speaker profile before deleting.");
+      return;
+    }
+
+    try {
+      await deleteSpeakerProfileApi({ profileId: selectedSpeakerProfileId });
+      setSpeakerProfiles((current) => current.filter((profile) => profile.id !== selectedSpeakerProfileId));
+      setSelectedSpeakerProfileIdState("");
+      setError(null);
+    } catch (profileError) {
+      setError(profileError instanceof Error ? profileError.message : "Unable to delete speaker profile.");
+    }
+  };
+
   const cancelCurrentOffline = async () => {
     if (!activeOfflineJobId) {
       return;
@@ -357,8 +582,17 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
   };
 
   const startLive = async () => {
-    if (selectedCategories.length === 0) {
+    const speakerLive = desktopMode === "speakerSuppression";
+    if (!speakerLive && selectedCategories.length === 0) {
       setError("Select at least one model category before starting live monitoring.");
+      return;
+    }
+    if (speakerLive && !speakerReferencePath.trim()) {
+      setError("Choose a reference speaker clip or saved speaker profile before starting speaker realtime.");
+      return;
+    }
+    if (speakerLive && speakerEngine !== "tsextract_onnx") {
+      setError("The Quality Bundle engine is offline-only. Use Fast ONNX for speaker realtime.");
       return;
     }
     if (debugInputEnabled && !debugInputPath.trim()) {
@@ -382,6 +616,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       let endedBeforeResolve = false;
       const result = await startLiveMonitor(
         {
+          processingMode: speakerLive ? "speakerSuppression" : "semanticSuppression",
           inputDeviceId: inputDeviceId || null,
           outputDeviceId:
             outputMode === "virtualMic"
@@ -389,10 +624,14 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
               : outputDeviceId || null,
           outputMode,
           debugInputPath: debugInputEnabled ? debugInputPath : null,
-          categories: selectedCategories,
+          categories: speakerLive ? [] : selectedCategories,
           aggressiveness,
           lookaheadMs,
           recordOutputPath: recordEnabled ? recordOutputPath : null,
+          speakerReferencePath: speakerLive ? speakerReferencePath : null,
+          speakerEngine: speakerLive ? speakerEngine : null,
+          speakerOutputMode: speakerLive ? speakerOutputMode : null,
+          speakerRemovalScale: speakerLive ? speakerRemovalScale : null,
         },
         {
           onStatus: (event) => {
@@ -444,9 +683,20 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       presets,
       devices,
       runtimeMetrics,
+      targetSpeakerInfo,
+      speakerProfiles,
       virtualMicStatus,
+      desktopMode,
       selectedCategories,
       aggressiveness,
+      speakerInputPath,
+      speakerReferencePath,
+      speakerOutputPath,
+      speakerEngine,
+      speakerOutputMode,
+      speakerRemovalScale,
+      selectedSpeakerProfileId,
+      speakerProfileName,
       lookaheadMs,
       outputMode,
       inputDeviceId,
@@ -466,10 +716,19 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       isStartingLive,
       isOfflineRunning,
       error,
+      setDesktopMode,
       setSelectedCategories,
       toggleCategory,
       applyPreset,
       setAggressiveness,
+      setSpeakerInputPath,
+      setSpeakerReferencePath: updateSpeakerReferencePath,
+      setSpeakerOutputPath,
+      setSpeakerEngine,
+      setSpeakerOutputMode,
+      setSpeakerRemovalScale,
+      setSelectedSpeakerProfileId,
+      setSpeakerProfileName,
       setLookaheadMs,
       setOutputMode,
       setInputDeviceId,
@@ -482,12 +741,20 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       setRecordOutputPath,
       browseInputPath,
       browseOutputPath,
+      browseSpeakerInputPath,
+      browseSpeakerReferencePath,
+      browseSpeakerOutputPath,
       browseDebugInputPath,
       browseRecordOutputPath,
       refreshDevices,
       refreshVirtualMicStatus,
       refreshRuntimeMetrics,
+      refreshTargetSpeakerInfo,
+      refreshSpeakerProfiles,
       startOffline,
+      startSpeakerSuppression,
+      saveCurrentSpeakerProfile,
+      deleteSelectedSpeakerProfile,
       cancelOffline: cancelCurrentOffline,
       startLive,
       stopLive,
@@ -498,6 +765,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       activeOfflineJobId,
       aggressiveness,
       categories,
+      desktopMode,
       devices,
       error,
       debugInputEnabled,
@@ -519,6 +787,16 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       recordOutputPath,
       runtimeMetrics,
       selectedCategories,
+      selectedSpeakerProfileId,
+      speakerProfileName,
+      speakerEngine,
+      speakerInputPath,
+      speakerOutputMode,
+      speakerOutputPath,
+      speakerProfiles,
+      speakerReferencePath,
+      speakerRemovalScale,
+      targetSpeakerInfo,
       virtualMicStatus,
     ],
   );

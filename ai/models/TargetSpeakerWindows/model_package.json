@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "model_id": "target_speaker_windows",
+  "package_version": "target_speaker_windows_20260430",
+  "family": "target_speaker",
+  "display_name": "Target Speaker Suppression",
+  "description": "Windows desktop target-speaker suppression package using the validated TSExtract ONNX export by default, with the native ClearVoice bundle available as an offline quality fallback.",
+  "suppression_strategy": {
+    "kind": "target_speaker_residual_suppression",
+    "formula": "target = f(mixture, reference); clean = mixture - removal_scale * target",
+    "target": "speaker matching the reference clip"
+  },
+  "export_contract": {
+    "desktop_runtime": "target_speaker_windows_bundle",
+    "default_engine": "tsextract_onnx",
+    "default_output_mode": "remove_target",
+    "optional_engines": [
+      "clearvoice_bundle"
+    ],
+    "tsextract_onnx": {
+      "sample_rate": 8000,
+      "mixture_samples": 80000,
+      "reference_samples": 24000,
+      "inputs": {
+        "mixture": [
+          1,
+          80000
+        ],
+        "reference": [
+          1,
+          24000
+        ],
+        "reference_length": [
+          1
+        ]
+      },
+      "outputs": [
+        "target"
+      ],
+      "external_data": "tsextract_fp32.onnx.data"
+    },
+    "clearvoice_bundle": {
+      "sample_rate": 16000,
+      "entrypoint": "clearvoice_native/run_clearvoice_extract.ps1",
+      "role": "offline_quality_reference"
+    }
+  },
+  "validation_summary": {
+    "status": "tsextract_onnx_validated_cpu",
+    "validation_artifact": "../exports/target_speaker_windows/tsextract/tsextract_fp32.validation.json",
+    "correlation": 0.9999984569312139,
+    "rmse": 0.000035682252928381786,
+    "passed": true
+  },
+  "edge_profile": {
+    "primary_target": "windows_desktop_cpu",
+    "default_engine": "tsextract_onnx",
+    "live_supported": false,
+    "package_role": "offline_target_speaker_suppressor"
+  },
+  "categories": [
+    {
+      "id": "target_speaker",
+      "label": "target speaker",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    }
+  ],
+  "presets": [],
+  "platforms": {
+    "desktop": {
+      "runtime_kind": "target_speaker_windows_bundle",
+      "artifact": "../exports/target_speaker_windows/windows_bundle_slim/windows_bundle_manifest.json",
+      "metadata_artifacts": [
+        "../exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.manifest.json",
+        "../exports/target_speaker_windows/tsextract/tsextract_fp32.validation.json",
+        "../exports/target_speaker_windows/windows_bundle_slim/clearvoice_native/manifest.json"
+      ],
+      "sample_rate": 8000,
+      "chunk_samples": 80000,
+      "preferred_live_hop_ms": 0,
+      "mix_channels": 1
+    }
+  }
+}

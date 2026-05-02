@@ -15,6 +15,7 @@ __all__ = [
     "TARGETS",
     "TargetSpeakerSeparator",
     "UniversalSeparator",
+    "WaveformerOnnxStream",
     "WaveformerSeparator",
 ]
 
@@ -75,4 +76,9 @@ def __getattr__(name: str):
             }
         )
         return globals()[name]
+    if name == "WaveformerOnnxStream":
+        from .waveformer_onnx_stream import WaveformerOnnxStream
+
+        globals()["WaveformerOnnxStream"] = WaveformerOnnxStream
+        return WaveformerOnnxStream
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

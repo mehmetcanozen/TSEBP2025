@@ -1,6 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use realfft::{num_complex::Complex32, ComplexToReal, RealFftPlanner, RealToComplex};
+use rubato::{
+    Resampler, SincFixedIn, SincInterpolationParameters, SincInterpolationType, WindowFunction,
+};
 
 use crate::error::{AppError, AppResult};
 
@@ -25,6 +28,13 @@ struct StftPlan {
     window: Vec<f32>,
     rfft: Arc<dyn RealToComplex<f32>>,
     irfft: Arc<dyn ComplexToReal<f32>>,
+}
+
+pub struct StreamingSincResampler {
+    source_rate: u32,
+    target_rate: u32,
+    max_input_frames: usize,
+    resampler: Option<SincFixedIn<f32>>,
 }
 
 impl Default for WienerMasker {
@@ -69,8 +79,14 @@ impl WienerMasker {
             self.prev_clean_power = Some(vec![0.0; freq_bins]);
             self.prev_noise_power = Some(vec![1.0e-10; freq_bins]);
         }
-        let prev_clean = self.prev_clean_power.as_mut().expect("masker state initialized");
-        let prev_noise = self.prev_noise_power.as_mut().expect("masker state initialized");
+        let prev_clean = self
+            .prev_clean_power
+            .as_mut()
+            .expect("masker state initialized");
+        let prev_noise = self
+            .prev_noise_power
+            .as_mut()
+            .expect("masker state initialized");
 
         let perceptual_floor = build_perceptual_floor(freq_bins, sample_rate, 0.01, 0.05);
         let mut clean_frames = Vec::with_capacity(frame_count);
@@ -102,7 +118,7 @@ impl WienerMasker {
                 if dominance >= options.speech_dominance_threshold {
                     let preserve_bias = ((dominance - options.speech_dominance_threshold)
                         / options.speech_dominance_threshold.max(eps))
-                        .clamp(0.0, 1.0);
+                    .clamp(0.0, 1.0);
                     gain = gain.max((floor + 0.18 * preserve_bias).clamp(floor, 1.0));
                 }
 
@@ -172,7 +188,128 @@ pub fn linear_resample(audio: &[f32], source_rate: u32, target_rate: u32) -> Vec
     output
 }
 
-pub fn build_overlap_window(length: usize, overlap_samples: usize, fade_in: bool, fade_out: bool) -> Vec<f32> {
+pub fn sinc_resample(audio: &[f32], source_rate: u32, target_rate: u32) -> AppResult<Vec<f32>> {
+    let expected_len = expected_resampled_len(audio.len(), source_rate, target_rate);
+    sinc_resample_to_len(audio, source_rate, target_rate, expected_len)
+}
+
+pub fn sinc_resample_to_len(
+    audio: &[f32],
+    source_rate: u32,
+    target_rate: u32,
+    output_len: usize,
+) -> AppResult<Vec<f32>> {
+    if audio.is_empty() {
+        return Ok(vec![0.0; output_len]);
+    }
+    if source_rate == target_rate {
+        let mut copy = audio.to_vec();
+        fit_resampled_length(&mut copy, output_len);
+        return Ok(copy);
+    }
+
+    let mut resampler = StreamingSincResampler::new(source_rate, target_rate, audio.len())?;
+    resampler.process_to_len(audio, output_len)
+}
+
+impl StreamingSincResampler {
+    pub fn new(source_rate: u32, target_rate: u32, max_input_frames: usize) -> AppResult<Self> {
+        let mut instance = Self {
+            source_rate,
+            target_rate,
+            max_input_frames: max_input_frames.max(1),
+            resampler: None,
+        };
+        instance.rebuild(instance.max_input_frames)?;
+        Ok(instance)
+    }
+
+    pub fn matches(&self, source_rate: u32, target_rate: u32, max_input_frames: usize) -> bool {
+        self.source_rate == source_rate
+            && self.target_rate == target_rate
+            && self.max_input_frames >= max_input_frames.max(1)
+    }
+
+    pub fn process(&mut self, audio: &[f32]) -> AppResult<Vec<f32>> {
+        if audio.is_empty() {
+            return Ok(Vec::new());
+        }
+        if self.source_rate == self.target_rate {
+            return Ok(audio.to_vec());
+        }
+        if audio.len() > self.max_input_frames {
+            self.rebuild(audio.len())?;
+        }
+
+        let resampler = self
+            .resampler
+            .as_mut()
+            .ok_or_else(|| AppError::message("sinc resampler was not initialized"))?;
+        resampler
+            .set_chunk_size(audio.len())
+            .map_err(|error| AppError::message(error.to_string()))?;
+        let input = vec![audio.to_vec()];
+        let mut output = resampler
+            .process(&input, None)
+            .map_err(|error| AppError::message(error.to_string()))?;
+        Ok(output.pop().unwrap_or_default())
+    }
+
+    pub fn process_to_len(&mut self, audio: &[f32], output_len: usize) -> AppResult<Vec<f32>> {
+        let mut output = self.process(audio)?;
+        fit_resampled_length(&mut output, output_len);
+        Ok(output)
+    }
+
+    fn rebuild(&mut self, max_input_frames: usize) -> AppResult<()> {
+        self.max_input_frames = max_input_frames.max(1);
+        if self.source_rate == self.target_rate {
+            self.resampler = None;
+            return Ok(());
+        }
+
+        let params = SincInterpolationParameters {
+            sinc_len: 64,
+            f_cutoff: 0.95,
+            interpolation: SincInterpolationType::Linear,
+            oversampling_factor: 64,
+            window: WindowFunction::BlackmanHarris2,
+        };
+        let ratio = self.target_rate as f64 / self.source_rate as f64;
+        let resampler = SincFixedIn::<f32>::new(ratio, 1.0, params, self.max_input_frames, 1)
+            .map_err(|error| AppError::message(error.to_string()))?;
+        self.resampler = Some(resampler);
+        Ok(())
+    }
+}
+
+pub fn expected_resampled_len(input_len: usize, source_rate: u32, target_rate: u32) -> usize {
+    if input_len == 0 {
+        return 0;
+    }
+    if source_rate == target_rate {
+        return input_len;
+    }
+    ((input_len as f64) * target_rate as f64 / source_rate as f64)
+        .round()
+        .max(1.0) as usize
+}
+
+pub fn fit_resampled_length(audio: &mut Vec<f32>, output_len: usize) {
+    if audio.len() > output_len {
+        audio.truncate(output_len);
+    } else if audio.len() < output_len {
+        let fill = audio.last().copied().unwrap_or_default();
+        audio.resize(output_len, fill);
+    }
+}
+
+pub fn build_overlap_window(
+    length: usize,
+    overlap_samples: usize,
+    fade_in: bool,
+    fade_out: bool,
+) -> Vec<f32> {
     let mut window = vec![1.0f32; length];
     let overlap = overlap_samples.min(length);
     if overlap == 0 {
@@ -193,7 +330,10 @@ pub fn build_overlap_window(length: usize, overlap_samples: usize, fade_in: bool
     window
 }
 
-pub fn project_removed_to_channels(original_channels: &[Vec<f32>], removed_mono: &[f32]) -> Vec<Vec<f32>> {
+pub fn project_removed_to_channels(
+    original_channels: &[Vec<f32>],
+    removed_mono: &[f32],
+) -> Vec<Vec<f32>> {
     if original_channels.is_empty() {
         return Vec::new();
     }
@@ -215,7 +355,8 @@ pub fn project_removed_to_channels(original_channels: &[Vec<f32>], removed_mono:
             } else {
                 1.0 / channel_count as f32
             };
-            projected[channel_index][frame_index] = removed_mono[frame_index] * weight * channel_count as f32;
+            projected[channel_index][frame_index] =
+                removed_mono[frame_index] * weight * channel_count as f32;
         }
     }
 
@@ -231,7 +372,9 @@ pub fn rms(signal: &[f32]) -> f32 {
 }
 
 pub fn peak(signal: &[f32]) -> f32 {
-    signal.iter().fold(0.0f32, |current, sample| current.max(sample.abs()))
+    signal
+        .iter()
+        .fold(0.0f32, |current, sample| current.max(sample.abs()))
 }
 
 pub fn waveform_summary(signal: &[f32], bins: usize) -> Vec<f32> {
@@ -332,7 +475,12 @@ fn frame_starts(signal_len: usize, n_fft: usize, hop_size: usize) -> Vec<usize> 
     starts
 }
 
-fn build_perceptual_floor(freq_bins: usize, sample_rate: u32, floor_min: f32, floor_max: f32) -> Vec<f32> {
+fn build_perceptual_floor(
+    freq_bins: usize,
+    sample_rate: u32,
+    floor_min: f32,
+    floor_max: f32,
+) -> Vec<f32> {
     let mut floor = vec![floor_min; freq_bins];
     let f_low = 200.0f32;
     let f_peak = 2500.0f32;
@@ -357,7 +505,10 @@ fn build_perceptual_floor(freq_bins: usize, sample_rate: u32, floor_min: f32, fl
 
 #[cfg(test)]
 mod tests {
-    use super::{build_overlap_window, linear_resample, peak, project_removed_to_channels, rms, WienerMasker, MaskingOptions};
+    use super::{
+        build_overlap_window, linear_resample, peak, project_removed_to_channels, rms,
+        sinc_resample_to_len, MaskingOptions, StreamingSincResampler, WienerMasker,
+    };
 
     #[test]
     fn overlap_window_fades_cleanly() {
@@ -374,6 +525,29 @@ mod tests {
         let output = linear_resample(&input, 4, 8);
         assert_eq!(output.first().copied().unwrap_or_default(), 0.0);
         assert!(output.len() >= 7);
+    }
+
+    #[test]
+    fn sinc_resample_to_len_returns_requested_shape() {
+        let input = (0..4807)
+            .map(|index| ((index as f32) * 0.01).sin())
+            .collect::<Vec<_>>();
+        let output =
+            sinc_resample_to_len(&input, 48_000, 44_100, 4416).expect("sinc resample should run");
+        assert_eq!(output.len(), 4416);
+        assert!(output.iter().all(|sample| sample.is_finite()));
+    }
+
+    #[test]
+    fn streaming_sinc_resampler_reuses_state_for_live_chunks() {
+        let mut resampler =
+            StreamingSincResampler::new(48_000, 44_100, 4807).expect("resampler should construct");
+        let input = vec![0.0f32; 4807];
+        let output = resampler
+            .process_to_len(&input, 4416)
+            .expect("resampler should process");
+        assert_eq!(output.len(), 4416);
+        assert!(resampler.matches(48_000, 44_100, 4807));
     }
 
     #[test]

@@ -4,6 +4,7 @@
   "models": {
     "audiosep_hive15cat": "AudioSepHive15Cat/model_package.json",
     "codecsep_dnrv2_15cat": "CodecSepDNRv2_15Cat/model_package.json",
+    "target_speaker_windows": "TargetSpeakerWindows/model_package.json",
     "waveformer_edge_100ms": "Waveformer/model_package.json"
   }
 }

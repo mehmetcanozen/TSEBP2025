@@ -16,6 +16,8 @@ Welcome to the **Semantic Suppressor** user manual. This document is the master 
 
 **Mobile**: See [MOBILE_DEPLOYMENT.md](MOBILE_DEPLOYMENT.md) for React Native / Expo deployment.
 
+**Waveformer wide demo/eval data**: See [WAVEFORMER_WIDE_EVAL.md](WAVEFORMER_WIDE_EVAL.md) for the reproducible public-dataset download, mixing, validation, and suppression spot-check workflow.
+
 ---
 
 ## 1. Introduction <a name="introduction"></a>
