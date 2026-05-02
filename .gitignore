@@ -140,6 +140,9 @@ __MACOSX/
 # Local audio assets and generated results
 ai/data/audio/Sounds/
 ai/data/audio/processed/
+ai/data/audio/waveformertestdownloads/
+ai/data/audio/waveformertestsources/
+ai/data/audio/waveformertestmixed/
 mobile-backend/models_store/
 models_store/
 mobile-backend/test_shared.db*

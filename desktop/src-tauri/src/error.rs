@@ -69,4 +69,3 @@ impl From<cpal::PauseStreamError> for AppError {
         Self::Message(value.to_string())
     }
 }
-

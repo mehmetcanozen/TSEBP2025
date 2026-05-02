@@ -45,7 +45,8 @@ class LiveSuppressionSession(
 
   private val capturedFrames = AtomicLong(0)
   private val renderedFrames = AtomicLong(0)
-  private val providerName = runtime.runtimeInfo("").provider
+  private val runtimeSnapshot = runtime.runtimeInfo("")
+  private val providerName = runtimeSnapshot.provider
 
   private val nativeSampleRate =
     audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 48_000
@@ -60,7 +61,8 @@ class LiveSuppressionSession(
     }
   private val captureRing = FloatRingBuffer(nativeSampleRate * 15)
   private val renderRing = FloatRingBuffer(nativeSampleRate * 8)
-  private val startupBlendMs = 900
+  private val startupBlendMs =
+    if (runtimeSnapshot.runtimeKind?.contains("streaming_target_extractor") == true) 220 else 900
   private val startupBlendFrames = (nativeSampleRate * startupBlendMs / 1000).toLong()
   private val processBoundaryFadeFrames = max(16, nativeSampleRate * 3 / 1000)
   private val renderBoundaryFadeFrames = max(16, nativeSampleRate * 5 / 1000)

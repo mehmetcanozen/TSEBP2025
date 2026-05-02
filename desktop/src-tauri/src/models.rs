@@ -79,6 +79,56 @@ pub struct RuntimeMetrics {
     pub active_jobs: usize,
     pub model_path: Option<String>,
     pub runtime_metadata_paths: Vec<String>,
+    pub model_sample_rate: u32,
+    pub chunk_samples: Option<usize>,
+    pub preferred_live_hop_ms: f32,
+    pub validation_status: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TargetSpeakerRuntimeInfo {
+    pub model_id: String,
+    pub display_name: String,
+    pub runtime_kind: String,
+    pub default_engine: TargetSpeakerEngine,
+    pub available_engines: Vec<TargetSpeakerEngine>,
+    pub model_sample_rate: u32,
+    pub mixture_samples: usize,
+    pub reference_samples: usize,
+    pub validation_status: String,
+    pub runtime_metadata_paths: Vec<String>,
+    pub bundle_manifest_path: Option<String>,
+    pub tsextract_onnx_path: Option<String>,
+    pub clearvoice_bundle_path: Option<String>,
+    pub onnx_sidecar_present: bool,
+    pub clearvoice_ready: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSpeakerProfileRequest {
+    pub name: String,
+    pub reference_path: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteSpeakerProfileRequest {
+    pub profile_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeakerProfile {
+    pub id: String,
+    pub name: String,
+    pub reference_path: String,
+    pub source_path: Option<String>,
+    pub sample_rate: u32,
+    pub duration_ms: u64,
+    pub created_at_ms: u64,
+    pub updated_at_ms: u64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -90,6 +140,31 @@ pub struct StartOfflineJobRequest {
     pub aggressiveness: f32,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetSpeakerEngine {
+    TsextractOnnx,
+    ClearvoiceBundle,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TargetSpeakerOutputMode {
+    RemoveTarget,
+    ExtractTarget,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartTargetSpeakerJobRequest {
+    pub input_path: String,
+    pub reference_path: String,
+    pub output_path: String,
+    pub engine: TargetSpeakerEngine,
+    pub output_mode: TargetSpeakerOutputMode,
+    pub removal_scale: f32,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelOfflineJobRequest {
@@ -99,15 +174,35 @@ pub struct CancelOfflineJobRequest {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartLiveMonitorRequest {
+    #[serde(default)]
+    pub processing_mode: LiveProcessingMode,
     pub input_device_id: Option<String>,
     pub output_device_id: Option<String>,
     #[serde(default)]
     pub output_mode: LiveOutputMode,
     pub debug_input_path: Option<String>,
+    #[serde(default)]
     pub categories: Vec<String>,
     pub aggressiveness: f32,
     pub lookahead_ms: u32,
     pub record_output_path: Option<String>,
+    pub speaker_reference_path: Option<String>,
+    pub speaker_engine: Option<TargetSpeakerEngine>,
+    pub speaker_output_mode: Option<TargetSpeakerOutputMode>,
+    pub speaker_removal_scale: Option<f32>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum LiveProcessingMode {
+    SemanticSuppression,
+    SpeakerSuppression,
+}
+
+impl Default for LiveProcessingMode {
+    fn default() -> Self {
+        Self::SemanticSuppression
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -184,6 +279,8 @@ pub struct LiveStatusEvent {
     pub output_mode: LiveOutputModeEvent,
     pub lookahead_ms: u32,
     pub inference_ms: Option<f32>,
+    pub inference_ms_p50: Option<f32>,
+    pub inference_ms_p95: Option<f32>,
     pub queue_depth_ms: Option<f32>,
     pub estimated_latency_ms: Option<f32>,
     pub realtime_health: LiveRealtimeHealth,
@@ -236,7 +333,7 @@ pub struct LiveMeterEvent {
 
 #[cfg(test)]
 mod tests {
-    use super::ModelCategory;
+    use super::{LiveProcessingMode, ModelCategory, StartLiveMonitorRequest};
 
     #[test]
     fn model_category_deserializes_packaged_snake_case_fields() {
@@ -252,5 +349,27 @@ mod tests {
 
         assert_eq!(category.id, "speech");
         assert_eq!(category.default_aggressiveness, 1.4);
+    }
+
+    #[test]
+    fn live_request_defaults_to_semantic_processing() {
+        let request: StartLiveMonitorRequest = serde_json::from_str(
+            r#"{
+                "inputDeviceId": null,
+                "outputDeviceId": null,
+                "outputMode": "monitor",
+                "debugInputPath": null,
+                "categories": ["speech"],
+                "aggressiveness": 1.0,
+                "lookaheadMs": 150,
+                "recordOutputPath": null
+            }"#,
+        )
+        .expect("legacy live monitor payloads should keep working");
+
+        assert_eq!(
+            request.processing_mode,
+            LiveProcessingMode::SemanticSuppression
+        );
     }
 }

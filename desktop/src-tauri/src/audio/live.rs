@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::BufWriter,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
         mpsc, Arc,
@@ -29,13 +29,15 @@ use crate::{
         io::{decode_audio_file, DecodedAudio},
     },
     engine::{
-        dsp::{linear_resample, peak, rms, waveform_summary},
+        dsp::{peak, rms, sinc_resample, waveform_summary},
+        target_speaker::TargetSpeakerRuntime,
         SharedEngine,
     },
     error::{AppError, AppResult},
     models::{
-        LiveMeterEvent, LiveOutputMode, LiveOutputModeEvent, LiveRealtimeHealth, LiveSessionState,
-        LiveStatusEvent, StartLiveMonitorRequest,
+        LiveMeterEvent, LiveOutputMode, LiveOutputModeEvent, LiveProcessingMode,
+        LiveRealtimeHealth, LiveSessionState, LiveStatusEvent, StartLiveMonitorRequest,
+        TargetSpeakerEngine, TargetSpeakerOutputMode,
     },
 };
 
@@ -62,6 +64,7 @@ impl LiveSessionControl {
 
 pub fn spawn_live_session(
     engine: Arc<SharedEngine>,
+    target_speaker: Arc<TargetSpeakerRuntime>,
     session_id: String,
     request: StartLiveMonitorRequest,
     status_channel: Channel<LiveStatusEvent>,
@@ -80,6 +83,7 @@ pub fn spawn_live_session(
         };
         let result = run_live_worker(
             engine,
+            target_speaker,
             session_id.clone(),
             request,
             status_channel,
@@ -117,6 +121,7 @@ pub fn spawn_live_session(
 
 fn run_live_worker(
     engine: Arc<SharedEngine>,
+    target_speaker: Arc<TargetSpeakerRuntime>,
     session_id: String,
     request: StartLiveMonitorRequest,
     status_channel: Channel<LiveStatusEvent>,
@@ -162,13 +167,17 @@ fn run_live_worker(
     };
     let output_device_id = output.descriptor.id.clone();
     let output_device_name = output.descriptor.name.clone();
-    let provider = match (&output_mode, debug_input.is_some()) {
+    let processing_mode = request.processing_mode.clone();
+    let provider_base = match (&output_mode, debug_input.is_some()) {
         (LiveOutputMode::Monitor, false) => "wasapi-shared/cpal",
         (LiveOutputMode::VirtualMic, false) => "wasapi-shared/cpal+vb-cable",
         (LiveOutputMode::Monitor, true) => "debug-wav/cpal",
         (LiveOutputMode::VirtualMic, true) => "debug-wav/cpal+vb-cable",
-    }
-    .to_string();
+    };
+    let provider = match &processing_mode {
+        LiveProcessingMode::SemanticSuppression => provider_base.to_string(),
+        LiveProcessingMode::SpeakerSuppression => format!("{provider_base}/target-speaker"),
+    };
     let output_mode_event = LiveOutputModeEvent::from(&output_mode);
 
     let output_config = output.config.clone();
@@ -183,10 +192,44 @@ fn run_live_worker(
         .map(|input| input.config.channels() as usize)
         .unwrap_or(1);
     let output_channels = output_config.channels() as usize;
-    let preferred_hop_ms = engine.preferred_live_hop_ms().max(1);
-    let lookahead_ms =
-        clamp_live_lookahead_ms(request.lookahead_ms, engine.is_streaming_live_runtime());
-    let mut processor = engine.make_processor()?;
+    let preferred_hop_ms = match &processing_mode {
+        LiveProcessingMode::SemanticSuppression => engine.preferred_live_hop_ms_f32().max(1.0),
+        LiveProcessingMode::SpeakerSuppression => target_speaker.preferred_live_hop_ms(),
+    };
+    let lookahead_ms = clamp_live_lookahead_ms(
+        request.lookahead_ms,
+        matches!(&processing_mode, LiveProcessingMode::SemanticSuppression)
+            && engine.is_streaming_live_runtime(),
+    );
+    let mut semantic_processor = match &processing_mode {
+        LiveProcessingMode::SemanticSuppression => Some(engine.make_processor()?),
+        LiveProcessingMode::SpeakerSuppression => None,
+    };
+    let mut speaker_processor = match &processing_mode {
+        LiveProcessingMode::SemanticSuppression => None,
+        LiveProcessingMode::SpeakerSuppression => {
+            let reference_path = request
+                .speaker_reference_path
+                .as_deref()
+                .map(str::trim)
+                .filter(|path| !path.is_empty())
+                .ok_or_else(|| {
+                    AppError::message("choose a reference speaker clip or saved speaker profile")
+                })?;
+            let engine = request
+                .speaker_engine
+                .unwrap_or(TargetSpeakerEngine::TsextractOnnx);
+            let output_mode = request
+                .speaker_output_mode
+                .unwrap_or(TargetSpeakerOutputMode::RemoveTarget);
+            Some(target_speaker.make_live_processor(
+                Path::new(reference_path),
+                engine,
+                output_mode,
+                request.speaker_removal_scale.unwrap_or(1.0),
+            )?)
+        }
+    };
     let mut record_writer =
         create_record_writer(request.record_output_path.as_deref(), input_rate)?;
 
@@ -244,6 +287,8 @@ fn run_live_worker(
             output_mode: input_output_mode_error.clone(),
             lookahead_ms,
             inference_ms: None,
+            inference_ms_p50: None,
+            inference_ms_p95: None,
             queue_depth_ms: None,
             estimated_latency_ms: None,
             realtime_health: LiveRealtimeHealth::Overloaded,
@@ -271,6 +316,8 @@ fn run_live_worker(
             output_mode: output_output_mode_error.clone(),
             lookahead_ms,
             inference_ms: None,
+            inference_ms_p50: None,
+            inference_ms_p95: None,
             queue_depth_ms: None,
             estimated_latency_ms: None,
             realtime_health: LiveRealtimeHealth::Overloaded,
@@ -391,8 +438,10 @@ fn run_live_worker(
         output_mode: output_mode_event.clone(),
         lookahead_ms,
         inference_ms: None,
+        inference_ms_p50: None,
+        inference_ms_p95: None,
         queue_depth_ms: None,
-        estimated_latency_ms: Some((lookahead_ms + preferred_hop_ms) as f32),
+        estimated_latency_ms: Some(lookahead_ms as f32 + preferred_hop_ms),
         realtime_health: LiveRealtimeHealth::Idle,
         sample_rate: Some(input_rate),
         input_device_id: Some(input_device_id.clone()),
@@ -405,13 +454,19 @@ fn run_live_worker(
         .send(Ok(()))
         .map_err(|error| AppError::message(error.to_string()))?;
 
-    let hop_samples = ((input_rate as usize * preferred_hop_ms as usize) / 1000).max(1);
+    let hop_samples = match &processing_mode {
+        LiveProcessingMode::SemanticSuppression => engine.preferred_live_hop_samples(input_rate),
+        LiveProcessingMode::SpeakerSuppression => {
+            target_speaker.preferred_live_hop_samples(input_rate)
+        }
+    };
     let prebuffer_frames = output_rate as usize * lookahead_ms as usize / 1000;
     let mut pending_input = Vec::<f32>::with_capacity(hop_samples * 4);
     let mut scratch = vec![0.0f32; hop_samples.max(1024)];
     let mut buffered_since_inference = 0usize;
     let mut last_output_chunk = Vec::<f32>::new();
     let mut last_input_chunk = Vec::<f32>::new();
+    let mut inference_window = Vec::<f32>::with_capacity(128);
     let mut last_meter_emit = Instant::now();
 
     let _ = status_channel.send(LiveStatusEvent {
@@ -422,14 +477,16 @@ fn run_live_worker(
         output_mode: output_mode_event.clone(),
         lookahead_ms,
         inference_ms: None,
+        inference_ms_p50: None,
+        inference_ms_p95: None,
         queue_depth_ms: Some(0.0),
-        estimated_latency_ms: Some((lookahead_ms + preferred_hop_ms) as f32),
+        estimated_latency_ms: Some(lookahead_ms as f32 + preferred_hop_ms),
         realtime_health: LiveRealtimeHealth::Ok,
         sample_rate: Some(input_rate),
         input_device_id: Some(input_device_id.clone()),
         output_device_id: Some(output_device_id.clone()),
         output_device_name: Some(output_device_name.clone()),
-        message: Some("Live suppression active".to_string()),
+        message: Some(live_active_message(&processing_mode).to_string()),
     });
 
     while !stop_flag.load(Ordering::Relaxed) {
@@ -447,18 +504,30 @@ fn run_live_worker(
         while buffered_since_inference >= hop_samples {
             let chunk = pending_input.drain(0..hop_samples).collect::<Vec<_>>();
             let infer_started = Instant::now();
-            let mut cleaned = processor.suppress_live_chunk(
-                &chunk,
-                input_rate,
-                &request.categories,
-                request.aggressiveness,
-                &stop_flag,
-            )?;
+            let mut cleaned = match (&mut semantic_processor, &mut speaker_processor) {
+                (Some(processor), None) => processor.suppress_live_chunk(
+                    &chunk,
+                    input_rate,
+                    &request.categories,
+                    request.aggressiveness,
+                    &stop_flag,
+                )?,
+                (None, Some(processor)) => {
+                    target_speaker.suppress_live_chunk(processor, &chunk, input_rate, &stop_flag)?
+                }
+                _ => {
+                    return Err(AppError::message(
+                        "live session did not resolve exactly one processor",
+                    ));
+                }
+            };
             let inference_ms = infer_started.elapsed().as_secs_f32() * 1000.0;
+            let (inference_ms_p50, inference_ms_p95) =
+                update_inference_window(&mut inference_window, inference_ms);
             let record_chunk = cleaned.clone();
 
             if output_rate != input_rate {
-                cleaned = linear_resample(&cleaned, input_rate, output_rate);
+                cleaned = sinc_resample(&cleaned, input_rate, output_rate)?;
             }
             last_output_chunk = cleaned.clone();
 
@@ -492,18 +561,25 @@ fn run_live_worker(
                 output_mode: output_mode_event.clone(),
                 lookahead_ms,
                 inference_ms: Some(inference_ms),
+                inference_ms_p50: Some(inference_ms_p50),
+                inference_ms_p95: Some(inference_ms_p95),
                 queue_depth_ms: Some(queue_depth_ms),
                 estimated_latency_ms: Some(estimated_added_latency_ms(
                     queue_depth_ms,
                     inference_ms,
                     preferred_hop_ms,
                 )),
-                realtime_health: realtime_health(inference_ms, xruns_now, preferred_hop_ms),
+                realtime_health: realtime_health(
+                    inference_ms,
+                    xruns_now,
+                    preferred_hop_ms,
+                    live_target_count(&processing_mode, request.categories.len()),
+                ),
                 sample_rate: Some(input_rate),
                 input_device_id: Some(input_device_id.clone()),
                 output_device_id: Some(output_device_id.clone()),
                 output_device_name: Some(output_device_name.clone()),
-                message: Some("Live suppression active".to_string()),
+                message: Some(live_active_message(&processing_mode).to_string()),
             });
 
             buffered_since_inference = buffered_since_inference.saturating_sub(hop_samples);
@@ -548,6 +624,8 @@ fn run_live_worker(
             output_mode: output_mode_event,
             lookahead_ms,
             inference_ms: None,
+            inference_ms_p50: None,
+            inference_ms_p95: None,
             queue_depth_ms: Some(0.0),
             estimated_latency_ms: Some(0.0),
             realtime_health: LiveRealtimeHealth::Idle,
@@ -702,20 +780,59 @@ pub(crate) fn clamp_live_lookahead_ms(requested_ms: u32, streaming_runtime: bool
 fn estimated_added_latency_ms(
     queue_depth_ms: f32,
     inference_ms: f32,
-    preferred_hop_ms: u32,
+    preferred_hop_ms: f32,
 ) -> f32 {
-    queue_depth_ms + inference_ms + preferred_hop_ms as f32
+    queue_depth_ms + inference_ms + preferred_hop_ms
 }
 
-fn realtime_health(inference_ms: f32, xruns: u32, preferred_hop_ms: u32) -> LiveRealtimeHealth {
-    let hop_ms = preferred_hop_ms as f32;
+fn realtime_health(
+    inference_ms: f32,
+    xruns: u32,
+    preferred_hop_ms: f32,
+    category_count: usize,
+) -> LiveRealtimeHealth {
+    let hop_ms = preferred_hop_ms.max(1.0);
     if inference_ms >= hop_ms * 2.0 {
         LiveRealtimeHealth::Overloaded
-    } else if inference_ms > hop_ms || xruns > 0 {
+    } else if inference_ms > hop_ms || xruns > 0 || category_count > 2 {
         LiveRealtimeHealth::Warning
     } else {
         LiveRealtimeHealth::Ok
     }
+}
+
+fn live_active_message(processing_mode: &LiveProcessingMode) -> &'static str {
+    match processing_mode {
+        LiveProcessingMode::SemanticSuppression => "Live suppression active",
+        LiveProcessingMode::SpeakerSuppression => "Speaker realtime suppression active",
+    }
+}
+
+fn live_target_count(processing_mode: &LiveProcessingMode, category_count: usize) -> usize {
+    match processing_mode {
+        LiveProcessingMode::SemanticSuppression => category_count,
+        LiveProcessingMode::SpeakerSuppression => 1,
+    }
+}
+
+fn update_inference_window(window: &mut Vec<f32>, value: f32) -> (f32, f32) {
+    const MAX_WINDOW: usize = 128;
+    if window.len() == MAX_WINDOW {
+        window.remove(0);
+    }
+    window.push(value);
+
+    let mut sorted = window.clone();
+    sorted.sort_by(|left, right| left.total_cmp(right));
+    (percentile(&sorted, 0.50), percentile(&sorted, 0.95))
+}
+
+fn percentile(sorted: &[f32], fraction: f32) -> f32 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let index = ((sorted.len() - 1) as f32 * fraction).round() as usize;
+    sorted[index.min(sorted.len() - 1)]
 }
 
 fn create_record_writer(

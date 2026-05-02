@@ -1,4 +1,5 @@
 pub mod dsp;
+pub mod target_speaker;
 
 use std::{
     collections::HashMap,
@@ -23,8 +24,8 @@ use crate::{
 };
 
 use self::dsp::{
-    build_overlap_window, linear_resample, project_removed_to_channels, rms, MaskingOptions,
-    WienerMasker,
+    build_overlap_window, linear_resample, project_removed_to_channels, rms, sinc_resample,
+    MaskingOptions, StreamingSincResampler, WienerMasker,
 };
 
 const OUTER_CHUNK_SECONDS: f32 = 10.0;
@@ -40,6 +41,10 @@ pub struct SuppressionProcessor {
     masker: WienerMasker,
     audiosep_live_buffer: Vec<f32>,
     waveformer_live_states: HashMap<usize, WaveformerStreamState>,
+    waveformer_input_resampler: Option<StreamingSincResampler>,
+    waveformer_output_resampler: Option<StreamingSincResampler>,
+    waveformer_live_category_signature: Vec<usize>,
+    waveformer_live_tail: Vec<f32>,
 }
 
 enum ModelRuntime {
@@ -92,6 +97,10 @@ pub struct EngineRuntimeInfo {
     pub runtime_kind: String,
     pub model_path: Option<String>,
     pub runtime_metadata_paths: Vec<String>,
+    pub model_sample_rate: u32,
+    pub chunk_samples: Option<usize>,
+    pub preferred_live_hop_ms: f32,
+    pub validation_status: String,
 }
 
 impl SharedEngine {
@@ -114,8 +123,31 @@ impl SharedEngine {
         &self.assets.presets
     }
 
-    pub fn preferred_live_hop_ms(&self) -> u32 {
-        self.assets.preferred_live_hop_ms
+    pub fn preferred_live_hop_ms_f32(&self) -> f32 {
+        if self.is_streaming_live_runtime() {
+            if let Some(chunk_samples) = self.assets.chunk_samples {
+                if self.assets.sample_rate > 0 {
+                    return chunk_samples as f32 / self.assets.sample_rate as f32 * 1000.0;
+                }
+            }
+        }
+        self.assets.preferred_live_hop_ms.max(1) as f32
+    }
+
+    pub fn preferred_live_hop_samples(&self, input_rate: u32) -> usize {
+        if self.is_streaming_live_runtime() {
+            if let Some(chunk_samples) = self.assets.chunk_samples {
+                if self.assets.sample_rate > 0 {
+                    return ((chunk_samples as f64 * input_rate as f64
+                        / self.assets.sample_rate as f64)
+                        .round()
+                        .max(1.0)) as usize;
+                }
+            }
+        }
+        ((input_rate as f32 * self.preferred_live_hop_ms_f32() / 1000.0)
+            .round()
+            .max(1.0)) as usize
     }
 
     pub fn is_streaming_live_runtime(&self) -> bool {
@@ -128,7 +160,9 @@ impl SharedEngine {
 
     pub fn validate_selected_categories(&self, categories: &[String]) -> AppResult<()> {
         if categories.is_empty() {
-            return Err(AppError::message("at least one model category must be selected"));
+            return Err(AppError::message(
+                "at least one model category must be selected",
+            ));
         }
         if !categories
             .iter()
@@ -149,6 +183,10 @@ impl SharedEngine {
             masker: WienerMasker::default(),
             audiosep_live_buffer: Vec::new(),
             waveformer_live_states: HashMap::new(),
+            waveformer_input_resampler: None,
+            waveformer_output_resampler: None,
+            waveformer_live_category_signature: Vec::new(),
+            waveformer_live_tail: Vec::new(),
         })
     }
 
@@ -163,13 +201,19 @@ impl SharedEngine {
             display_name: self.assets.display_name.clone(),
             suppression_strategy: self.assets.suppression_strategy.clone(),
             runtime_kind: self.assets.runtime_kind.clone(),
-            model_path: runtime.as_ref().map(|runtime| runtime.model_path().to_string()),
+            model_path: runtime
+                .as_ref()
+                .map(|runtime| runtime.model_path().to_string()),
             runtime_metadata_paths: self
                 .assets
                 .runtime_metadata_paths
                 .iter()
                 .map(|path| path.to_string_lossy().to_string())
                 .collect(),
+            model_sample_rate: self.assets.sample_rate,
+            chunk_samples: self.assets.chunk_samples,
+            preferred_live_hop_ms: self.preferred_live_hop_ms_f32(),
+            validation_status: self.assets.validation_status.clone(),
         }
     }
 
@@ -219,12 +263,20 @@ impl SuppressionProcessor {
         F: FnMut(f32),
     {
         match self.runtime.as_ref() {
-            ModelRuntime::AudioSep(_) => {
-                self.process_offline_audiosep(audio, categories, aggressiveness, cancel_flag, progress)
-            }
-            ModelRuntime::Waveformer(_) => {
-                self.process_offline_waveformer(audio, categories, aggressiveness, cancel_flag, progress)
-            }
+            ModelRuntime::AudioSep(_) => self.process_offline_audiosep(
+                audio,
+                categories,
+                aggressiveness,
+                cancel_flag,
+                progress,
+            ),
+            ModelRuntime::Waveformer(_) => self.process_offline_waveformer(
+                audio,
+                categories,
+                aggressiveness,
+                cancel_flag,
+                progress,
+            ),
         }
     }
 
@@ -237,12 +289,20 @@ impl SuppressionProcessor {
         cancel_flag: &AtomicBool,
     ) -> AppResult<Vec<f32>> {
         match self.runtime.as_ref() {
-            ModelRuntime::AudioSep(_) => {
-                self.suppress_live_chunk_audiosep(chunk, sample_rate, categories, aggressiveness, cancel_flag)
-            }
-            ModelRuntime::Waveformer(_) => {
-                self.suppress_live_chunk_waveformer(chunk, sample_rate, categories, aggressiveness, cancel_flag)
-            }
+            ModelRuntime::AudioSep(_) => self.suppress_live_chunk_audiosep(
+                chunk,
+                sample_rate,
+                categories,
+                aggressiveness,
+                cancel_flag,
+            ),
+            ModelRuntime::Waveformer(_) => self.suppress_live_chunk_waveformer(
+                chunk,
+                sample_rate,
+                categories,
+                aggressiveness,
+                cancel_flag,
+            ),
         }
     }
 
@@ -258,14 +318,18 @@ impl SuppressionProcessor {
         F: FnMut(f32),
     {
         let frame_count = audio.frame_count();
-        let chunk_size = (audio.sample_rate as f32 * OUTER_CHUNK_SECONDS).round().max(1.0) as usize;
+        let chunk_size = (audio.sample_rate as f32 * OUTER_CHUNK_SECONDS)
+            .round()
+            .max(1.0) as usize;
         let overlap_seconds = self
             .runtime
             .as_ref()
             .audiosep_runtime()
             .map(|runtime| runtime.overlap_seconds())
             .unwrap_or(1.0);
-        let overlap = (audio.sample_rate as f32 * overlap_seconds).round().max(0.0) as usize;
+        let overlap = (audio.sample_rate as f32 * overlap_seconds)
+            .round()
+            .max(0.0) as usize;
         let step = chunk_size.saturating_sub(overlap).max(1);
 
         let mut clean_channels = vec![vec![0.0f32; frame_count]; audio.channel_count().max(1)];
@@ -320,8 +384,8 @@ impl SuppressionProcessor {
 
                 for channel_index in 0..audio.channel_count() {
                     for frame_index in 0..clean_mono.len() {
-                        let cleaned =
-                            original_chunk[channel_index][frame_index] - removed[channel_index][frame_index];
+                        let cleaned = original_chunk[channel_index][frame_index]
+                            - removed[channel_index][frame_index];
                         clean_channels[channel_index][start + frame_index] +=
                             cleaned * chunk_window[frame_index];
                     }
@@ -342,7 +406,10 @@ impl SuppressionProcessor {
             }
         }
 
-        Ok(DecodedAudio::from_channels(audio.sample_rate, clean_channels))
+        Ok(DecodedAudio::from_channels(
+            audio.sample_rate,
+            clean_channels,
+        ))
     }
 
     fn process_offline_waveformer<F>(
@@ -367,7 +434,8 @@ impl SuppressionProcessor {
             .iter()
             .map(|sample| (*sample / peak).clamp(-1.0, 1.0))
             .collect::<Vec<_>>();
-        let mut clean_resampled = linear_resample(&normalized, audio.sample_rate, runtime.sample_rate);
+        let mut clean_resampled =
+            sinc_resample(&normalized, audio.sample_rate, runtime.sample_rate)?;
         let chunks_per_pass = clean_resampled.len().div_ceil(runtime.chunk_samples).max(1);
         let total_steps = (chunks_per_pass * categories.len().max(1)) as f32;
         let mut completed_steps = 0.0f32;
@@ -379,7 +447,8 @@ impl SuppressionProcessor {
 
             let category_index = runtime.category_index(category_id)?;
             let mut state = runtime.new_state();
-            let scale = self.effective_aggressiveness(category_id, aggressiveness)
+            let scale = self
+                .effective_aggressiveness(category_id, aggressiveness)
                 .clamp(0.5, 2.0);
             clean_resampled = runtime.suppress_audio_with_state(
                 &clean_resampled,
@@ -394,7 +463,7 @@ impl SuppressionProcessor {
             )?;
         }
 
-        let mut clean = linear_resample(&clean_resampled, runtime.sample_rate, audio.sample_rate);
+        let mut clean = sinc_resample(&clean_resampled, runtime.sample_rate, audio.sample_rate)?;
         clean.resize(mono.len(), 0.0);
         clean.truncate(mono.len());
         for sample in &mut clean {
@@ -420,7 +489,10 @@ impl SuppressionProcessor {
         }
 
         progress(1.0);
-        Ok(DecodedAudio::from_channels(audio.sample_rate, clean_channels))
+        Ok(DecodedAudio::from_channels(
+            audio.sample_rate,
+            clean_channels,
+        ))
     }
 
     fn suppress_live_chunk_audiosep(
@@ -439,9 +511,8 @@ impl SuppressionProcessor {
         }
 
         self.audiosep_live_buffer.extend_from_slice(chunk);
-        let context_samples = (sample_rate as f32
-            * runtime.segment_seconds().max(1.0))
-            .round() as usize;
+        let context_samples =
+            (sample_rate as f32 * runtime.segment_seconds().max(1.0)).round() as usize;
         if self.audiosep_live_buffer.len() > context_samples {
             let overflow = self.audiosep_live_buffer.len() - context_samples;
             self.audiosep_live_buffer.drain(0..overflow);
@@ -477,6 +548,16 @@ impl SuppressionProcessor {
             return Err(AppError::Cancelled);
         }
 
+        let category_indices = categories
+            .iter()
+            .map(|category_id| runtime.category_index(category_id))
+            .collect::<AppResult<Vec<_>>>()?;
+        if self.waveformer_live_category_signature != category_indices {
+            self.waveformer_live_states.clear();
+            self.waveformer_live_tail.clear();
+            self.waveformer_live_category_signature = category_indices.clone();
+        }
+
         let peak = chunk
             .iter()
             .fold(1.0f32, |current, sample| current.max(sample.abs()));
@@ -484,11 +565,18 @@ impl SuppressionProcessor {
             .iter()
             .map(|sample| (*sample / peak).clamp(-1.0, 1.0))
             .collect::<Vec<_>>();
-        let mut clean_resampled = linear_resample(&normalized, sample_rate, runtime.sample_rate);
+        let mut clean_resampled = live_sinc_resample_to_len(
+            &mut self.waveformer_input_resampler,
+            &normalized,
+            sample_rate,
+            runtime.sample_rate,
+            runtime.chunk_samples,
+        )?;
 
-        for category_id in categories {
-            let category_index = runtime.category_index(category_id)?;
-            let scale = self.effective_aggressiveness(category_id, aggressiveness)
+        for (category_id, category_index) in categories.iter().zip(category_indices.iter().copied())
+        {
+            let scale = self
+                .effective_aggressiveness(category_id, aggressiveness)
                 .clamp(0.5, 2.0);
             let state = self
                 .waveformer_live_states
@@ -504,12 +592,20 @@ impl SuppressionProcessor {
             )?;
         }
 
-        let mut clean = linear_resample(&clean_resampled, runtime.sample_rate, sample_rate);
-        clean.resize(chunk.len(), 0.0);
-        clean.truncate(chunk.len());
+        let mut clean = live_sinc_resample_to_len(
+            &mut self.waveformer_output_resampler,
+            &clean_resampled,
+            runtime.sample_rate,
+            sample_rate,
+            chunk.len(),
+        )?;
         for sample in &mut clean {
-            *sample *= peak;
+            *sample = (*sample * peak).clamp(-1.0, 1.0);
+            if !sample.is_finite() {
+                *sample = 0.0;
+            }
         }
+        smooth_live_boundary(&mut clean, &mut self.waveformer_live_tail, sample_rate);
         Ok(clean)
     }
 
@@ -540,7 +636,8 @@ impl SuppressionProcessor {
             .map(|sample| (*sample / peak).clamp(-1.0, 1.0))
             .collect::<Vec<_>>();
         let resampled = linear_resample(&normalized, sample_rate, runtime.sample_rate);
-        let unwanted_resampled = runtime.separate_categories(&resampled, categories, cancel_flag)?;
+        let unwanted_resampled =
+            runtime.separate_categories(&resampled, categories, cancel_flag)?;
         let mut unwanted = linear_resample(&unwanted_resampled, runtime.sample_rate, sample_rate);
         unwanted.resize(mono.len(), 0.0);
         unwanted.truncate(mono.len());
@@ -619,17 +716,16 @@ impl AudioSepRuntime {
         let segment_seconds = assets.segment_seconds.unwrap_or(5.0);
         let sample_rate = assets.sample_rate;
         let warmup_audio = vec![0.0f32; (sample_rate as f32 * segment_seconds) as usize];
-        let _ = Self::run_window_inner(
-            &mut session,
-            &warmup_audio,
-            0,
-            sample_rate,
-            segment_seconds,
-        )?;
+        let _ =
+            Self::run_window_inner(&mut session, &warmup_audio, 0, sample_rate, segment_seconds)?;
 
         Ok(Self {
             session: Mutex::new(session),
-            category_order: assets.categories.iter().map(|category| category.id.clone()).collect(),
+            category_order: assets
+                .categories
+                .iter()
+                .map(|category| category.id.clone())
+                .collect(),
             model_path: assets.model_path.display().to_string(),
             sample_rate,
             segment_samples: (sample_rate as f32 * segment_seconds) as usize,
@@ -675,7 +771,10 @@ impl AudioSepRuntime {
             );
         }
 
-        let step = self.segment_samples.saturating_sub(self.overlap_samples).max(1);
+        let step = self
+            .segment_samples
+            .saturating_sub(self.overlap_samples)
+            .max(1);
         let mut separated = vec![0.0f32; audio.len()];
         let mut weights = vec![0.0f32; audio.len()];
 
@@ -798,7 +897,11 @@ impl WaveformerRuntime {
         let state_shapes = WaveformerStateShapes::from_assets(assets)?;
         let runtime = Self {
             session: Mutex::new(session),
-            category_order: assets.categories.iter().map(|category| category.id.clone()).collect(),
+            category_order: assets
+                .categories
+                .iter()
+                .map(|category| category.id.clone())
+                .collect(),
             model_path: assets.model_path.display().to_string(),
             sample_rate: assets.sample_rate,
             chunk_samples: assets.chunk_samples.unwrap_or(0),
@@ -850,7 +953,13 @@ impl WaveformerRuntime {
             let chunk = &audio[start..end];
             let target = self.run_chunk_inner(&mut session, chunk, category_index, state)?;
             for (mix, extracted) in chunk.iter().zip(target.iter()) {
-                clean.push((mix - scale * extracted).clamp(-1.0, 1.0));
+                let extracted = if extracted.is_finite() {
+                    *extracted
+                } else {
+                    0.0
+                };
+                let sample = (*mix - scale * extracted).clamp(-1.0, 1.0);
+                clean.push(if sample.is_finite() { sample } else { *mix });
             }
             on_chunk();
             if end >= audio.len() {
@@ -981,20 +1090,28 @@ impl WaveformerStateShapes {
             .state_tensors
             .get("enc_buf")
             .cloned()
-            .ok_or_else(|| AppError::message("waveformer desktop config is missing enc_buf shape"))?;
+            .ok_or_else(|| {
+                AppError::message("waveformer desktop config is missing enc_buf shape")
+            })?;
         let dec_buf = assets
             .state_tensors
             .get("dec_buf")
             .cloned()
-            .ok_or_else(|| AppError::message("waveformer desktop config is missing dec_buf shape"))?;
+            .ok_or_else(|| {
+                AppError::message("waveformer desktop config is missing dec_buf shape")
+            })?;
         let out_buf = assets
             .state_tensors
             .get("out_buf")
             .cloned()
-            .ok_or_else(|| AppError::message("waveformer desktop config is missing out_buf shape"))?;
+            .ok_or_else(|| {
+                AppError::message("waveformer desktop config is missing out_buf shape")
+            })?;
 
         if enc_buf.len() != 3 || dec_buf.len() != 4 || out_buf.len() != 3 {
-            return Err(AppError::message("waveformer state tensor ranks are invalid"));
+            return Err(AppError::message(
+                "waveformer state tensor ranks are invalid",
+            ));
         }
 
         Ok(Self {
@@ -1033,9 +1150,62 @@ fn latest_context(rolling_input: &[f32], context_samples: usize) -> Vec<f32> {
     context
 }
 
+fn live_sinc_resample_to_len(
+    slot: &mut Option<StreamingSincResampler>,
+    audio: &[f32],
+    source_rate: u32,
+    target_rate: u32,
+    output_len: usize,
+) -> AppResult<Vec<f32>> {
+    if audio.is_empty() {
+        return Ok(vec![0.0; output_len]);
+    }
+    if source_rate == target_rate {
+        let mut copy = audio.to_vec();
+        dsp::fit_resampled_length(&mut copy, output_len);
+        return Ok(copy);
+    }
+
+    let max_input_frames = audio.len().max(1);
+    let should_rebuild = slot
+        .as_ref()
+        .map(|resampler| !resampler.matches(source_rate, target_rate, max_input_frames))
+        .unwrap_or(true);
+    if should_rebuild {
+        *slot = Some(StreamingSincResampler::new(
+            source_rate,
+            target_rate,
+            max_input_frames,
+        )?);
+    }
+
+    slot.as_mut()
+        .ok_or_else(|| AppError::message("live sinc resampler was not initialized"))?
+        .process_to_len(audio, output_len)
+}
+
+fn smooth_live_boundary(clean: &mut [f32], previous_tail: &mut Vec<f32>, sample_rate: u32) {
+    let fade_samples = ((sample_rate as usize / 500).max(16)).min(256);
+    let fade = fade_samples.min(clean.len()).min(previous_tail.len());
+    if fade > 0 {
+        for index in 0..fade {
+            let t = (index + 1) as f32 / fade as f32;
+            clean[index] = previous_tail[index] * (1.0 - t) + clean[index] * t;
+        }
+    }
+
+    let keep = fade_samples.min(clean.len());
+    previous_tail.clear();
+    if keep > 0 {
+        previous_tail.extend_from_slice(&clean[clean.len() - keep..]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::engine::dsp::build_overlap_window;
+    use crate::engine::{
+        dsp::build_overlap_window, live_sinc_resample_to_len, smooth_live_boundary,
+    };
 
     #[test]
     fn outer_chunk_overlap_matches_expected_seconds() {
@@ -1046,5 +1216,24 @@ mod tests {
         assert_eq!(window.len(), chunk_size);
         assert!(window[0] < 0.001);
         assert!(window[overlap - 1] > 0.9);
+    }
+
+    #[test]
+    fn live_sinc_resampler_returns_exact_waveformer_chunk_size() {
+        let input = vec![0.0f32; 4807];
+        let mut resampler = None;
+        let output = live_sinc_resample_to_len(&mut resampler, &input, 48_000, 44_100, 4416)
+            .expect("live resampling should work");
+        assert_eq!(output.len(), 4416);
+    }
+
+    #[test]
+    fn boundary_smoothing_preserves_length_and_updates_tail() {
+        let mut clean = vec![1.0f32; 128];
+        let mut tail = vec![0.0f32; 128];
+        smooth_live_boundary(&mut clean, &mut tail, 48_000);
+        assert_eq!(clean.len(), 128);
+        assert!(!tail.is_empty());
+        assert!(clean[0] < 1.0);
     }
 }

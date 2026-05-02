@@ -36,11 +36,16 @@
     },
     "resources": {
       "../../ai/models/model_selection.json": "models/model_selection.json",
-      "../../ai/models/AudioSepHive15Cat/": "models/AudioSepHive15Cat/",
-      "../../ai/models/CodecSepDNRv2_15Cat/": "models/CodecSepDNRv2_15Cat/",
       "../../ai/models/Waveformer/model_package.json": "models/Waveformer/model_package.json",
       "../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx": "models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
       "../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json": "models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json",
+      "../../ai/models/TargetSpeakerWindows/model_package.json": "models/TargetSpeakerWindows/model_package.json",
+      "../../ai/models/exports/target_speaker_windows/tsextract/tsextract_fp32.validation.json": "models/exports/target_speaker_windows/tsextract/tsextract_fp32.validation.json",
+      "../../ai/models/exports/target_speaker_windows/windows_bundle_slim/windows_bundle_manifest.json": "models/exports/target_speaker_windows/windows_bundle_slim/windows_bundle_manifest.json",
+      "../../ai/models/exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.manifest.json": "models/exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.manifest.json",
+      "../../ai/models/exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.onnx": "models/exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.onnx",
+      "../../ai/models/exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.onnx.data": "models/exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.onnx.data",
+      "../../ai/models/exports/target_speaker_windows/windows_bundle_slim/clearvoice_native/": "models/exports/target_speaker_windows/windows_bundle_slim/clearvoice_native/",
       "./runtime/": "runtime/"
     }
   }
