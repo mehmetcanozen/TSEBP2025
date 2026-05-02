@@ -161,3 +161,4 @@ lerna-debug.log*
 *.ntvs*
 *.njsproj
 *.sln
+ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx
