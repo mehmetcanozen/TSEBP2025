@@ -1,7 +1,4 @@
-use std::{
-    fs::File,
-    path::Path,
-};
+use std::{fs::File, path::Path};
 
 use hound::{SampleFormat, WavSpec, WavWriter};
 use symphonia::core::{
@@ -24,11 +21,17 @@ pub struct DecodedAudio {
 
 impl DecodedAudio {
     pub fn from_channels(sample_rate: u32, channels: Vec<Vec<f32>>) -> Self {
-        Self { sample_rate, channels }
+        Self {
+            sample_rate,
+            channels,
+        }
     }
 
     pub fn frame_count(&self) -> usize {
-        self.channels.first().map(|channel| channel.len()).unwrap_or(0)
+        self.channels
+            .first()
+            .map(|channel| channel.len())
+            .unwrap_or(0)
     }
 
     pub fn channel_count(&self) -> usize {
@@ -84,20 +87,39 @@ pub fn decode_audio_file(path: &Path) -> AppResult<DecodedAudio> {
     let mut format = probed.format;
     let track = format
         .default_track()
-        .or_else(|| format.tracks().iter().find(|track| track.codec_params.codec != CODEC_TYPE_NULL))
-        .ok_or_else(|| AppError::message(format!("no decodable audio track found in '{}'", path.display())))?;
+        .or_else(|| {
+            format
+                .tracks()
+                .iter()
+                .find(|track| track.codec_params.codec != CODEC_TYPE_NULL)
+        })
+        .ok_or_else(|| {
+            AppError::message(format!(
+                "no decodable audio track found in '{}'",
+                path.display()
+            ))
+        })?;
 
-    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default())?;
+    let mut decoder =
+        symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default())?;
     let track_id = track.id;
 
     let mut sample_rate = track.codec_params.sample_rate.unwrap_or(0);
-    let mut channel_count = track.codec_params.channels.map(|channels| channels.count()).unwrap_or(0);
+    let mut channel_count = track
+        .codec_params
+        .channels
+        .map(|channels| channels.count())
+        .unwrap_or(0);
     let mut interleaved = Vec::<f32>::new();
 
     loop {
         let packet = match format.next_packet() {
             Ok(packet) => packet,
-            Err(SymphoniaError::IoError(error)) if error.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(SymphoniaError::IoError(error))
+                if error.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                break
+            }
             Err(error) => return Err(error.into()),
         };
 
@@ -131,7 +153,8 @@ pub fn decode_audio_file(path: &Path) -> AppResult<DecodedAudio> {
     let mut channels = vec![vec![0.0f32; frame_count]; channel_count];
     for frame_index in 0..frame_count {
         for channel_index in 0..channel_count {
-            channels[channel_index][frame_index] = interleaved[frame_index * channel_count + channel_index];
+            channels[channel_index][frame_index] =
+                interleaved[frame_index * channel_count + channel_index];
         }
     }
 
@@ -149,7 +172,8 @@ pub fn write_wav_float(path: &Path, audio: &DecodedAudio) -> AppResult<()> {
         bits_per_sample: 32,
         sample_format: SampleFormat::Float,
     };
-    let mut writer = WavWriter::create(path, spec).map_err(|error| AppError::message(error.to_string()))?;
+    let mut writer =
+        WavWriter::create(path, spec).map_err(|error| AppError::message(error.to_string()))?;
     let frames = audio.frame_count();
     let channels = audio.channel_count();
 
@@ -161,6 +185,8 @@ pub fn write_wav_float(path: &Path, audio: &DecodedAudio) -> AppResult<()> {
         }
     }
 
-    writer.finalize().map_err(|error| AppError::message(error.to_string()))?;
+    writer
+        .finalize()
+        .map_err(|error| AppError::message(error.to_string()))?;
     Ok(())
 }

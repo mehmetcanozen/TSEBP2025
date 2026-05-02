@@ -37,7 +37,12 @@ pub fn run() {
             commands::list_audio_devices,
             commands::get_virtual_mic_status,
             commands::get_runtime_metrics,
+            commands::get_target_speaker_runtime_info,
+            commands::list_speaker_profiles,
+            commands::save_speaker_profile,
+            commands::delete_speaker_profile,
             commands::start_offline_job,
+            commands::start_target_speaker_job,
             commands::cancel_offline_job,
             commands::start_live_monitor,
             commands::stop_live_monitor
@@ -45,4 +50,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

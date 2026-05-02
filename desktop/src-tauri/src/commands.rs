@@ -4,9 +4,11 @@ use tauri::{ipc::Channel, AppHandle, State};
 
 use crate::{
     models::{
-        CancelOfflineJobRequest, Hive15Preset, JobHandle, LiveMeterEvent, LiveSessionHandle,
-        LiveStatusEvent, ModelCategory, OfflineProgressEvent, RuntimeMetrics, StartLiveMonitorRequest,
-        StartOfflineJobRequest, StopLiveMonitorRequest,
+        CancelOfflineJobRequest, DeleteSpeakerProfileRequest, Hive15Preset, JobHandle,
+        LiveMeterEvent, LiveSessionHandle, LiveStatusEvent, ModelCategory, OfflineProgressEvent,
+        RuntimeMetrics, SaveSpeakerProfileRequest, SpeakerProfile, StartLiveMonitorRequest,
+        StartOfflineJobRequest, StartTargetSpeakerJobRequest, StopLiveMonitorRequest,
+        TargetSpeakerRuntimeInfo,
     },
     state::AppState,
 };
@@ -24,18 +26,60 @@ pub fn get_hive15_presets(state: SharedState<'_>) -> Result<Vec<Hive15Preset>, S
 }
 
 #[tauri::command]
-pub fn list_audio_devices(state: SharedState<'_>) -> Result<Vec<crate::models::AudioDevice>, String> {
-    state.list_audio_devices().map_err(|error| error.to_string())
+pub fn list_audio_devices(
+    state: SharedState<'_>,
+) -> Result<Vec<crate::models::AudioDevice>, String> {
+    state
+        .list_audio_devices()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub fn get_virtual_mic_status(state: SharedState<'_>) -> Result<crate::models::VirtualMicStatus, String> {
-    state.get_virtual_mic_status().map_err(|error| error.to_string())
+pub fn get_virtual_mic_status(
+    state: SharedState<'_>,
+) -> Result<crate::models::VirtualMicStatus, String> {
+    state
+        .get_virtual_mic_status()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn get_runtime_metrics(state: SharedState<'_>) -> Result<RuntimeMetrics, String> {
     state.runtime_metrics().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_target_speaker_runtime_info(
+    state: SharedState<'_>,
+) -> Result<TargetSpeakerRuntimeInfo, String> {
+    Ok(state.target_speaker_runtime_info())
+}
+
+#[tauri::command]
+pub fn list_speaker_profiles(state: SharedState<'_>) -> Result<Vec<SpeakerProfile>, String> {
+    state
+        .list_speaker_profiles()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_speaker_profile(
+    state: SharedState<'_>,
+    request: SaveSpeakerProfileRequest,
+) -> Result<SpeakerProfile, String> {
+    state
+        .save_speaker_profile(request)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_speaker_profile(
+    state: SharedState<'_>,
+    request: DeleteSpeakerProfileRequest,
+) -> Result<(), String> {
+    state
+        .delete_speaker_profile(request)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -52,8 +96,25 @@ pub async fn start_offline_job(
 }
 
 #[tauri::command]
-pub fn cancel_offline_job(state: SharedState<'_>, request: CancelOfflineJobRequest) -> Result<(), String> {
-    state.cancel_offline_job(&request.job_id).map_err(|error| error.to_string())
+pub async fn start_target_speaker_job(
+    state: SharedState<'_>,
+    request: StartTargetSpeakerJobRequest,
+    progress_channel: Channel<OfflineProgressEvent>,
+) -> Result<JobHandle, String> {
+    state
+        .start_target_speaker_job(request, progress_channel)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn cancel_offline_job(
+    state: SharedState<'_>,
+    request: CancelOfflineJobRequest,
+) -> Result<(), String> {
+    state
+        .cancel_offline_job(&request.job_id)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -70,7 +131,10 @@ pub async fn start_live_monitor(
 }
 
 #[tauri::command]
-pub fn stop_live_monitor(state: SharedState<'_>, request: StopLiveMonitorRequest) -> Result<(), String> {
+pub fn stop_live_monitor(
+    state: SharedState<'_>,
+    request: StopLiveMonitorRequest,
+) -> Result<(), String> {
     state
         .stop_live_monitor(&request.session_id)
         .map_err(|error| error.to_string())

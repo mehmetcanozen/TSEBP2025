@@ -1,12 +1,83 @@
 {
   "schema_version": 1,
   "model_id": "waveformer_edge_100ms",
-  "package_version": "waveformer_edge_100ms_20260418",
+  "package_version": "waveformer_edge_100ms_20260430_mobile_onnx",
   "family": "waveformer",
   "display_name": "Waveformer Edge 100ms",
-  "description": "Streaming Waveformer target extractor using the exported 100 ms edge deployments for desktop ONNX and mobile ExecuTorch.",
+  "description": "Streaming Waveformer target extractor using the validated 100 ms ONNX deployment for desktop and Android edge runtimes.",
   "suppression_strategy": {
-    "kind": "streaming_target_subtraction"
+    "kind": "direct_residual",
+    "formula": "clean = mixture - aggressiveness * target_chunk",
+    "target": "selected unwanted semantic category"
+  },
+  "export_contract": {
+    "desktop_runtime": "onnxruntime_cpu",
+    "android_runtime": "onnxruntime_android_cpu",
+    "sample_rate": 44100,
+    "chunk_samples": 4416,
+    "chunk_ms": 100.1360544217687,
+    "inputs": {
+      "mixture": [
+        1,
+        2,
+        4416
+      ],
+      "label_vector": [
+        1,
+        20
+      ],
+      "enc_buf": [
+        1,
+        256,
+        2046
+      ],
+      "dec_buf": [
+        1,
+        2,
+        13,
+        256
+      ],
+      "out_buf": [
+        1,
+        256,
+        4
+      ]
+    },
+    "outputs": [
+      "target_chunk",
+      "enc_buf_out",
+      "dec_buf_out",
+      "out_buf_out"
+    ]
+  },
+  "validation_summary": {
+    "status": "onnx_contract_validated_cpu",
+    "audit_script": "ai/scripts/audit_waveformer_onnx.py",
+    "last_audit": {
+      "provider": "CPUExecutionProvider",
+      "opset": 20,
+      "two_step_stateful_smoke": "passed"
+    },
+    "known_reference_cases": [
+      {
+        "case": "speech_barking_to_speech",
+        "target": "dog",
+        "snr_improvement_db": 4.93,
+        "si_snr_improvement_db": 9.26
+      },
+      {
+        "case": "speech_keyboard_to_speech",
+        "target": "computer_typing",
+        "snr_improvement_db": 0.58,
+        "si_snr_improvement_db": 6.32
+      }
+    ]
+  },
+  "optimized_model_path": "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
+  "edge_profile": {
+    "primary_target": "windows_desktop_cpu_and_android_cpu",
+    "live_category_budget": 2,
+    "package_role": "default_realtime_semantic_suppressor"
   },
   "categories": [
     {
@@ -199,10 +270,10 @@
       }
     },
     "android": {
-      "runtime_kind": "executorch_streaming_target_extractor",
-      "artifact": "WFExports/executorch_recommended_100ms/semantic_hearing_100ms_portable.pte",
+      "runtime_kind": "onnx_streaming_target_extractor",
+      "artifact": "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
       "metadata_artifacts": [
-        "WFExports/executorch_recommended_100ms/semantic_hearing_100ms_portable.pte.json"
+        "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json"
       ],
       "sample_rate": 44100,
       "chunk_samples": 4416,

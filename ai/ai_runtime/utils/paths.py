@@ -68,6 +68,21 @@ def get_waveformer_experiments_path() -> Path:
     return get_waveformer_model_path() / "experiments"
 
 
+def get_waveformer_model_package_path() -> Path:
+    """Return the packaged Waveformer desktop/mobile model manifest."""
+    return get_waveformer_model_path() / "model_package.json"
+
+
+def get_waveformer_desktop_onnx_path() -> Path:
+    """Return the Waveformer desktop streaming ONNX export path."""
+    return (
+        get_waveformer_model_path()
+        / "WFExports"
+        / "windows_desktop_onnx"
+        / "semantic_hearing_100ms_windows.onnx"
+    )
+
+
 def get_yamnet_model_path() -> Path:
     """Return the YAMNet model directory (ai/models/YAMNet/)."""
     return get_models_path() / "YAMNet"

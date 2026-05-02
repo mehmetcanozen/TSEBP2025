@@ -50,6 +50,52 @@ export interface RuntimeMetrics {
   activeJobs: number;
   modelPath?: string | null;
   runtimeMetadataPaths: string[];
+  modelSampleRate: number;
+  chunkSamples?: number | null;
+  preferredLiveHopMs: number;
+  validationStatus: string;
+}
+
+export type TargetSpeakerEngine = "tsextract_onnx" | "clearvoice_bundle";
+export type TargetSpeakerOutputMode = "remove_target" | "extract_target";
+export type LiveProcessingMode = "semanticSuppression" | "speakerSuppression";
+
+export interface TargetSpeakerRuntimeInfo {
+  modelId: string;
+  displayName: string;
+  runtimeKind: string;
+  defaultEngine: TargetSpeakerEngine;
+  availableEngines: TargetSpeakerEngine[];
+  modelSampleRate: number;
+  mixtureSamples: number;
+  referenceSamples: number;
+  validationStatus: string;
+  runtimeMetadataPaths: string[];
+  bundleManifestPath?: string | null;
+  tsextractOnnxPath?: string | null;
+  clearvoiceBundlePath?: string | null;
+  onnxSidecarPresent: boolean;
+  clearvoiceReady: boolean;
+}
+
+export interface SpeakerProfile {
+  id: string;
+  name: string;
+  referencePath: string;
+  sourcePath?: string | null;
+  sampleRate: number;
+  durationMs: number;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+export interface SaveSpeakerProfileRequest {
+  name: string;
+  referencePath: string;
+}
+
+export interface DeleteSpeakerProfileRequest {
+  profileId: string;
 }
 
 export interface StartOfflineJobRequest {
@@ -59,11 +105,21 @@ export interface StartOfflineJobRequest {
   aggressiveness: number;
 }
 
+export interface StartTargetSpeakerJobRequest {
+  inputPath: string;
+  referencePath: string;
+  outputPath: string;
+  engine: TargetSpeakerEngine;
+  outputMode: TargetSpeakerOutputMode;
+  removalScale: number;
+}
+
 export interface CancelOfflineJobRequest {
   jobId: string;
 }
 
 export interface StartLiveMonitorRequest {
+  processingMode?: LiveProcessingMode;
   inputDeviceId?: string | null;
   outputDeviceId?: string | null;
   outputMode: "monitor" | "virtualMic";
@@ -72,6 +128,10 @@ export interface StartLiveMonitorRequest {
   aggressiveness: number;
   lookaheadMs: number;
   recordOutputPath?: string | null;
+  speakerReferencePath?: string | null;
+  speakerEngine?: TargetSpeakerEngine | null;
+  speakerOutputMode?: TargetSpeakerOutputMode | null;
+  speakerRemovalScale?: number | null;
 }
 
 export interface StopLiveMonitorRequest {
@@ -103,6 +163,8 @@ export interface LiveStatusEvent {
   outputMode: "monitor" | "virtualMic";
   lookaheadMs: number;
   inferenceMs?: number | null;
+  inferenceMsP50?: number | null;
+  inferenceMsP95?: number | null;
   queueDepthMs?: number | null;
   estimatedLatencyMs?: number | null;
   realtimeHealth: "idle" | "ok" | "warning" | "overloaded";
@@ -184,6 +246,28 @@ const FALLBACK_RUNTIME_METRICS: RuntimeMetrics = {
   activeJobs: 0,
   modelPath: null,
   runtimeMetadataPaths: [],
+  modelSampleRate: 44100,
+  chunkSamples: 4416,
+  preferredLiveHopMs: 100.136,
+  validationStatus: "web-fallback",
+};
+
+const FALLBACK_TARGET_SPEAKER_INFO: TargetSpeakerRuntimeInfo = {
+  modelId: "target_speaker_windows",
+  displayName: "Target Speaker Suppression",
+  runtimeKind: "target_speaker_windows_bundle",
+  defaultEngine: "tsextract_onnx",
+  availableEngines: ["tsextract_onnx", "clearvoice_bundle"],
+  modelSampleRate: 8000,
+  mixtureSamples: 80000,
+  referenceSamples: 24000,
+  validationStatus: "desktop-bridge-unavailable",
+  runtimeMetadataPaths: [],
+  bundleManifestPath: null,
+  tsextractOnnxPath: null,
+  clearvoiceBundlePath: null,
+  onnxSidecarPresent: false,
+  clearvoiceReady: false,
 };
 
 const FALLBACK_VIRTUAL_MIC_STATUS: VirtualMicStatus = {
@@ -289,6 +373,51 @@ export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {
   return invoke<RuntimeMetrics>("get_runtime_metrics");
 }
 
+export async function getTargetSpeakerRuntimeInfo(): Promise<TargetSpeakerRuntimeInfo> {
+  if (!isTauriDesktop()) {
+    return FALLBACK_TARGET_SPEAKER_INFO;
+  }
+
+  const { invoke } = await loadTauriCore();
+  return invoke<TargetSpeakerRuntimeInfo>("get_target_speaker_runtime_info");
+}
+
+export async function listSpeakerProfiles(): Promise<SpeakerProfile[]> {
+  if (!isTauriDesktop()) {
+    return [];
+  }
+
+  const { invoke } = await loadTauriCore();
+  return invoke<SpeakerProfile[]>("list_speaker_profiles");
+}
+
+export async function saveSpeakerProfile(request: SaveSpeakerProfileRequest): Promise<SpeakerProfile> {
+  if (!isTauriDesktop()) {
+    return {
+      id: `mock-speaker-profile-${Date.now()}`,
+      name: request.name,
+      referencePath: request.referencePath,
+      sourcePath: request.referencePath,
+      sampleRate: 0,
+      durationMs: 0,
+      createdAtMs: Date.now(),
+      updatedAtMs: Date.now(),
+    };
+  }
+
+  const { invoke } = await loadTauriCore();
+  return invoke<SpeakerProfile>("save_speaker_profile", { request });
+}
+
+export async function deleteSpeakerProfile(request: DeleteSpeakerProfileRequest): Promise<void> {
+  if (!isTauriDesktop()) {
+    return;
+  }
+
+  const { invoke } = await loadTauriCore();
+  await invoke("delete_speaker_profile", { request });
+}
+
 export async function startOfflineJob(
   request: StartOfflineJobRequest,
   onProgress: (event: OfflineProgressEvent) => void,
@@ -309,6 +438,31 @@ export async function startOfflineJob(
   const progressChannel = new Channel<OfflineProgressEvent>();
   progressChannel.onmessage = onProgress;
   return invoke<{ jobId: string }>("start_offline_job", {
+    request,
+    progressChannel,
+  });
+}
+
+export async function startTargetSpeakerJob(
+  request: StartTargetSpeakerJobRequest,
+  onProgress: (event: OfflineProgressEvent) => void,
+): Promise<{ jobId: string }> {
+  if (!isTauriDesktop()) {
+    const jobId = `mock-target-speaker-${Date.now()}`;
+    onProgress({
+      jobId,
+      stage: "completed",
+      progress: 100,
+      message: "Desktop bridge unavailable in browser mode.",
+      outputPath: request.outputPath,
+    });
+    return { jobId };
+  }
+
+  const { invoke, Channel } = await loadTauriCore();
+  const progressChannel = new Channel<OfflineProgressEvent>();
+  progressChannel.onmessage = onProgress;
+  return invoke<{ jobId: string }>("start_target_speaker_job", {
     request,
     progressChannel,
   });
