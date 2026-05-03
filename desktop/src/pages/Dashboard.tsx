@@ -2,6 +2,7 @@ import HeaderBar from "@/components/HeaderBar";
 import CategorySelector from "@/components/desktop/CategorySelector";
 import PresetStrip from "@/components/desktop/PresetStrip";
 import SignalMeter from "@/components/desktop/SignalMeter";
+import TransmissionTestPanel from "@/components/desktop/TransmissionTestPanel";
 import { useDesktopRuntime } from "@/contexts/DesktopRuntimeContext";
 import { AudioWaveform, RefreshCw, Scissors, UserRound } from "lucide-react";
 
@@ -53,9 +54,7 @@ const Dashboard = () => {
     selectedSpeakerProfileId,
     speakerProfileName,
     lookaheadMs,
-    outputMode,
     inputDeviceId,
-    outputDeviceId,
     inputPath,
     outputPath,
     debugInputEnabled,
@@ -84,9 +83,7 @@ const Dashboard = () => {
     setSelectedSpeakerProfileId,
     setSpeakerProfileName,
     setLookaheadMs,
-    setOutputMode,
     setInputDeviceId,
-    setOutputDeviceId,
     setInputPath,
     setOutputPath,
     setDebugInputEnabled,
@@ -118,41 +115,66 @@ const Dashboard = () => {
   const inputDevices = devices.filter((device) => device.direction === "input");
   const outputDevices = devices.filter((device) => device.direction === "output");
   const selectedInputDevice = inputDevices.find((device) => device.id === inputDeviceId);
+  const effectiveLiveInputDevice = selectedInputDevice ?? inputDevices.find((device) => device.default);
   const virtualMicReady = Boolean(virtualMicStatus?.installed && virtualMicStatus.playbackDeviceId);
   const virtualMicPlaybackName = virtualMicStatus?.playbackDeviceName ?? "CABLE Input";
   const virtualMicRecordingName = virtualMicStatus?.recordingDeviceName ?? "CABLE Output";
   const selectedSpeakerProfile = speakerProfiles.find((profile) => profile.id === selectedSpeakerProfileId);
-  const liveStartDisabled = isStartingLive || isLoading || (outputMode === "virtualMic" && !virtualMicReady);
-  const speakerLiveMicUsesVirtualCableInput =
-    desktopMode === "speakerSuppression" &&
-    outputMode === "virtualMic" &&
+  const liveMicUsesVirtualCableInput =
     !debugInputEnabled &&
-    selectedInputDevice?.virtualCable?.role === "recording";
+    effectiveLiveInputDevice?.virtualCable?.role === "recording";
+  const semanticLiveMicUsesVirtualCableInput =
+    desktopMode === "semanticSuppression" && liveMicUsesVirtualCableInput;
+  const speakerLiveMicUsesVirtualCableInput =
+    desktopMode === "speakerSuppression" && liveMicUsesVirtualCableInput;
   const liveTitle = desktopMode === "speakerSuppression"
-    ? outputMode === "virtualMic"
-      ? "Mic -> speaker profile -> virtual mic"
-      : "Mic -> speaker profile -> monitor"
-    : outputMode === "virtualMic"
-      ? "Mic -> suppress -> virtual mic"
-      : "Mic -> suppress -> monitor";
+    ? debugInputEnabled
+      ? "Debug WAV -> speaker profile -> VB-CABLE"
+      : "Live mic -> speaker profile -> VB-CABLE"
+    : debugInputEnabled
+      ? "Debug WAV -> suppress -> VB-CABLE"
+      : "Live mic -> suppress -> VB-CABLE";
   const speakerEngineLabel = speakerEngine === "tsextract_onnx" ? "Fast ONNX" : "Quality Bundle";
   const speakerOutputLabel = speakerOutputMode === "remove_target" ? "Suppress speaker" : "Extract target";
   const speakerActionLabel =
     speakerOutputMode === "remove_target" ? "Suppress referenced speaker" : "Extract referenced speaker";
-  const speakerLiveActionLabel = outputMode === "virtualMic" ? "Start speaker virtual mic" : "Start speaker realtime";
-  const speakerReferenceReady = Boolean(speakerReferencePath.trim());
-  const speakerRealtimeBlockReason = speakerEngine !== "tsextract_onnx"
-    ? "Realtime uses Fast ONNX."
-    : speakerLiveMicUsesVirtualCableInput
+  const liveActionLabel = debugInputEnabled ? "Start debug WAV route" : "Start live mic route";
+  const semanticRealtimeBlockReason = !virtualMicReady
+    ? "VB-CABLE playback endpoint is required for semantic realtime."
+    : semanticLiveMicUsesVirtualCableInput
       ? "Choose a real microphone as input. CABLE Output is for the target app."
-    : !speakerReferenceReady
-      ? "Choose a reference clip or saved profile."
-      : null;
+      : selectedCategories.length === 0
+        ? "Select at least one category."
+        : debugInputEnabled && !debugInputPath.trim()
+          ? "Choose a debug WAV file."
+          : null;
+  const liveStartDisabled =
+    isStartingLive ||
+    isLoading ||
+    !virtualMicReady ||
+    semanticLiveMicUsesVirtualCableInput ||
+    selectedCategories.length === 0 ||
+    (debugInputEnabled && !debugInputPath.trim());
+  const speakerReferenceReady = Boolean(speakerReferencePath.trim());
+  const speakerRealtimeBlockReason = !virtualMicReady
+    ? "VB-CABLE playback endpoint is required for speaker realtime."
+    : speakerEngine !== "tsextract_onnx"
+      ? "Realtime uses Fast ONNX."
+      : speakerLiveMicUsesVirtualCableInput
+        ? "Choose a real microphone as input. CABLE Output is for the target app."
+        : !speakerReferenceReady
+          ? "Choose a reference clip or saved profile."
+          : debugInputEnabled && !debugInputPath.trim()
+            ? "Choose a debug WAV file."
+            : null;
   const speakerRealtimeDisabled =
-    liveStartDisabled ||
+    isStartingLive ||
+    isLoading ||
+    !virtualMicReady ||
     !speakerReferenceReady ||
     speakerEngine !== "tsextract_onnx" ||
-    speakerLiveMicUsesVirtualCableInput;
+    speakerLiveMicUsesVirtualCableInput ||
+    (debugInputEnabled && !debugInputPath.trim());
   const activeOutputPath = desktopMode === "speakerSuppression" ? speakerOutputPath : outputPath;
 
   const renderSpeakerReferenceControls = () => (
@@ -371,6 +393,7 @@ const Dashboard = () => {
           </section>
 
           {desktopMode === "speakerSuppression" && (
+            <>
             <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
               <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-4">
@@ -396,32 +419,22 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-1">
-                  <div className="grid grid-cols-2 gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setOutputMode("monitor")}
-                      disabled={Boolean(activeLiveSessionId)}
-                      className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                        outputMode === "monitor"
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
-                      }`}
-                    >
-                      Listen locally
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOutputMode("virtualMic")}
-                      disabled={Boolean(activeLiveSessionId) || !virtualMicReady}
-                      className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                        outputMode === "virtualMic"
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
-                      }`}
-                    >
-                      Virtual mic
-                    </button>
+                <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-4">
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">Speaker realtime route</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {debugInputEnabled
+                          ? `Debug WAV is processed and rendered to ${virtualMicPlaybackName}.`
+                          : `Live mic is processed and rendered to ${virtualMicPlaybackName}.`}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-accent/25 bg-accent/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent">
+                      VB-CABLE output
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                    Target app microphone: {virtualMicRecordingName}
                   </div>
                 </div>
 
@@ -541,13 +554,11 @@ const Dashboard = () => {
                 <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-foreground">Realtime input source</div>
+                      <div className="text-sm font-semibold text-foreground">Realtime source</div>
                       <div className="mt-1 text-xs text-muted-foreground">
                         {debugInputEnabled
-                          ? "Debug WAV is used as the live input."
-                          : outputMode === "virtualMic"
-                            ? `Your mic is processed and sent to ${virtualMicPlaybackName}.`
-                            : "Your mic is processed and played to the monitor device."}
+                          ? "Debug WAV feeds the same VB-CABLE realtime route."
+                          : "Live mic feeds the VB-CABLE realtime route."}
                       </div>
                     </div>
                     <div className="rounded-2xl border border-border bg-background/70 p-1">
@@ -579,11 +590,17 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </div>
-                  {!debugInputEnabled && outputMode === "virtualMic" && (
-                    <div className="mt-3 rounded-xl border border-primary/20 bg-primary/8 px-3 py-2 text-xs text-muted-foreground">
-                      App input is your physical mic. App output is {virtualMicPlaybackName}. Target app mic is {virtualMicRecordingName}.
-                    </div>
-                  )}
+                  <div
+                    className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
+                      virtualMicReady
+                        ? "border-primary/20 bg-primary/8 text-muted-foreground"
+                        : "border-destructive/25 bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {virtualMicReady
+                      ? `Output sink: ${virtualMicPlaybackName}. Target app mic: ${virtualMicRecordingName}.`
+                      : virtualMicStatus?.message ?? "VB-CABLE is required for speaker realtime."}
+                  </div>
                 </div>
 
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -597,12 +614,17 @@ const Dashboard = () => {
                     >
                       <option value="">System default</option>
                       {inputDevices.map((device) => (
-                        <option key={device.id} value={device.id}>
+                        <option
+                          key={device.id}
+                          value={device.id}
+                          disabled={device.virtualCable?.role === "recording"}
+                        >
                           {device.name}
+                          {device.virtualCable?.role === "recording" ? " (target app mic)" : ""}
                         </option>
                       ))}
                     </select>
-                    {!debugInputEnabled && outputMode === "virtualMic" && (
+                    {!debugInputEnabled && (
                       <div className={`mt-2 text-xs ${speakerLiveMicUsesVirtualCableInput ? "text-destructive" : "text-muted-foreground"}`}>
                         {speakerLiveMicUsesVirtualCableInput
                           ? "CABLE Output would feed the virtual mic back into itself. Select your real microphone."
@@ -612,13 +634,10 @@ const Dashboard = () => {
                   </label>
 
                   <label className="block">
-                    <div className="mb-2 text-sm font-semibold text-foreground">
-                      {outputMode === "virtualMic" ? "Clean audio sink" : "Monitor device"}
-                    </div>
+                    <div className="mb-2 text-sm font-semibold text-foreground">VB-CABLE sink</div>
                     <select
-                      value={outputMode === "virtualMic" ? virtualMicStatus?.playbackDeviceId ?? "" : outputDeviceId}
-                      onChange={(event) => setOutputDeviceId(event.target.value)}
-                      disabled={outputMode === "virtualMic"}
+                      value={virtualMicStatus?.playbackDeviceId ?? ""}
+                      disabled
                       className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
                     >
                       <option value="">System default</option>
@@ -629,11 +648,11 @@ const Dashboard = () => {
                         </option>
                       ))}
                     </select>
-                    {outputMode === "virtualMic" && (
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        {virtualMicPlaybackName}
-                      </div>
-                    )}
+                    <div className={`mt-2 text-xs ${virtualMicReady ? "text-muted-foreground" : "text-destructive"}`}>
+                      {virtualMicReady
+                        ? `${virtualMicPlaybackName} feeds ${virtualMicRecordingName}.`
+                        : virtualMicStatus?.message ?? "CABLE Input was not detected as a usable output device."}
+                    </div>
                   </label>
                 </div>
 
@@ -641,7 +660,7 @@ const Dashboard = () => {
                   <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
                     <div className="text-sm font-semibold text-foreground">Debug WAV file</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      Selected WAV replaces the live mic.
+                      Selected WAV replaces the live mic and renders through VB-CABLE.
                     </div>
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                       <input
@@ -717,7 +736,7 @@ const Dashboard = () => {
                       disabled={speakerRealtimeDisabled}
                       className="rounded-2xl border border-primary/35 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isStartingLive ? "Starting..." : speakerLiveActionLabel}
+                      {isStartingLive ? "Starting..." : liveActionLabel}
                     </button>
                   )}
                   <button
@@ -786,6 +805,8 @@ const Dashboard = () => {
                 </div>
               </div>
             </section>
+            <TransmissionTestPanel />
+            </>
           )}
 
           {desktopMode === "semanticSuppression" ? (
@@ -932,19 +953,19 @@ const Dashboard = () => {
             </div>
           </section>
 
-          <section className="grid gap-5 xl:grid-cols-2">
+          <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-                    Live Monitor
+                    Semantic Realtime
                   </div>
                   <h2 className="mt-2 text-2xl font-semibold text-foreground">
                     {liveTitle}
                   </h2>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Windows-only buffered live path. Audio threads stay lightweight while the active model runtime
-                    handles suppression on the latest captured audio blocks.
+                    Windows-only buffered realtime path. Audio threads stay lightweight while the active model runtime
+                    handles category suppression on the latest captured audio blocks.
                   </p>
                 </div>
                 <div
@@ -958,32 +979,22 @@ const Dashboard = () => {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-1">
-                <div className="grid grid-cols-2 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setOutputMode("monitor")}
-                    disabled={Boolean(activeLiveSessionId)}
-                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                      outputMode === "monitor"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
-                    }`}
-                  >
-                    Listen locally
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOutputMode("virtualMic")}
-                    disabled={Boolean(activeLiveSessionId) || !virtualMicReady}
-                    className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                      outputMode === "virtualMic"
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
-                    }`}
-                  >
-                    Virtual mic
-                  </button>
+              <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-4">
+                <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">Semantic realtime route</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {debugInputEnabled
+                        ? `Debug WAV is processed and rendered to ${virtualMicPlaybackName}.`
+                        : `Live mic is processed and rendered to ${virtualMicPlaybackName}.`}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+                    VB-CABLE output
+                  </div>
+                </div>
+                <div className="mt-3 rounded-xl border border-border bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                  Target app microphone: {virtualMicRecordingName}
                 </div>
               </div>
 
@@ -1023,7 +1034,7 @@ const Dashboard = () => {
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <label className="block">
-                  <div className="mb-2 text-sm font-semibold text-foreground">Input device</div>
+                  <div className="mb-2 text-sm font-semibold text-foreground">Live mic device</div>
                   <select
                     value={inputDeviceId}
                     onChange={(event) => setInputDeviceId(event.target.value)}
@@ -1032,21 +1043,30 @@ const Dashboard = () => {
                   >
                     <option value="">System default</option>
                     {inputDevices.map((device) => (
-                      <option key={device.id} value={device.id}>
+                      <option
+                        key={device.id}
+                        value={device.id}
+                        disabled={device.virtualCable?.role === "recording"}
+                      >
                         {device.name}
+                        {device.virtualCable?.role === "recording" ? " (target app mic)" : ""}
                       </option>
                     ))}
                   </select>
+                  {!debugInputEnabled && (
+                    <div className={`mt-2 text-xs ${semanticLiveMicUsesVirtualCableInput ? "text-destructive" : "text-muted-foreground"}`}>
+                      {semanticLiveMicUsesVirtualCableInput
+                        ? "CABLE Output would feed the virtual mic back into itself. Select your real microphone."
+                        : "Use your real microphone here; other apps should use CABLE Output."}
+                    </div>
+                  )}
                 </label>
 
                 <label className="block">
-                  <div className="mb-2 text-sm font-semibold text-foreground">
-                    {outputMode === "virtualMic" ? "Clean audio sink" : "Monitor device"}
-                  </div>
+                  <div className="mb-2 text-sm font-semibold text-foreground">VB-CABLE sink</div>
                   <select
-                    value={outputMode === "virtualMic" ? virtualMicStatus?.playbackDeviceId ?? "" : outputDeviceId}
-                    onChange={(event) => setOutputDeviceId(event.target.value)}
-                    disabled={outputMode === "virtualMic"}
+                    value={virtualMicStatus?.playbackDeviceId ?? ""}
+                    disabled
                     className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
                   >
                     <option value="">System default</option>
@@ -1057,33 +1077,63 @@ const Dashboard = () => {
                       </option>
                     ))}
                   </select>
-                  {outputMode === "virtualMic" && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      {virtualMicPlaybackName}
-                    </div>
-                  )}
+                  <div className={`mt-2 text-xs ${virtualMicReady ? "text-muted-foreground" : "text-destructive"}`}>
+                    {virtualMicReady
+                      ? `${virtualMicPlaybackName} feeds ${virtualMicRecordingName}.`
+                      : virtualMicStatus?.message ?? "CABLE Input was not detected as a usable output device."}
+                  </div>
                 </label>
               </div>
 
               <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-sm font-semibold text-foreground">Debug WAV mic source</div>
+                    <div className="text-sm font-semibold text-foreground">Realtime source</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {debugInputEnabled ? "Live input is the selected WAV." : "Live input is the selected device."}
+                      {debugInputEnabled
+                        ? "Debug WAV feeds the same VB-CABLE realtime route."
+                        : "Live mic feeds the VB-CABLE realtime route."}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setDebugInputEnabled(!debugInputEnabled)}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
-                      debugInputEnabled
-                        ? "border-primary/35 bg-primary/15 text-primary"
-                        : "border-border bg-card text-muted-foreground"
-                    }`}
-                  >
-                    {debugInputEnabled ? "on" : "off"}
-                  </button>
+                  <div className="rounded-2xl border border-border bg-background/70 p-1">
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setDebugInputEnabled(false)}
+                        disabled={Boolean(activeLiveSessionId)}
+                        className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                          !debugInputEnabled
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
+                        }`}
+                      >
+                        Live mic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDebugInputEnabled(true)}
+                        disabled={Boolean(activeLiveSessionId)}
+                        className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                          debugInputEnabled
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-muted-foreground hover:bg-card/70 hover:text-foreground"
+                        }`}
+                      >
+                        Debug WAV
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
+                    virtualMicReady
+                      ? "border-primary/20 bg-primary/8 text-muted-foreground"
+                      : "border-destructive/25 bg-destructive/10 text-destructive"
+                  }`}
+                >
+                  {virtualMicReady
+                    ? `Output sink: ${virtualMicPlaybackName}. Target app mic: ${virtualMicRecordingName}.`
+                    : virtualMicStatus?.message ?? "VB-CABLE is required for semantic realtime."}
                 </div>
 
                 {debugInputEnabled && (
@@ -1110,7 +1160,7 @@ const Dashboard = () => {
                   <div>
                     <div className="text-sm font-semibold text-foreground">Record clean live session</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      Optional WAV capture of the monitored clean output.
+                      Optional WAV capture of the semantic-suppressed output.
                     </div>
                   </div>
                   <button
@@ -1152,7 +1202,7 @@ const Dashboard = () => {
                     onClick={() => void stopLive()}
                     className="rounded-2xl border border-destructive/35 bg-destructive/12 px-5 py-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/18"
                   >
-                    Stop live monitor
+                    Stop semantic realtime
                   </button>
                 ) : (
                   <button
@@ -1161,11 +1211,7 @@ const Dashboard = () => {
                     disabled={liveStartDisabled}
                     className="rounded-2xl border border-primary/35 bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isStartingLive
-                      ? "Starting..."
-                      : outputMode === "virtualMic"
-                        ? "Start virtual mic"
-                        : "Start live monitor"}
+                    {isStartingLive ? "Starting..." : liveActionLabel}
                   </button>
                 )}
                 <button
@@ -1175,9 +1221,22 @@ const Dashboard = () => {
                 >
                   Refresh devices
                 </button>
+                {semanticRealtimeBlockReason && (
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    {semanticRealtimeBlockReason}
+                  </div>
+                )}
               </div>
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            </div>
+
+            <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+              <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+                Live Signal
+              </div>
+              <h2 className="mt-2 text-2xl font-semibold text-foreground">Semantic monitor</h2>
+
+              <div className="mt-5 grid gap-4">
                 <SignalMeter
                   title="input monitor"
                   waveform={liveMeter?.waveformIn ?? []}
@@ -1186,15 +1245,50 @@ const Dashboard = () => {
                   accentClass="bg-gradient-to-t from-[hsl(var(--neon-orange))] to-[hsl(var(--neon-pink))]"
                 />
                 <SignalMeter
-                  title="clean monitor"
+                  title="semantic-suppressed"
                   waveform={liveMeter?.waveformOut ?? []}
                   peak={liveMeter?.peakOut ?? 0}
                   rms={liveMeter?.rmsOut ?? 0}
                   accentClass="bg-gradient-to-t from-[hsl(var(--accent))] to-[hsl(var(--primary))]"
                 />
               </div>
-            </div>
 
+              <div className="mt-5 grid gap-3 text-sm text-muted-foreground">
+                <div className="flex items-center justify-between gap-4">
+                  <span>Targets</span>
+                  <span className="max-w-[62%] truncate text-right font-mono text-foreground/80">
+                    {selectedCategories.length ? `${selectedCategories.length} selected` : "--"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span>Route</span>
+                  <span className="font-mono text-foreground/80">
+                    {debugInputEnabled ? "Debug WAV" : "Live mic"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span>Model</span>
+                  <span className="max-w-[62%] truncate text-right font-mono text-foreground/80">
+                    {runtimeMetrics?.displayName ?? "--"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span>Inference</span>
+                  <span className="font-mono text-foreground/80">{formatMillis(liveStatus?.inferenceMs)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span>Health</span>
+                  <span className={healthTone(liveStatus?.realtimeHealth)}>
+                    {liveStatus?.realtimeHealth ?? "idle"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <TransmissionTestPanel />
+
+          <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
             <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1279,22 +1373,30 @@ const Dashboard = () => {
                 </button>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-border bg-muted/30 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="text-sm font-semibold text-foreground">
-                    {offlineProgress?.stage ?? "waiting"}
-                  </div>
-                  <div className="text-xs font-mono uppercase tracking-[0.16em] text-muted-foreground">
-                    {Math.max(0, offlineProgress?.progress ?? 0).toFixed(0)}%
+            </div>
+
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-border bg-card/85 p-5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
+                    <AudioWaveform className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {offlineProgress?.stage ?? "waiting"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {Math.max(0, offlineProgress?.progress ?? 0).toFixed(0)}% complete
+                    </div>
                   </div>
                 </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-border/70">
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-border/70">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-[hsl(var(--accent))] to-[hsl(var(--primary))]"
                     style={{ width: `${Math.min(100, Math.max(0, offlineProgress?.progress ?? 0))}%` }}
                   />
                 </div>
-                <div className="mt-3 grid gap-2 text-sm text-muted-foreground">
+                <div className="mt-4 grid gap-2 text-sm text-muted-foreground">
                   <div className="flex items-center justify-between gap-4">
                     <span>ETA</span>
                     <span className="font-mono text-foreground/80">
@@ -1304,7 +1406,7 @@ const Dashboard = () => {
                   <div className="flex items-start justify-between gap-4">
                     <span>Message</span>
                     <span className="max-w-[65%] text-right text-foreground/80">
-                      {offlineProgress?.message ?? "Waiting for a render job."}
+                      {offlineProgress?.message ?? "Waiting for a semantic render job."}
                     </span>
                   </div>
                   <div className="flex items-start justify-between gap-4">

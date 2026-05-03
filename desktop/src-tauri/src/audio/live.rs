@@ -144,7 +144,11 @@ fn run_live_worker(
     } else {
         Some(resolve_input_device(request.input_device_id.as_deref())?)
     };
-    let output_mode = request.output_mode.clone();
+    let processing_mode = request.processing_mode.clone();
+    let output_mode = match &processing_mode {
+        LiveProcessingMode::SpeakerSuppression => LiveOutputMode::VirtualMic,
+        LiveProcessingMode::SemanticSuppression => request.output_mode.clone(),
+    };
     let output = match output_mode {
         LiveOutputMode::Monitor => resolve_output_device(request.output_device_id.as_deref())?,
         LiveOutputMode::VirtualMic => resolve_virtual_mic_output_device()?.0,
@@ -167,7 +171,6 @@ fn run_live_worker(
     };
     let output_device_id = output.descriptor.id.clone();
     let output_device_name = output.descriptor.name.clone();
-    let processing_mode = request.processing_mode.clone();
     let provider_base = match (&output_mode, debug_input.is_some()) {
         (LiveOutputMode::Monitor, false) => "wasapi-shared/cpal",
         (LiveOutputMode::VirtualMic, false) => "wasapi-shared/cpal+vb-cable",

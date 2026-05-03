@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTransmissionTest } from "@/hooks/useTransmissionTest";
 import {
   browseForAudioInput,
   browseForOutputWav,
@@ -37,6 +38,11 @@ import {
   type TargetSpeakerRuntimeInfo,
   type VirtualMicStatus,
 } from "@/lib/desktop-api";
+import type {
+  TransmissionCalibrationResult,
+  TransmissionMetricsSnapshot,
+  TransmissionTestState,
+} from "@/lib/transmission-test";
 
 type LiveOutputMode = "monitor" | "virtualMic";
 type DesktopMode = "semanticSuppression" | "speakerSuppression";
@@ -72,6 +78,11 @@ interface DesktopRuntimeContextValue {
   recordOutputPath: string;
   liveStatus: LiveStatusEvent | null;
   liveMeter: LiveMeterEvent | null;
+  transmissionReady: boolean;
+  transmissionTestState: TransmissionTestState;
+  transmissionMetrics: TransmissionMetricsSnapshot;
+  transmissionCalibration: TransmissionCalibrationResult;
+  playReceivedAudio: boolean;
   offlineProgress: OfflineProgressEvent | null;
   activeLiveSessionId: string | null;
   activeOfflineJobId: string | null;
@@ -121,6 +132,10 @@ interface DesktopRuntimeContextValue {
   cancelOffline: () => Promise<void>;
   startLive: () => Promise<void>;
   stopLive: () => Promise<void>;
+  setPlayReceivedAudio: (value: boolean) => void;
+  startTransmissionTest: () => Promise<void>;
+  stopTransmissionTest: () => Promise<void>;
+  runTransmissionCalibration: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -131,7 +146,7 @@ const INITIAL_LIVE_STATUS: LiveStatusEvent = {
   state: "stopped",
   xruns: 0,
   provider: "idle",
-  outputMode: "monitor",
+  outputMode: "virtualMic",
   lookaheadMs: 150,
   estimatedLatencyMs: 0,
   realtimeHealth: "idle",
@@ -157,7 +172,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
   const [selectedSpeakerProfileId, setSelectedSpeakerProfileIdState] = useState("");
   const [speakerProfileName, setSpeakerProfileName] = useState("");
   const [lookaheadMs, setLookaheadMs] = useState(150);
-  const [outputMode, setOutputModeState] = useState<LiveOutputMode>("monitor");
+  const [outputMode, setOutputModeState] = useState<LiveOutputMode>("virtualMic");
   const [inputDeviceId, setInputDeviceId] = useState("");
   const [outputDeviceId, setOutputDeviceId] = useState("");
   const [inputPath, setInputPath] = useState("");
@@ -176,6 +191,21 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
   const [isOfflineRunning, setIsOfflineRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hydratedDefaults = useRef(false);
+  const {
+    transmissionReady,
+    transmissionTestState,
+    transmissionMetrics,
+    transmissionCalibration,
+    playReceivedAudio,
+    setPlayReceivedAudio,
+    startTransmissionTest,
+    stopTransmissionTest,
+    runTransmissionCalibration,
+  } = useTransmissionTest({
+    liveSessionActive: Boolean(activeLiveSessionId),
+    liveStatus,
+    virtualMicStatus,
+  });
 
   const refreshDevices = async () => {
     try {
@@ -583,6 +613,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
 
   const startLive = async () => {
     const speakerLive = desktopMode === "speakerSuppression";
+    const effectiveOutputMode: LiveOutputMode = "virtualMic";
     if (!speakerLive && selectedCategories.length === 0) {
       setError("Select at least one model category before starting live monitoring.");
       return;
@@ -603,7 +634,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       setError("Choose a record output WAV path or turn live recording off.");
       return;
     }
-    if (outputMode === "virtualMic" && (!virtualMicStatus?.installed || !virtualMicStatus.playbackDeviceId)) {
+    if (effectiveOutputMode === "virtualMic" && (!virtualMicStatus?.installed || !virtualMicStatus.playbackDeviceId)) {
       setError(virtualMicStatus?.message ?? "VB-CABLE was not detected. Install it, then refresh devices.");
       return;
     }
@@ -619,10 +650,10 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
           processingMode: speakerLive ? "speakerSuppression" : "semanticSuppression",
           inputDeviceId: inputDeviceId || null,
           outputDeviceId:
-            outputMode === "virtualMic"
+            effectiveOutputMode === "virtualMic"
               ? virtualMicStatus?.playbackDeviceId ?? null
               : outputDeviceId || null,
-          outputMode,
+          outputMode: effectiveOutputMode,
           debugInputPath: debugInputEnabled ? debugInputPath : null,
           categories: speakerLive ? [] : selectedCategories,
           aggressiveness,
@@ -709,6 +740,11 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       recordOutputPath,
       liveStatus,
       liveMeter,
+      transmissionReady,
+      transmissionTestState,
+      transmissionMetrics,
+      transmissionCalibration,
+      playReceivedAudio,
       offlineProgress,
       activeLiveSessionId,
       activeOfflineJobId,
@@ -758,6 +794,10 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       cancelOffline: cancelCurrentOffline,
       startLive,
       stopLive,
+      setPlayReceivedAudio,
+      startTransmissionTest,
+      stopTransmissionTest,
+      runTransmissionCalibration,
       clearError: () => setError(null),
     }),
     [
@@ -779,6 +819,7 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       liveStatus,
       lookaheadMs,
       offlineProgress,
+      playReceivedAudio,
       outputMode,
       outputDeviceId,
       outputPath,
@@ -786,6 +827,10 @@ export const DesktopRuntimeProvider = ({ children }: { children: ReactNode }) =>
       recordEnabled,
       recordOutputPath,
       runtimeMetrics,
+      transmissionCalibration,
+      transmissionMetrics,
+      transmissionReady,
+      transmissionTestState,
       selectedCategories,
       selectedSpeakerProfileId,
       speakerProfileName,
