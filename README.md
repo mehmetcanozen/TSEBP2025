@@ -257,10 +257,10 @@ python ai\scripts\demos\demo_custom_realtime.py --list-devices
 
 ### Virtual Mic developer setup
 
-Virtual Mic mode needs a Windows recording endpoint that other apps can select
-as a microphone. The project does not ship or create an audio driver. For local
-development, install VB-CABLE from the official VB-Audio site, then reboot if
-the installer asks for it:
+The desktop app's realtime path depends on a Windows recording endpoint that
+other apps can select as a microphone. The project does not ship or create an
+audio driver. For local development, install VB-CABLE from the official
+VB-Audio site, then reboot if the installer asks for it:
 
 ```text
 https://vb-audio.com/Cable/
@@ -273,16 +273,126 @@ CABLE Input  - playback endpoint the desktop app writes cleaned audio into
 CABLE Output - recording endpoint the target app selects as its microphone
 ```
 
-If VB-CABLE is not installed, the desktop app still supports offline rendering
-and live **Listen locally** mode. Virtual Mic mode stays disabled until
-`CABLE Input` and `CABLE Output` are detected.
+On some Windows machines the playback side may appear under a name such as
+`Speakers (2- VB-Audio Virtual Cable)` rather than literally `CABLE Input`.
+That is still the VB-CABLE playback endpoint the desktop app should write into.
+
+### Desktop live routing
+
+Both desktop live modes now use the same routing model:
+
+- `Live mic`: the desktop app captures the user's real microphone.
+- `Debug WAV`: the desktop app uses a WAV file as if it were the live
+  microphone, which is the most reliable one-machine validation path.
+
+In both cases the processed stream is written into the VB-CABLE playback side,
+and the target app should record from the VB-CABLE recording side:
+
+```text
+Semantic suppression:
+Live mic or Debug WAV
+-> semantic suppressor
+-> CABLE Input / Speakers (VB-CABLE playback endpoint)
+-> CABLE Output
+-> target app microphone selection
+
+Speaker suppression:
+Live mic or Debug WAV
+-> speaker suppressor using the active reference/profile
+-> CABLE Input / Speakers (VB-CABLE playback endpoint)
+-> CABLE Output
+-> target app microphone selection
+```
+
+Important routing rule:
+
+- In `Live mic` mode, choose a real microphone as the app input device.
+- Do not choose `CABLE Output` as the app's own live input, because that feeds
+  the virtual mic back into itself.
+
+If VB-CABLE is not installed or Windows does not expose both sides as usable
+audio endpoints, the desktop app still supports offline rendering. The realtime
+VB-CABLE route stays unavailable until the playback side and recording side are
+both detected.
+
+### Desktop transmission test harness
+
+The desktop app now includes a shared `Transmission Test` panel for both
+semantic and speaker realtime modes. It exists to answer a different question
+than local WAV recording:
+
+- local recording tells us whether suppression itself is working
+- transmission testing tells us how the already-processed VB-CABLE mic behaves
+  when a browser-style network path captures it, transports it, and plays it
+  back
+
+This desktop v1 path is a same-machine WebRTC loopback benchmark. It is not a
+real WAN benchmark and it does not replace testing in Zoom, Discord, Meet, or
+other production apps.
+
+Test route:
+
+```text
+desktop live suppression
+-> CABLE Input / Speakers (VB-CABLE playback endpoint)
+-> CABLE Output (VB-CABLE recording endpoint)
+-> desktop Transmission Test browser capture
+-> local WebRTC loopback
+-> local speaker playback
+```
+
+How to use it:
+
+1. Start a desktop live session first in either semantic or speaker mode.
+2. Confirm the app shows a healthy VB-CABLE route.
+3. Open the shared `Transmission Test` panel.
+4. Click `Start loopback test`.
+5. Leave `Play received audio` enabled if you want to hear the returned stream.
+6. Click `Run ping calibration` when you want an explicit loopback-delay check.
+
+Important behavior:
+
+- the transmission tester captures `CABLE Output`, not your real microphone
+- this means it validates the exact virtual microphone stream that another app
+  would receive
+- `Live mic` and `Debug WAV` both work, because both ultimately feed the same
+  VB-CABLE route
+- browser-side echo cancellation, noise suppression, and auto gain control are
+  requested off so the test path does not "improve" the stream behind our backs
+
+Metrics surfaced by the panel:
+
+- app-side live metrics already produced by the Rust suppression runtime:
+  - estimated live latency
+  - queue depth
+  - inference p95
+  - realtime health
+- WebRTC transport metrics from the loopback:
+  - current / average / max round-trip time
+  - inbound jitter
+  - average jitter-buffer delay
+  - packet loss rate
+  - concealed samples and concealment events
+  - send / receive bitrate
+  - codec when exposed by stats
+- derived estimates:
+  - network loopback estimate
+  - combined app + network estimate
+  - calibrated loopback delay from the explicit ping pass
+
+What `Run ping calibration` does:
+
+- it injects a short calibration tone into the browser sender graph
+- it listens for that tone on the received loopback stream
+- it reports the measured return delay in milliseconds
+- it only runs when requested and is not mixed into normal monitoring
 
 ### Test Virtual Mic with a WAV source
 
-Use the desktop app's **Debug WAV mic source** control for the reliable
-one-machine Virtual Mic test. The desktop app reads the WAV as live input,
-runs the normal live suppression path, and sends the cleaned stream to
-VB-CABLE. This does not require a second virtual cable pair.
+Use the desktop app's `Debug WAV` realtime source for the reliable one-machine
+VB-CABLE test. The desktop app reads the WAV as live input, runs the normal
+live suppression path, and sends the cleaned stream to VB-CABLE. This does not
+require a second virtual cable pair.
 
 Start the desktop app:
 
@@ -295,7 +405,7 @@ npm run tauri:dev
 This is the tested route:
 
 ```text
-desktop Debug WAV mic source
+desktop Debug WAV realtime source
 -> desktop live suppression
 -> CABLE Input
 -> CABLE Output
@@ -311,9 +421,8 @@ C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav
 Desktop live settings:
 
 ```text
-Mode: Virtual mic
-Clean audio sink: CABLE Input (VB-Audio Virtual Cable)
-Debug WAV mic source: ON
+Realtime source: Debug WAV
+VB-CABLE sink: CABLE Input (VB-Audio Virtual Cable) or Speakers (VB-Audio Virtual Cable)
 Debug WAV path: C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav
 Category: dog barking
 ```

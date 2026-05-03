@@ -197,16 +197,23 @@ pub(crate) fn build_virtual_mic_status(devices: &[AudioDevice]) -> VirtualMicSta
     let installed = playback.is_some() && recording.is_some();
     let recording_name = recording.map(|device| device.name.clone());
     let playback_name = playback.map(|device| device.name.clone());
-    let message = if installed {
-        format!(
+    let message = match (playback_name.as_deref(), recording_name.as_deref()) {
+        (Some(_), Some(recording_name)) => format!(
             "Virtual mic ready. Select '{}' as the microphone in your target app.",
             recording_name
-                .as_deref()
-                .unwrap_or("CABLE Output (VB-Audio Virtual Cable)")
-        )
-    } else {
-        "VB-CABLE was not detected. Install VB-CABLE, reboot if prompted, then refresh devices."
-            .to_string()
+        ),
+        (None, Some(recording_name)) => format!(
+            "VB-CABLE recording endpoint '{}' was found, but CABLE Input was not found as a usable Windows output device.",
+            recording_name
+        ),
+        (Some(playback_name), None) => format!(
+            "VB-CABLE playback endpoint '{}' was found, but CABLE Output was not found as a usable Windows input device.",
+            playback_name
+        ),
+        (None, None) => {
+            "VB-CABLE was not detected. Install VB-CABLE, reboot if prompted, then refresh devices."
+                .to_string()
+        }
     };
 
     VirtualMicStatus {
@@ -229,17 +236,27 @@ pub(crate) fn virtual_cable_endpoint(
         || normalized.contains("vb-cable")
         || normalized.contains("virtual cable")
         || normalized == "cable input"
-        || normalized == "cable output";
+        || normalized == "cable output"
+        || normalized.contains("cable in")
+        || normalized.contains("cable out");
 
     if !looks_like_vb_cable {
         return None;
     }
 
     let role = match direction {
-        AudioDeviceDirection::Output if normalized.contains("cable input") => {
+        AudioDeviceDirection::Output
+            if normalized.contains("cable input")
+                || normalized.contains("cable in")
+                || normalized.contains("speakers") =>
+        {
             VirtualCableEndpointRole::Playback
         }
-        AudioDeviceDirection::Input if normalized.contains("cable output") => {
+        AudioDeviceDirection::Input
+            if normalized.contains("cable output")
+                || normalized.contains("cable out")
+                || normalized.contains("microphone") =>
+        {
             VirtualCableEndpointRole::Recording
         }
         _ => return None,
@@ -280,10 +297,26 @@ fn pick_default_config(
     device: &Device,
     direction: &AudioDeviceDirection,
 ) -> AppResult<SupportedStreamConfig> {
-    Ok(match direction {
-        AudioDeviceDirection::Input => device.default_input_config()?,
-        AudioDeviceDirection::Output => device.default_output_config()?,
-    })
+    match direction {
+        AudioDeviceDirection::Input => match device.default_input_config() {
+            Ok(config) => Ok(config),
+            Err(default_error) => device
+                .supported_input_configs()
+                .map_err(AppError::from)?
+                .next()
+                .map(|config| config.with_max_sample_rate())
+                .ok_or_else(|| AppError::from(default_error)),
+        },
+        AudioDeviceDirection::Output => match device.default_output_config() {
+            Ok(config) => Ok(config),
+            Err(default_error) => device
+                .supported_output_configs()
+                .map_err(AppError::from)?
+                .next()
+                .map(|config| config.with_max_sample_rate())
+                .ok_or_else(|| AppError::from(default_error)),
+        },
+    }
 }
 
 fn make_id(direction: &AudioDeviceDirection, index: usize, name: &str) -> String {
@@ -338,6 +371,20 @@ mod tests {
 
         assert_eq!(playback.role, VirtualCableEndpointRole::Playback);
         assert_eq!(recording.role, VirtualCableEndpointRole::Recording);
+
+        let speakers_variant = virtual_cable_endpoint(
+            &AudioDeviceDirection::Output,
+            "Speakers (2- VB-Audio Virtual Cable)",
+        )
+        .expect("speaker-style playback endpoint should be detected");
+        let microphone_variant = virtual_cable_endpoint(
+            &AudioDeviceDirection::Input,
+            "Microphone (2- VB-Audio Virtual Cable)",
+        )
+        .expect("microphone-style recording endpoint should be detected");
+
+        assert_eq!(speakers_variant.role, VirtualCableEndpointRole::Playback);
+        assert_eq!(microphone_variant.role, VirtualCableEndpointRole::Recording);
     }
 
     #[test]
@@ -407,5 +454,67 @@ mod tests {
 
         let missing_recording = build_virtual_mic_status(&devices[..1]);
         assert!(!missing_recording.installed);
+    }
+
+    #[test]
+    fn virtual_mic_status_explains_partial_cable_detection() {
+        let recording_only = vec![AudioDevice {
+            id: "input::0::cable-output".to_string(),
+            name: "CABLE Output (VB-Audio Virtual Cable)".to_string(),
+            direction: AudioDeviceDirection::Input,
+            default: false,
+            virtual_cable: virtual_cable_endpoint(
+                &AudioDeviceDirection::Input,
+                "CABLE Output (VB-Audio Virtual Cable)",
+            ),
+        }];
+
+        let status = build_virtual_mic_status(&recording_only);
+
+        assert!(!status.installed);
+        assert_eq!(
+            status.recording_device_name.as_deref(),
+            Some("CABLE Output (VB-Audio Virtual Cable)")
+        );
+        assert!(status.playback_device_id.is_none());
+        assert!(status.message.contains("CABLE Input was not found"));
+    }
+
+    #[test]
+    fn virtual_mic_status_accepts_windows_speakers_style_playback_name() {
+        let devices = vec![
+            AudioDevice {
+                id: "output::0::speakers-2-vb-audio-virtual-cable".to_string(),
+                name: "Speakers (2- VB-Audio Virtual Cable)".to_string(),
+                direction: AudioDeviceDirection::Output,
+                default: false,
+                virtual_cable: virtual_cable_endpoint(
+                    &AudioDeviceDirection::Output,
+                    "Speakers (2- VB-Audio Virtual Cable)",
+                ),
+            },
+            AudioDevice {
+                id: "input::0::cable-output-2-vb-audio-virtual-cable".to_string(),
+                name: "CABLE Output (2- VB-Audio Virtual Cable)".to_string(),
+                direction: AudioDeviceDirection::Input,
+                default: false,
+                virtual_cable: virtual_cable_endpoint(
+                    &AudioDeviceDirection::Input,
+                    "CABLE Output (2- VB-Audio Virtual Cable)",
+                ),
+            },
+        ];
+
+        let status = build_virtual_mic_status(&devices);
+
+        assert!(status.installed);
+        assert_eq!(
+            status.playback_device_name.as_deref(),
+            Some("Speakers (2- VB-Audio Virtual Cable)")
+        );
+        assert_eq!(
+            status.recording_device_name.as_deref(),
+            Some("CABLE Output (2- VB-Audio Virtual Cable)")
+        );
     }
 }
