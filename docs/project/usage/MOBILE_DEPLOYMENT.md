@@ -1,372 +1,225 @@
-## React Native / Expo Mobile Deployment Guide
+# Android Mobile Deployment Guide
 
-> **Goal**: Run the semantic noise suppression stack (YAMNet + Native UNet TFLite) on a React Native (Expo) app, using the `mobile-test` project as a reference implementation.
+This guide describes the current Android suppression path in `mobile-part`.
+Older project notes may mention `mobile-test`, Native UNet, or TFLite. Those are
+historical. The current Android runtime uses packaged suppression model bundles
+with ONNX Runtime Android and ExecuTorch-capable native code.
 
-### 1. High-Level Architecture
+For the shorter operator runbook, see [Mobile app](MOBILE_APP.md).
 
-- **App type**: React Native + Expo (TypeScript).
-- **Audio capture & playback**:
-  - `react-native-audio-record` for 44.1 kHz microphone recording.
-  - `expo-av` for WAV playback (original vs. cleaned).
-- **File & asset handling**:
-  - `expo-file-system` for reading/writing audio files.
-  - Raw `.tflite` models stored under `assets/models/`.
-- **ML runtime**:
-  - `react-native-fast-tflite` (JSI-based TFLite inference on-device).
-- **Pipeline** (current validated design):
-  1. Record N seconds of mic audio into a WAV file (44.1 kHz).
-  2. Load the WAV into a `Float32Array`.
-  3. Slice into fixed-length chunks (3s at 44.1 kHz).
-  4. Run each chunk through TFLite model (Native UNet).
-  5. Stitch outputs and save as a new WAV.
-  6. Playback “Original” vs “Clean” audio for A/B comparison.
-
----
-
-### 2. Project Scaffolding & Dependencies
-
-#### 2.1 Base Expo project
-
-- Create an Expo app (TypeScript):
-
-```bash
-npx create-expo-app mobile-app --template
-cd mobile-app
-```
-
-#### 2.2 Core dependencies (validated in `mobile-test`)
-
-Add these packages (matching what worked in `mobile-test/package.json`):
-
-```bash
-npm install \
-  expo@~54.0.33 \
-  react@19.1.0 \
-  react-native@0.81.5 \
-  expo-av@~16.0.8 \
-  expo-file-system@~19.0.21 \
-  react-native-audio-record@^0.2.2 \
-  react-native-fast-tflite@^2.0.0 \
-  buffer@^6.0.3
-
-npm install --save-dev \
-  typescript@~5.9.2 \
-  @types/react@~19.1.0
-```
-
-**Notes / pitfalls**:
-
-- **Expo SDK versions**: Keep Expo/React/React Native versions consistent (see `mobile-test/package.json`) to avoid native build issues.
-- **Android focus first**: All validation was done on Android; iOS should work but was not fully exercised.
-
----
-
-### 3. TFLite Model Assets
-
-#### 3.1 Expected asset layout
-
-- Place models under:
+## Current Architecture
 
 ```text
-mobile-app/
-  assets/
-    models/
-      yamnet.tflite        # YAMNet for detection (optional for now)
-      waveformer.tflite    # Native UNet TFLite (~514 KB)
+ai/models/model_selection.json
+    -> selected model_package.json
+    -> Gradle prepareBundledSuppressionModel
+    -> generated Android asset bundle
+    -> native SuppressionEngine.prepare()
+    -> BundleRuntimeStore
+    -> InferenceRuntime
+    -> LiveSuppressionSession
+    -> Oboe/AAudio audio engine by default
+    -> Kotlin AudioRecord/AudioTrack fallback
 ```
 
-- In `mobile-test`, `waveformer.tflite` is a **real TFLite model with a Native UNet architecture** exported from Python (no complex-number ops, TFLite-friendly).
-- File paths in code use relative `require` paths like:
-  - `require('../assets/models/waveformer.tflite')`
+The default generated bundle is:
 
-**Pitfall**: Incorrect asset paths (e.g. `../../assets` instead of `../assets`) will cause silent failures where the model never loads but the app still runs. Always verify the require path matches your folder structure.
-
-#### 3.2 Model export summary (Python side)
-
-- Export is done in Python via the `ai/export` package in the main repo:
-  - `ai/export/export_onnx.py` for ONNX export.
-  - `ai/export/export_tflite.py` for TFLite, using ONNX → TFLite tooling.
-- **Key constraints that shaped the current model**:
-  - Original Waveformer used complex STFT ops that are hard to convert to TFLite.
-  - To avoid complex-number blockers, a **Native UNet** architecture was introduced and exported as `waveformer.tflite`.
-  - Size is ~514 KB and runs successfully on-device via `react-native-fast-tflite`.
-
-For mobile devs: you don’t need to re-export the model for basic integration tests; just consume the `.tflite` artifacts provided under `assets/models`. If you re-export in the future, keep to TFLite-safe ops (no complex tensors, avoid unsupported ONNX ops).
-
----
-
-### 4. React Native Integration Details
-
-#### 4.1 Metro configuration for `.tflite` assets
-
-- Metro needs to treat `.tflite` as a static asset. In `mobile-test/metro.config.js` the pattern is:
-
-```js
-const { getDefaultConfig } = require('expo/metro-config');
-const config = getDefaultConfig(__dirname);
-
-config.resolver.assetExts.push('tflite');
-
-module.exports = config;
+```text
+model_id: waveformer_edge_100ms
+runtime_kind: onnx_streaming_target_extractor
+sample_rate: 44100
+chunk_samples: 4416
+artifact: model_fixed.ort
 ```
 
-**Pitfall**: If `.tflite` isn’t added to `assetExts`, bundling will fail or the model won’t be bundled, leading to runtime errors when loading via `require`.
+The generated manifest is expected at:
 
-#### 4.2 Loading the model (`react-native-fast-tflite`)
+```text
+mobile-part/android/app/build/generated/suppression-assets/suppression-model-bundle/manifest.json
+```
 
-- The `WaveformerInferenceService.ts` in `mobile-test/services` demonstrates:
-  - Loading the TFLite model once at startup.
-  - Reusing the interpreter for multiple inferences.
-  - Managing input/output buffers explicitly.
+## Source Files To Know
 
-Core ideas:
+| File | Role |
+| --- | --- |
+| `mobile-part/android/app/build.gradle` | Generates the bundled suppression model assets from shared package manifests. |
+| `mobile-part/services/ModelBundleService.ts` | Calls native prepare for the bundled on-device model. |
+| `mobile-part/services/SuppressionEngineService.ts` | TypeScript wrapper around the native `SuppressionEngine` module. |
+| `mobile-part/hooks/useSuppressionDemo.ts` | UI-facing hook for prepare/start/stop, meters, recording, and finished events. |
+| `SuppressionEngineModule.kt` | Native React module entrypoint. |
+| `BundleRuntimeStore.kt` | Installs bundled Android asset model bundles and parses manifests. |
+| `InferenceRuntime.kt` | Selects ONNX or ExecuTorch implementation from `runtime_kind`. |
+| `LiveSuppressionSession.kt` | Owns live-session lifecycle, starts Oboe first, runs processor-thread inference, handles fallback audio, and emits status/meter/finished events. |
+| `NativeOboeAudioEngine.kt` | Kotlin JNI wrapper for the native Oboe/AAudio audio engine. |
+| `mobile-part/android/app/src/main/cpp/native_oboe_audio_engine.cpp` | C++ Oboe callback engine and native audio rings. |
 
-- Use `react-native-fast-tflite` to:
-  - Load:
-    - `const model = await TfliteModel.fromAsset(require('../assets/models/waveformer.tflite'));`
-  - Create an interpreter:
-    - `const interpreter = new TfliteInterpreter(model);`
-  - Allocate `Float32Array` buffers that match model input and output shapes.
-  - Run inference:
-    - `interpreter.run(inputBuffer, outputBuffer);`
+## Build-Time Bundle Generation
 
-**Pitfalls and fixes**:
+Gradle task:
 
-- **Wrong tensor rank/shape**:
-  - The model expects a fixed-length 3-second window at 44.1 kHz.
-  - Use `(B, L, C) = (1, 132300, 1)` or the exact shape for your exported model.
-  - Mismatched shapes will either throw errors or produce garbage output.
-- **Multiple outputs confusion**:
-  - Early attempts assumed 3 outputs; actual model had a single output tensor.
-  - Fixed by reading only the single output and mapping it to a `Float32Array` correctly.
+```text
+prepareBundledSuppressionModel
+```
 
----
+This task reads the active model package and writes a complete asset bundle.
+The generated manifest includes model id, package version, runtime kind, sample
+rate, categories, artifact hashes, and streaming/segment shape.
 
-### 5. Audio Recording & Playback
+To inspect the current generated bundle:
 
-#### 5.1 Recording with `react-native-audio-record`
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+Get-Content .\mobile-part\android\app\build\generated\suppression-assets\suppression-model-bundle\manifest.json
+```
 
-- `mobile-test` uses `react-native-audio-record` for capturing mic input:
-  - Configure for 44.1 kHz, mono.
-  - Start/stop recording from UI buttons.
-  - Output is a `.wav` file (path returned from the library).
+If this file is missing or stale, run an Android Gradle build or `expo
+run:android` from `mobile-part` so the Gradle task runs.
 
-**Pitfalls & learnings**:
+## Native Runtime Kinds
 
-- **Shorter-than-expected recordings**:
-  - Initially, a “5 second” record produced shorter audio.
-  - Root cause: mismatched sample rate assumptions across recording and processing.
-  - Fix: Align everything to **44.1 kHz** and ensure timing logic uses sample counts, not just timers.
+`InferenceRuntime.kt` supports:
 
-#### 5.2 File I/O and conversion
+- `onnx_category_separator`: ONNX Runtime category separator, used by
+  AudioSepHive15Cat-style packages.
+- `onnx_streaming_target_extractor`: ONNX Runtime streaming target extractor,
+  used by the current Waveformer default.
+- `executorch_category_separator`: ExecuTorch category separator, used by
+  CodecSepDNRv2 exact-15 Android packaging.
+- `executorch_streaming_target_extractor`: reserved for streaming target
+  extractor packages exported to ExecuTorch.
 
-- Use `expo-file-system` to:
-  - Read recorded WAV file bytes.
-  - Convert bytes to `Float32Array` for ML input (see `utils/wavUtils.ts`).
-  - Write processed samples back to a new WAV file.
+The current default uses ONNX Runtime Android CPU.
 
-Key design used in `mobile-test`:
+## Live Audio Engine
 
-- `utils/wavUtils.ts` contains helpers for:
-  - Parsing WAV headers.
-  - Extracting PCM samples as `Float32Array`.
-  - Writing new WAV files from processed float data.
+`SuppressionEngine.startLive()` accepts `audioEngine`, with this default:
 
-#### 5.3 Playback with `expo-av`
+```text
+audioEngine: auto
+```
 
-- Use `expo-av`’s `Audio.Sound` to:
-  - Load the “original” WAV.
-  - Load the “cleaned” WAV.
-  - Provide simple UI actions:
-    - “Play Original”
-    - “Play Clean”
+`auto` attempts the native Oboe/AAudio path first. If Oboe cannot open on the
+device, the app falls back to the older Kotlin `AudioRecord`/`AudioTrack` path.
+The Oboe callbacks are intentionally small: they move audio through preallocated
+native rings and do not run ONNX inference. Waveformer inference runs on a
+processor thread with the current quality-stable defaults:
 
----
+```text
+hop: 100 ms
+lookahead: about 300 ms
+provider: ONNX Runtime Android CPU
+post-filter: off
+quantization: none by default
+```
 
-### 6. Processing Pipeline (Chunked Inference)
+The runtime panel/status events expose the active audio engine, native sample
+rate, frames per burst, queue depth, callback underruns, input overflows, render
+underruns, fail-open count, and inference p50/p95/p99. On a healthy device,
+`audioEngine` should be `oboe`, inference p95 should stay under the 100 ms hop
+budget, and fail-open should remain zero.
 
-Because mobile devices can’t efficiently process arbitrarily long audio in a single pass, `mobile-test` uses **chunked processing**:
+## Backend Boundary
 
-1. Convert entire recorded WAV to `Float32Array`.
-2. Compute chunk size: `chunkSamples = 3 * 44100`.
-3. For each 3-second block:
-   - Extract a slice `inputChunk`.
-   - Zero-pad the final chunk if shorter.
-   - Run TFLite inference: `outputChunk`.
-4. Concatenate all `outputChunk`s.
-5. Write concatenated array to a new WAV as the “cleaned” audio.
+The Android model path is local-only. `ModelBundleService.ts` does not call
+`/model/latest`, and `BundleRuntimeStore.kt` does not download model bundles.
+The FastAPI backend is for auth, history, and device metadata; it is not needed
+to prepare the suppression model or run live inference.
 
-**Benefits**:
+## Local Development Steps
 
-- Handles arbitrary-length recordings while using a fixed-size TFLite model.
-- Keeps memory usage bounded.
+From the repo root:
 
-**Pitfalls & fixes**:
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+Test-Path .\ai\models\model_selection.json
+Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\android\model_fixed.ort
+Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\android\required_operators.config
+```
 
-- **Muffled audio**:
-  - Early versions produced “muffled” output due to:
-    - Untrained weights (Native UNet with random weights).
-    - Slight inconsistencies in scaling/normalization.
-  - For production:
-    - Train the UNet on noise-suppression tasks and export updated weights.
-    - Ensure input audio is normalized consistently with training.
-- **Length mismatch**:
-  - Discrepancies between original and cleaned audio duration were solved by:
-    - Keeping sample rate and chunk sizes consistent.
-    - Avoiding off-by-one errors when slicing and stitching.
+From the mobile app:
 
----
-
-### 7. Hooks and Services Layout (`mobile-test`)
-
-- `hooks/useSuppressionDemo.ts`:
-  - Orchestrates:
-    - Recording via `react-native-audio-record`.
-    - Triggering processing via `WaveformerInferenceService`.
-    - Managing UI state (idle, recording, processing, playing).
-- `services/WaveformerInferenceService.ts`:
-  - Encapsulates:
-    - TFLite model loading.
-    - Chunked inference logic.
-    - Input/output buffer handling.
-- `services/YAMNetInferenceService.ts` (optional for now):
-  - Prototype for YAMNet-based classification on-device.
-  - Not strictly required for the current record-process-play demo, but useful for future semantic control on mobile.
-
-**Recommendation for production**:
-
-- Keep ML runtime details fully encapsulated in `services/`.
-- Keep UI logic in `hooks/` and `App.tsx`.
-- Expose high-level API like:
-  - `recordAndProcess(durationSeconds: number): Promise<{ originalPath: string; cleanPath: string }>`
-
----
-
-### 8. Native / Expo Prebuild Steps
-
-Working sequence validated in `mobile-test`:
-
-```bash
-# From mobile-test/ (or your app directory)
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-part
 npm install
-npx expo prebuild --clean --platform android
-npx expo run:android
+npm run android
 ```
 
-**Pitfalls & recoveries**:
+`npm run android` invokes Expo's Android build path and should trigger Gradle's
+model-bundle task. If native code changes, rebuild the dev client; Metro reload
+alone is not enough.
 
-- **Stale native build artifacts**:
-  - Use `--clean` with `expo prebuild` when changing native modules (`react-native-fast-tflite`, audio libs, etc.).
-- **Metro cache issues**:
-  - If models or JS changes aren’t reflected:
-    - `npx expo start -c` to clear Metro cache.
-- **Gradle/Android issues**:
-  - Keep `android/` directory under version control once stabilized.
-  - When dependencies change, regenerate with `expo prebuild --clean` rather than hand-editing Gradle files.
+## Runtime Smoke Checks
 
----
+In the app or logs, verify that `SuppressionEngine.prepare()` reports:
 
-### 9. Known Pitfalls and How We Solved Them
+```text
+modelId = waveformer_edge_100ms
+runtimeKind = onnx_streaming_target_extractor
+sampleRate = 44100
+categoryCount = 20
+provider includes onnxruntime-cpu or cpu
+audioEngine = oboe, or legacy only if Oboe is unavailable on the device
+inferenceP95Ms < 100 during normal live use
+```
 
-- **1. Complex-number Waveformer export to TFLite failed**:
-  - Problem: Original Waveformer graph relied on complex STFT ops that current ONNX→TFLite toolchains couldn’t handle reliably.
-  - Solution: Introduced a TFLite-friendly Native UNet model and exported it as `waveformer.tflite`. This is the model currently deployed in `mobile-test`.
+Then check:
 
-- **2. Dummy models vs. “real” processing**:
-  - Early attempts used trivial “dummy” models just to validate the pipeline, which produced no meaningful suppression.
-  - Final approach uses a real UNet architecture so the pipeline exercises a legitimate deep network, even if current weights are not yet fully trained for noise suppression.
+- categories load from native runtime
+- start live returns a session id
+- status and meter events arrive
+- stop live emits/handles the finished event
+- recording save, if enabled, waits for native drain/cleanup
+- backend logs do not show `/model/*` or `/separation/*` requests
 
-- **3. Wrong YAMNet indices for keyboard typing** (desktop, but relevant to semantics on mobile):
-  - Initially used incorrect YAMNet indices (370/371) for typing.
-  - Debugged by printing **all** YAMNet detections and discovered correct indices (e.g. 378, 380).
-  - Lesson: When porting semantics to mobile, always verify class indices empirically, not just from docs.
+## Troubleshooting
 
-- **4. Hardware pre-filtering hides noise**:
-  - Some “smart” headsets heavily filter typing noise before the mic signal reaches the app.
-  - Result: YAMNet (or mobile model) sees almost no keyboard content to suppress.
-  - Lesson: On-device suppression can’t remove sounds that never reach the microphone; test with “dumb” mics when validating.
+### Native Module Unavailable
 
-- **5. Mono vs. stereo mismatch**:
-  - Desktop: errors like “index 1 is out of bounds” occurred when assuming stereo output on mono devices.
-  - Mobile: similar care is needed—always check channel count, default to mono, and avoid hard-coded stereo assumptions.
+Error text may say the `SuppressionEngine` native module is unavailable. Rebuild
+the Android dev client after native changes:
 
-- **6. Asset path mistakes and silent loading failures**:
-  - Wrong `require` paths caused silent failure to load the `.tflite` file.
-  - Fix: keep `assets/models` under the project root, and use short, well-tested relative paths.
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-part
+npm run android
+```
 
-- **7. Recording duration mismatch**:
-  - UI said “5 seconds” but actual recorded WAV was shorter.
-  - Fix: Consistently use 44.1 kHz everywhere and compute durations from sample counts.
+### Stale Or Missing Bundle
 
----
+Check the generated manifest path. If it does not exist, the Gradle task did
+not run or failed. Check that the active package artifact exists under
+`ai/models`.
 
-### 10. How to Reuse `mobile-test` in the Real App
+### Backend Requests During Model Preparation
 
-When you are ready to move from `mobile-test` into the real `mobile/` app:
+Model preparation should not call the backend. If backend logs show `/model/*`
+or `/separation/*` requests from the app, check for stale JavaScript/native code
+or an old installed dev client.
 
-1. **Copy structure**:
-   - Replicate:
-     - `hooks/useSuppressionDemo.ts`
-     - `services/WaveformerInferenceService.ts`
-     - `services/YAMNetInferenceService.ts` (optional)
-     - `utils/wavUtils.ts`
-   - Adjust import paths to match the real app’s folder layout.
+### Audio Engine Shows `legacy`
 
-2. **Copy assets**:
-   - Copy `assets/models/waveformer.tflite` (and `yamnet.tflite` if needed).
-   - Ensure `metro.config.js` in the real app is configured with `.tflite` in `assetExts`.
+`legacy` means the Oboe path was unavailable or failed to open and the app used
+the Kotlin `AudioRecord`/`AudioTrack` fallback. Rebuild the app after native
+changes, confirm the native library is packaged, and test on a real Android
+device when emulator audio behavior is suspect.
 
-3. **Install identical dependencies**:
-   - Mirror `mobile-test/package.json` dependency versions, or upgrade carefully and re-validate builds.
+Useful build checks:
 
-4. **Wire up UI**:
-   - Use `useSuppressionDemo` (or a similar hook) to expose a simple UI with:
-     - Record button (N seconds).
-     - Play Original.
-     - Play Clean.
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-part\android
+.\gradlew.bat :app:compileDebugKotlin
+.\gradlew.bat :app:externalNativeBuildDebug
+.\gradlew.bat :app:mergeDebugNativeLibs
+```
 
-5. **Gradual enhancement**:
-   - Start with record-process-play offline flow (already validated).
-   - Later, explore streaming / near-real-time suppression if required.
+### TFLite References
 
----
+Some dependencies or old docs may still mention TFLite. Treat those as
+historical unless the current native module is changed to use them again. The
+current product runtime is ONNX/ExecuTorch bundle based.
 
-### 11. Quick Start Checklist (For Mobile Devs)
+## Historical Note
 
-- **Android Emulator microphone access (if testing on an emulator)**
-  - [ ] In Android Studio → **Device Manager** → select your AVD → **Edit** (pencil) → **Show Advanced Settings**:
-    - Set **Microphone** / **Audio input** to **Virtual microphone uses host audio input** (wording varies by Android Studio version).
-  - [ ] In the running emulator: open **Extended controls** (⋮) → **Microphone**:
-    - Enable microphone input if there is a toggle.
-    - Verify the emulator isn’t muted.
-  - [ ] Inside the emulator: **Settings → Apps → <your app> → Permissions → Microphone → Allow**.
-  - [ ] If recordings are silent:
-    - Prefer a **physical device** (emulator mic support varies by host OS/driver and AVD image).
-    - Try recreating the AVD or switching system images (Google APIs vs AOSP can differ).
-    - Fully rebuild the dev client (`npx expo prebuild --clean --platform android` then `npx expo run:android`).
-
-- **Environment**
-  - [ ] Node + npm installed (2026 LTS).
-  - [ ] Android SDK installed (Android Studio recommended).
-  - [ ] Expo CLI installed globally (`npm install -g expo-cli` if needed).
-
-- **Project Setup**
-  - [ ] Clone repo and navigate to `mobile/` (or `mobile-test/` during experimentation).
-  - [ ] Run `npm install`.
-  - [ ] Ensure `metro.config.js` includes `tflite` in `assetExts`.
-
-- **Models**
-  - [ ] `assets/models/waveformer.tflite` present (~514 KB).
-  - [ ] (Optional) `assets/models/yamnet.tflite` present (~4 MB).
-
-- **Build & Run**
-  - [ ] `npx expo prebuild --clean --platform android` succeeds.
-  - [ ] `npx expo run:android` installs the app on a device/emulator.
-
-- **Functional Test**
-  - [ ] Can record 5+ seconds of audio without errors.
-  - [ ] “Original” playback matches the spoken content.
-  - [ ] “Clean” playback is generated (may sound muffled until trained weights are deployed).
-
-Once all boxes are checked, the model deployment pipeline is working, and you can iterate on model quality (training, exporting new weights) without changing the React Native integration.
-
+Native UNet/TFLite was explored because complex Waveformer exports were hard to
+lower to TFLite. That decision has been superseded by the shared packaged-model
+runtime described in
+`../architecture/decision_records/ADR-002-shared-packaged-model-runtime.md`.

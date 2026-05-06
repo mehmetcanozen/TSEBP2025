@@ -1,5 +1,12 @@
 # Waveformer Wide Demo and Evaluation Dataset
 
+Current runtime note: this runbook targets the active
+`waveformer_edge_100ms` product surface. The suppression spot-check commands use
+the packaged Waveformer ONNX runtime via
+`ai.ai_runtime.separation.waveformer_onnx_stream`, with the generated desktop artifact
+`ai/models/Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx`.
+It is not a Native UNet/TFLite or exact-15 AudioSep/CodecSep runbook.
+
 This runbook explains the reproducible Waveformer wide demo dataset pipeline:
 download public audio datasets, normalize source clips, create curated real-life
 mixtures, validate the generated WAVs, and run Waveformer suppression spot
