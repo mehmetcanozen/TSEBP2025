@@ -90,10 +90,13 @@ virtual cable pair.
 ## Run the desktop app
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\desktop
-$env:Path += ";$env:USERPROFILE\.cargo\bin"
-npm run tauri:dev
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-backend.ps1
+.\shared\scripts\start-desktop.ps1 -DevUi
 ```
+
+Use the dev UI for this workflow because it exposes Debug WAV source controls,
+transmission diagnostics, and routing details.
 
 ## Use the barking demo WAV
 

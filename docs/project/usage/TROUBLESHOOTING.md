@@ -69,8 +69,8 @@ chunk_samples = 4416
 Rebuild the development client:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-part
-npm run android
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-mobile-android.ps1 -CleanInstall
 ```
 
 Metro reload alone is not enough after native Kotlin, CMake, or C++ changes.

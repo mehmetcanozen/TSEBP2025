@@ -7,6 +7,16 @@ needs the portable artifact folder restored at:
 C:\SoftwareProjects\TSEBP2025\ai\models\Exports
 ```
 
+Download the current portable `Exports` zip from:
+
+```text
+https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing
+```
+
+Open the link in a browser, download the zip, and keep it outside the Git
+checkout until extraction. Do not commit the zip or the extracted `Exports`
+folder.
+
 Small manifests stay in Git and point to the restored artifacts. The important
 manifests are:
 
@@ -20,14 +30,14 @@ ai\models\CodecSepDNRv2_15Cat\model_package.json
 
 ## Restore the artifact bundle
 
-If you receive a zip whose top-level folder is `Exports`, extract it into
+If the downloaded zip's top-level folder is `Exports`, extract it into
 `ai\models`:
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025
 
 Expand-Archive `
-  -LiteralPath C:\path\to\TSEBP2025-model-artifacts.zip `
+  -LiteralPath C:\path\to\Exports.zip `
   -DestinationPath .\ai\models `
   -Force
 ```

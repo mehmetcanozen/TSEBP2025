@@ -6,7 +6,9 @@ Use this index instead of hunting through the root README.
 ## Recommended order
 
 1. [Model artifacts](MODEL_ARTIFACTS.md)
-   Restore the portable `ai/models/Exports` bundle and verify required files.
+   Download the ignored `Exports` zip from
+   [Google Drive](https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing),
+   restore it to `ai/models/Exports`, and verify required files.
 1. [Getting started](GETTING_STARTED.md)
    Prepare the local environment and choose a workflow.
 1. [Developer scripts](DEV_SCRIPTS.md)
@@ -51,3 +53,36 @@ Use this index instead of hunting through the root README.
 
 Historical Native UNet, TFLite, old `WFExports`, and lowercase `exports`
 references should not be treated as the current runtime.
+
+## One-Machine Smoke Path
+
+After restoring model artifacts and setting up PostgreSQL once, this is the
+normal Windows development loop:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+
+.\shared\scripts\start-backend.ps1
+.\shared\scripts\start-desktop.ps1
+```
+
+For the developer diagnostics UI:
+
+```powershell
+.\shared\scripts\start-desktop.ps1 -DevUi
+```
+
+For Android:
+
+```powershell
+.\shared\scripts\start-mobile-android.ps1 -StartEmulator
+```
+
+For VB-CABLE WAV streaming:
+
+```powershell
+.\shared\scripts\stream-loopback-wav.ps1 -ListDevices
+.\shared\scripts\stream-loopback-wav.ps1 `
+  -Input .\ai\data\audio\raw\speech_barking.wav `
+  -DeviceName "CABLE Input"
+```

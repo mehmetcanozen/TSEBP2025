@@ -5,7 +5,7 @@ use the focused guides in [Usage guide index](README.md).
 
 ## What the system does
 
-Semantic Noise Mixer removes selected unwanted sounds from local audio. The
+TSEBP2025 Semantic Hearing removes selected unwanted sounds from local audio. The
 common product pattern is:
 
 ```text
@@ -20,7 +20,6 @@ Current product-facing modes:
 - Python file-based suppression
 - Windows desktop live monitor
 - Windows desktop Virtual Mic through VB-CABLE
-- Windows desktop Debug WAV demos
 - Windows target-speaker suppression
 - Android on-device live suppression
 - Shared backend account/profile/settings/history/device support
@@ -64,10 +63,39 @@ alternatives use labels such as `dog barking` and `keyboard typing`.
 | Run app account/history backend | [Backend](BACKEND.md) |
 | Fix a broken setup | [Troubleshooting](TROUBLESHOOTING.md) |
 
+## Windows desktop user UI
+
+The normal desktop launch opens a clean operator UI:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-desktop.ps1
+```
+
+The user UI is split into four task areas:
+
+| Area | Purpose |
+| --- | --- |
+| `Live` | Start or stop realtime semantic or speaker suppression. |
+| `File Render` | Process an input WAV and write a cleaned WAV. |
+| `Speaker Profiles` | Save and reuse reference clips for speaker suppression. |
+| `Status` | Check virtual microphone readiness, live health, and file progress. |
+
+Developer-only diagnostics are not shown in this UI. Use the dev/debug launch
+only for repeatable routing checks and transmission diagnostics:
+
+```powershell
+.\shared\scripts\start-desktop.ps1 -DevUi
+```
+
 ## Fresh-checkout rule
 
 A clone with correct manifests can still be incomplete. Before debugging code,
-verify the portable artifact bundle is restored:
+download the portable `Exports` zip and verify the artifact bundle is restored:
+
+```text
+https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing
+```
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025

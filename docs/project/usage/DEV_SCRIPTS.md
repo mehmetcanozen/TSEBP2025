@@ -208,6 +208,7 @@ Start the desktop app after the backend is running:
 What it does:
 
 - writes `desktop/.env`;
+- writes `VITE_DESKTOP_UI_SURFACE=user` by default;
 - checks backend health at `http://localhost:4000/api/v1/health`;
 - adds Cargo to the current terminal PATH when available;
 - installs npm packages if `desktop/node_modules` is missing;
@@ -222,12 +223,30 @@ Useful options:
 # Launch Vite web UI only, without Tauri.
 .\shared\scripts\start-desktop.ps1 -WebOnly
 
+# Launch the full dev/debug UI instead of the clean user UI.
+.\shared\scripts\start-desktop.ps1 -DevUi
+
+# Launch the dev/debug UI in Vite-only mode.
+.\shared\scripts\start-desktop.ps1 -WebOnly -DevUi
+
+# Only update desktop/.env, useful for script smoke checks.
+.\shared\scripts\start-desktop.ps1 -WriteEnvOnly
+
 # Use another backend URL.
 .\shared\scripts\start-desktop.ps1 -BackendUrl "http://localhost:4000/api/v1"
 
 # Skip backend health check for UI-only debugging.
 .\shared\scripts\start-desktop.ps1 -SkipBackendCheck
 ```
+
+Desktop UI surface rules:
+
+- default script launch: `VITE_DESKTOP_UI_SURFACE=user`
+- `-DevUi`: `VITE_DESKTOP_UI_SURFACE=dev`
+- URL query override: `?ui=user` or `?ui=dev`
+- user UI hides Debug WAV, Transmission Test, Loopback Monitor, and raw runtime diagnostics
+- dev UI keeps the full diagnostics in modular Semantic Debug, Speaker Debug,
+  Transmission, and Runtime/Devices panels
 
 Run desktop checks without launching:
 
