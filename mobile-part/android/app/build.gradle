@@ -110,7 +110,7 @@ tasks.register("prepareBundledSuppressionModel") {
                         ? "executorch"
                         : lower.endsWith(".json")
                             ? "json"
-                            : lower.endsWith(".txt")
+                            : (lower.endsWith(".txt") || lower.endsWith(".config"))
                                 ? "text"
                                 : lower.endsWith(".yaml")
                                     ? "yaml"
@@ -256,6 +256,13 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17 -Wall -Wextra -Werror"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
     }
     signingConfigs {
         debug {
@@ -285,6 +292,14 @@ android {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
             useLegacyPackaging enableLegacyPackaging.toBoolean()
+        }
+    }
+    buildFeatures {
+        prefab true
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
         }
     }
     androidResources {
@@ -322,6 +337,7 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.18.0")
     implementation("org.pytorch:executorch-android:1.2.0")
+    implementation("com.google.oboe:oboe:1.10.0")
     implementation("com.github.wendykierp:JTransforms:3.1")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";

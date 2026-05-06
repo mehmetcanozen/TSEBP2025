@@ -25,7 +25,15 @@ import numpy as np
 from scipy.signal import resample_poly
 
 from ai.ai_runtime.utils import audio_utils
-from ai.ai_runtime.utils.paths import get_speaker_separator_model_path
+from ai.ai_runtime.utils.paths import (
+    get_ai_root,
+    get_project_root,
+    get_speaker_separator_model_path,
+    get_target_speaker_clearvoice_bundle_path,
+    get_target_speaker_tsextract_desktop_onnx_path,
+    get_target_speaker_tsextract_source_onnx_path,
+    get_target_speaker_windows_export_root_path,
+)
 from ai.ai_runtime.utils.target_speaker import (
     DEFAULT_TARGET_SPEAKER_ENGINE,
     normalize_target_speaker_engine,
@@ -38,21 +46,12 @@ SOURCE_REPO = "https://github.com/youzhenghai/TSExcalibur.git"
 DEFAULT_CHECKPOINT = "DPRNN_TSE/LibriMix_Clean/Origin_mixing/best_model.pth"
 DEFAULT_SAMPLE_RATE = 8_000
 CLEARVOICE_SAMPLE_RATE = 16_000
-AI_ROOT = Path(__file__).resolve().parents[2]
-PROJECT_ROOT = AI_ROOT.parent
-DEFAULT_TARGET_SPEAKER_EXPORT_ROOT = AI_ROOT / "models" / "exports" / "target_speaker_windows"
-DEFAULT_TSEXTRACT_ONNX = DEFAULT_TARGET_SPEAKER_EXPORT_ROOT / "tsextract" / "tsextract_fp32.onnx"
-DEFAULT_TSEXTRACT_BUNDLE_ONNX = (
-    DEFAULT_TARGET_SPEAKER_EXPORT_ROOT
-    / "windows_bundle_slim"
-    / "tsextract_onnx"
-    / "tsextract_fp32.onnx"
-)
-DEFAULT_CLEARVOICE_BUNDLE = (
-    DEFAULT_TARGET_SPEAKER_EXPORT_ROOT
-    / "windows_bundle_slim"
-    / "clearvoice_native"
-)
+AI_ROOT = get_ai_root()
+PROJECT_ROOT = get_project_root()
+DEFAULT_TARGET_SPEAKER_EXPORT_ROOT = get_target_speaker_windows_export_root_path()
+DEFAULT_TSEXTRACT_ONNX = get_target_speaker_tsextract_source_onnx_path()
+DEFAULT_TSEXTRACT_BUNDLE_ONNX = get_target_speaker_tsextract_desktop_onnx_path()
+DEFAULT_CLEARVOICE_BUNDLE = get_target_speaker_clearvoice_bundle_path()
 
 
 @dataclass(frozen=True)

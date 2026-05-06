@@ -2,7 +2,7 @@
 
 This deliberately keeps the quality-preserving ClearVoice path as a native
 runtime bundle and exports only the fast TSExtract model to FP32 ONNX.
-Generated model files and bundles live under ai/models/exports, which is
+Generated model files and bundles live under ai/models/Exports, which is
 ignored by git.
 """
 
@@ -25,15 +25,24 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 AI_ROOT = PROJECT_ROOT / "ai"
 SPEAKER_SEPARATOR_DIR = AI_ROOT / "models" / "SpeakerSeperator"
-DEFAULT_EXPORT_ROOT = AI_ROOT / "models" / "exports" / "target_speaker_windows"
-DEFAULT_TSEXTRACT_ONNX = DEFAULT_EXPORT_ROOT / "tsextract" / "tsextract_fp32.onnx"
-DEFAULT_CLEARVOICE_BUNDLE = DEFAULT_EXPORT_ROOT / "clearvoice_native"
+TARGET_SPEAKER_PACKAGE_DIR = AI_ROOT / "models" / "TargetSpeakerWindows"
+TARGET_SPEAKER_PACKAGE_PATH = TARGET_SPEAKER_PACKAGE_DIR / "model_package.json"
+DEFAULT_EXPORT_ROOT = (
+    AI_ROOT / "models" / "Exports" / "TargetSpeakerWindows" / "target_speaker_windows_desktop"
+)
+DEFAULT_SOURCE_TSEXTRACT_ONNX = DEFAULT_EXPORT_ROOT / "source" / "tsextract_fp32.onnx"
+DEFAULT_DESKTOP_BUNDLE = DEFAULT_EXPORT_ROOT / "desktop"
+DEFAULT_DESKTOP_TSEXTRACT_ONNX = DEFAULT_DESKTOP_BUNDLE / "tsextract_onnx" / "tsextract_fp32.onnx"
+DEFAULT_DESKTOP_TSEXTRACT_VALIDATION = (
+    DEFAULT_DESKTOP_BUNDLE / "tsextract_onnx" / "tsextract_fp32.validation.json"
+)
+DEFAULT_CLEARVOICE_BUNDLE = DEFAULT_DESKTOP_BUNDLE / "clearvoice_native"
 DEFAULT_TSEXTRACT_ONNX_OPSET = 18
 
 TSEXTRACT_EXPORT_DEPS = ("torch", "onnx", "onnxruntime", "asteroid", "scipy", "soundfile")
 CLEARVOICE_RUNTIME_DEPS = ("torch", "torchaudio", "clearvoice", "speechbrain", "numpy", "scipy", "soundfile")
 CLEARVOICE_PACKAGE_DEPS = ()
-PACKAGE_IGNORE_DIRS = {".cache", ".git", ".pytest_cache", "__pycache__"}
+PACKAGE_IGNORE_DIRS = {".cache", ".git", ".pytest_cache", "__pycache__", ".venv", "venv", "env"}
 PACKAGE_IGNORE_PATTERNS = ("*.pyc", "*.pyo")
 CLEARVOICE_RUNTIME_REQUIREMENTS = (
     "numpy>=1.24,<3",
@@ -218,6 +227,8 @@ def export_tsextract_onnx(args: argparse.Namespace) -> None:
 
     model = onnx.load(str(output))
     onnx.checker.check_model(model)
+    save_onnx_with_external_data(model, output)
+    onnx.checker.check_model(str(output))
     manifest = {
         "artifact": "tsextract_fp32_onnx",
         "engine": "tsextract",
@@ -325,8 +336,6 @@ def package_clearvoice_runtime(args: argparse.Namespace) -> None:
     copy_tree(model_dir / "src", root / "src")
     copy_clearvoice_checkpoint_assets(model_dir, root)
     copy_clearvoice_speaker_assets(model_dir, root)
-    (root / "outputs").mkdir(exist_ok=True)
-    (root / "voice_profiles").mkdir(exist_ok=True)
     (root / "models" / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
     write_clearvoice_launcher(root / "run_clearvoice_extract.ps1")
     write_clearvoice_installer(root / "install_clearvoice_runtime.ps1")
@@ -359,6 +368,8 @@ def package_clearvoice_runtime(args: argparse.Namespace) -> None:
                 "Hugging Face download caches",
                 "git metadata",
                 "pytest caches",
+                "generated Python virtual environments",
+                "generated output and voice-profile folders",
                 "Python bytecode caches",
                 "developer docs unless --include-dev-docs is set",
             ],
@@ -376,6 +387,11 @@ def package_clearvoice_runtime(args: argparse.Namespace) -> None:
 
 
 def package_windows(args: argparse.Namespace) -> None:
+    print(
+        "warning: package-windows is a compatibility command. "
+        "Use package-desktop for the canonical TargetSpeakerWindows export layout.",
+        file=sys.stderr,
+    )
     root = args.output
     prepare_new_output_dir(root)
     clearvoice_args = argparse.Namespace(
@@ -399,11 +415,271 @@ def package_windows(args: argparse.Namespace) -> None:
         root / "windows_bundle_manifest.json",
         {
             "artifact": "target_speaker_windows_bundle",
-            "engines": ["clearvoice_native", "tsextract_onnx" if args.tsextract_onnx else "tsextract_onnx_missing"],
+            "engines": ["tsextract_onnx" if args.tsextract_onnx else "tsextract_onnx_missing", "clearvoice_bundle"],
             "quality_policy": "clearvoice native FP32 lossless slim package; tsextract ONNX FP32",
             "output": str(root),
         },
     )
+
+
+def package_desktop(args: argparse.Namespace) -> None:
+    """Build the canonical generated Windows desktop target-speaker package."""
+    root = args.out_root
+    prepare_generated_export_root(root)
+
+    source_onnx = root / "source" / "tsextract_fp32.onnx"
+    desktop_dir = root / "desktop"
+    desktop_tsextract_dir = desktop_dir / "tsextract_onnx"
+    desktop_onnx = desktop_tsextract_dir / "tsextract_fp32.onnx"
+    validation_report = desktop_tsextract_dir / "tsextract_fp32.validation.json"
+
+    export_args = argparse.Namespace(
+        model_dir=args.model_dir,
+        checkpoint=args.checkpoint,
+        device=args.device,
+        allow_download=args.allow_download,
+        output=source_onnx,
+        opset=args.opset,
+        exporter=args.exporter,
+        dynamic_axes=args.dynamic_axes,
+        mixture_samples=args.mixture_samples,
+        reference_samples=args.reference_samples,
+    )
+    export_tsextract_onnx(export_args)
+    optimize_onnx_for_desktop(source_onnx, desktop_onnx)
+
+    validate_args = argparse.Namespace(
+        model_dir=args.model_dir,
+        checkpoint=args.checkpoint,
+        device=args.device,
+        allow_download=args.allow_download,
+        onnx=desktop_onnx,
+        mixture=args.validation_mixture,
+        reference=args.validation_reference,
+        report=validation_report,
+        mixture_samples=args.mixture_samples,
+        reference_samples=args.reference_samples,
+        min_correlation=args.min_correlation,
+        max_rmse=args.max_rmse,
+    )
+    validate_tsextract_onnx(validate_args)
+
+    clearvoice_args = argparse.Namespace(
+        model_dir=args.model_dir,
+        output=desktop_dir / "clearvoice_native",
+        hash_assets=args.hash_assets,
+        include_dev_docs=args.include_dev_docs,
+    )
+    package_clearvoice_runtime(clearvoice_args)
+    write_desktop_bundle_manifest(desktop_dir, args.package_version)
+
+    if args.write_package:
+        write_target_speaker_model_package(args.package_version, validation_report)
+
+
+def optimize_onnx_for_desktop(source: Path, output: Path) -> None:
+    """Create a CPU-optimized desktop ONNX while keeping external data explicit."""
+    require_modules(("onnx", "onnxruntime"))
+    import onnx
+    import onnxruntime as ort
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    options = ort.SessionOptions()
+    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+    options.optimized_model_filepath = str(output)
+    session = ort.InferenceSession(
+        str(source),
+        sess_options=options,
+        providers=["CPUExecutionProvider"],
+    )
+    del session
+    if not output.exists():
+        raise FileNotFoundError(f"ONNX Runtime did not write optimized model: {output}")
+
+    ensure_external_data_sidecars_for_load(output, source)
+    onnx.checker.check_model(str(output))
+
+    source_manifest = read_json_if_exists(source.with_suffix(".manifest.json"))
+    manifest = {
+        "artifact": "tsextract_fp32_onnx_desktop_optimized",
+        "engine": "tsextract_onnx",
+        "quality_policy": "fp32_no_quantization_ort_extended_cpu_optimized",
+        "source_onnx": str(source),
+        "sample_rate_hz": int(source_manifest.get("sample_rate_hz", 8000) or 8000),
+        "opset": source_manifest.get("opset"),
+        "shape_policy": source_manifest.get("shape_policy", "fixed_shape"),
+        "mixture_samples": int(source_manifest.get("mixture_samples", 80000) or 80000),
+        "reference_samples": int(source_manifest.get("reference_samples", 24000) or 24000),
+        "input_names": source_manifest.get("input_names", ["mixture", "reference", "reference_length"]),
+        "output_names": source_manifest.get("output_names", ["target"]),
+        "onnxruntime_optimization": {
+            "provider": "CPUExecutionProvider",
+            "level": "ORT_ENABLE_EXTENDED",
+            "offline_serialized": True,
+            "quantization": "none",
+        },
+        "output": str(output),
+        "sha256": sha256_file(output),
+        "bytes": output.stat().st_size,
+        "external_data_files": [
+            {
+                "path": str(path),
+                "sha256": sha256_file(path),
+                "bytes": path.stat().st_size,
+            }
+            for path in find_onnx_external_data_files(output)
+        ],
+    }
+    write_json(output.with_suffix(".manifest.json"), manifest)
+
+
+def ensure_external_data_sidecars_for_load(model_path: Path, source_model_path: Path) -> None:
+    """Copy sidecars referenced by an optimized ONNX before loading it.
+
+    ONNX Runtime's offline serializer may emit an optimized ONNX that still
+    references external tensor data by relative location, without copying that
+    sidecar into the optimized model directory. Loading with external data then
+    fails unless the sidecar is present first.
+    """
+    import onnx
+
+    model = onnx.load(str(model_path), load_external_data=False)
+    locations = sorted(
+        {
+            entry.value
+            for tensor in model.graph.initializer
+            for entry in tensor.external_data
+            if entry.key == "location" and entry.value
+        }
+    )
+    for location in locations:
+        relative = Path(location)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(f"Unsafe ONNX external data location: {location}")
+        destination = model_path.parent / relative
+        if destination.is_file():
+            continue
+        if destination.exists():
+            raise FileExistsError(f"ONNX external data path is not a file: {destination}")
+
+        source = source_model_path.parent / relative
+        if not source.is_file() and relative.name == model_path.name + ".data":
+            source = source_model_path.with_name(source_model_path.name + ".data")
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"Optimized ONNX references external data '{location}', "
+                f"but it was not found next to {source_model_path}"
+            )
+        copy_file(source, destination)
+
+
+def save_onnx_with_external_data(model: object, output: Path) -> None:
+    import onnx
+
+    sidecar = output.with_name(output.name + ".data")
+    if sidecar.exists():
+        sidecar.unlink()
+    for extra in output.parent.glob(output.name + ".data.*"):
+        if extra.is_file():
+            extra.unlink()
+    onnx.save_model(
+        model,
+        str(output),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location=sidecar.name,
+        size_threshold=1024,
+        convert_attribute=False,
+    )
+
+
+def write_desktop_bundle_manifest(bundle_dir: Path, package_version: str) -> None:
+    tsextract_dir = bundle_dir / "tsextract_onnx"
+    clearvoice_dir = bundle_dir / "clearvoice_native"
+    manifest = {
+        "artifact": "target_speaker_windows_bundle",
+        "layout_version": 2,
+        "package_version": package_version,
+        "runtime_kind": "target_speaker_windows_bundle",
+        "default_engine": "tsextract_onnx",
+        "available_engines": ["tsextract_onnx", "clearvoice_bundle"],
+        "quality_policy": "TSExtract FP32 ONNX for default fast/live-capable desktop path; ClearVoice native FP32 bundle for offline quality fallback.",
+        "tsextract_onnx": {
+            "model": "tsextract_onnx/tsextract_fp32.onnx",
+            "external_data": "tsextract_onnx/tsextract_fp32.onnx.data",
+            "manifest": "tsextract_onnx/tsextract_fp32.manifest.json",
+            "validation": "tsextract_onnx/tsextract_fp32.validation.json",
+            "sample_rate_hz": 8000,
+            "mixture_samples": 80000,
+            "reference_samples": 24000,
+        },
+        "clearvoice_bundle": {
+            "root": "clearvoice_native",
+            "entrypoint": "clearvoice_native/run_clearvoice_extract.ps1",
+            "installer": "clearvoice_native/install_clearvoice_runtime.ps1",
+            "sample_rate_hz": 16000,
+            "runtime_installed_after_packaging": False,
+        },
+        "output": str(bundle_dir),
+        "asset_hashes": {
+            "tsextract_onnx/tsextract_fp32.onnx": sha256_file(tsextract_dir / "tsextract_fp32.onnx"),
+            "tsextract_onnx/tsextract_fp32.onnx.data": sha256_file(tsextract_dir / "tsextract_fp32.onnx.data"),
+            "tsextract_onnx/tsextract_fp32.manifest.json": sha256_file(tsextract_dir / "tsextract_fp32.manifest.json"),
+            "tsextract_onnx/tsextract_fp32.validation.json": sha256_file(tsextract_dir / "tsextract_fp32.validation.json"),
+            "clearvoice_native/manifest.json": sha256_file(clearvoice_dir / "manifest.json"),
+        },
+    }
+    write_json(bundle_dir / "windows_bundle_manifest.json", manifest)
+
+
+def write_target_speaker_model_package(package_version: str, validation_report: Path) -> None:
+    package = read_json_if_exists(TARGET_SPEAKER_PACKAGE_PATH)
+    if not package:
+        raise FileNotFoundError(TARGET_SPEAKER_PACKAGE_PATH)
+
+    validation = read_json_if_exists(validation_report)
+    package["package_version"] = package_version
+    package["description"] = (
+        "Windows desktop target-speaker suppression package using the validated "
+        "TSExtract ONNX export by default, with the native ClearVoice bundle "
+        "available as an offline quality fallback."
+    )
+    package.setdefault("edge_profile", {})
+    package["edge_profile"].update(
+        {
+            "primary_target": "windows_desktop_cpu",
+            "default_engine": "tsextract_onnx",
+            "live_supported": True,
+            "package_role": "desktop_target_speaker_suppressor",
+        }
+    )
+    package["validation_summary"] = {
+        "status": "tsextract_onnx_validated_cpu" if validation.get("passed") else "tsextract_onnx_validation_pending",
+        "validation_artifact": target_speaker_export_relative("desktop", "tsextract_onnx", "tsextract_fp32.validation.json"),
+        "correlation": validation.get("correlation"),
+        "rmse": validation.get("rmse"),
+        "passed": validation.get("passed"),
+    }
+    package.setdefault("platforms", {})
+    package["platforms"]["desktop"] = {
+        "runtime_kind": "target_speaker_windows_bundle",
+        "artifact": target_speaker_export_relative("desktop", "windows_bundle_manifest.json"),
+        "metadata_artifacts": [
+            target_speaker_export_relative("desktop", "tsextract_onnx", "tsextract_fp32.manifest.json"),
+            target_speaker_export_relative("desktop", "tsextract_onnx", "tsextract_fp32.validation.json"),
+            target_speaker_export_relative("desktop", "clearvoice_native", "manifest.json"),
+        ],
+        "sample_rate": 8000,
+        "chunk_samples": 80000,
+        "preferred_live_hop_ms": 6000,
+        "mix_channels": 1,
+    }
+    write_json(TARGET_SPEAKER_PACKAGE_PATH, package)
+
+
+def target_speaker_export_relative(*parts: str) -> str:
+    suffix = "/".join(parts)
+    return "../Exports/TargetSpeakerWindows/target_speaker_windows_desktop/" + suffix
 
 
 def require_modules(names: Iterable[str]) -> None:
@@ -478,6 +754,25 @@ def prepare_new_output_dir(path: Path) -> None:
             "files from older bundles being mistaken for slim release contents."
         )
     path.mkdir(parents=True, exist_ok=True)
+
+
+def prepare_generated_export_root(path: Path) -> None:
+    resolved = path.resolve()
+    exports_root = (AI_ROOT / "models" / "Exports").resolve()
+    try:
+        resolved.relative_to(exports_root)
+    except ValueError as exc:
+        raise SystemExit(
+            f"Refusing to clean generated package root outside {exports_root}: {resolved}"
+        ) from exc
+
+    resolved.mkdir(parents=True, exist_ok=True)
+    for child_name in ("source", "desktop"):
+        child = resolved / child_name
+        if child.is_dir():
+            shutil.rmtree(child)
+        elif child.exists():
+            child.unlink()
 
 
 def copy_clearvoice_checkpoint_assets(model_dir: Path, root: Path) -> None:
@@ -561,6 +856,12 @@ def summarize_assets(root: Path) -> dict[str, int]:
 def write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def read_json_if_exists(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def write_clearvoice_runtime_requirements(path: Path) -> None:
@@ -698,7 +999,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     export = subparsers.add_parser("export-tsextract-onnx", help="Export TSExtract to FP32 ONNX.")
     add_common_model_args(export)
-    export.add_argument("--output", type=Path, default=DEFAULT_TSEXTRACT_ONNX)
+    export.add_argument("--output", type=Path, default=DEFAULT_SOURCE_TSEXTRACT_ONNX)
     export.add_argument("--opset", type=int, default=DEFAULT_TSEXTRACT_ONNX_OPSET)
     export.add_argument(
         "--exporter",
@@ -720,10 +1021,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser("validate-tsextract-onnx", help="Compare ONNX output with PyTorch.")
     add_common_model_args(validate)
-    validate.add_argument("--onnx", type=Path, default=DEFAULT_TSEXTRACT_ONNX)
+    validate.add_argument("--onnx", type=Path, default=DEFAULT_SOURCE_TSEXTRACT_ONNX)
     validate.add_argument("--mixture", type=Path, required=True)
     validate.add_argument("--reference", type=Path, required=True)
-    validate.add_argument("--report", type=Path, default=DEFAULT_TSEXTRACT_ONNX.with_suffix(".validation.json"))
+    validate.add_argument("--report", type=Path, default=DEFAULT_SOURCE_TSEXTRACT_ONNX.with_suffix(".validation.json"))
     validate.add_argument("--mixture-samples", type=int, default=8000 * 10)
     validate.add_argument("--reference-samples", type=int, default=8000 * 3)
     validate.add_argument("--min-correlation", type=float, default=0.999)
@@ -744,9 +1045,50 @@ def build_parser() -> argparse.ArgumentParser:
     )
     clearvoice.set_defaults(func=package_clearvoice_runtime)
 
-    package = subparsers.add_parser("package-windows", help="Assemble both engine artifacts into one folder.")
+    desktop = subparsers.add_parser(
+        "package-desktop",
+        help="Export, validate, and package the canonical TargetSpeakerWindows desktop bundle.",
+    )
+    add_common_model_args(desktop)
+    desktop.add_argument("--out-root", type=Path, default=DEFAULT_EXPORT_ROOT)
+    desktop.add_argument("--package-version", default="target_speaker_windows_desktop_local")
+    desktop.add_argument("--opset", type=int, default=DEFAULT_TSEXTRACT_ONNX_OPSET)
+    desktop.add_argument(
+        "--exporter",
+        choices=["dynamo", "legacy"],
+        default="dynamo",
+        help="PyTorch ONNX exporter path. dynamo is the default for this model.",
+    )
+    desktop.add_argument(
+        "--dynamic-axes",
+        action="store_true",
+        help="Experimental dynamic-axis export; the canonical desktop package stays fixed-shape by default.",
+    )
+    desktop.add_argument("--mixture-samples", type=int, default=8000 * 10)
+    desktop.add_argument("--reference-samples", type=int, default=8000 * 3)
+    desktop.add_argument("--validation-mixture", type=Path, required=True)
+    desktop.add_argument("--validation-reference", type=Path, required=True)
+    desktop.add_argument("--min-correlation", type=float, default=0.999)
+    desktop.add_argument("--max-rmse", type=float, default=1.0e-4)
+    desktop.add_argument("--hash-assets", action="store_true")
+    desktop.add_argument(
+        "--include-dev-docs",
+        action="store_true",
+        help="Also copy original project README/docs and source requirements into the ClearVoice bundle.",
+    )
+    desktop.add_argument(
+        "--write-package",
+        action="store_true",
+        help="Update ai/models/TargetSpeakerWindows/model_package.json to the canonical generated root.",
+    )
+    desktop.set_defaults(func=package_desktop)
+
+    package = subparsers.add_parser(
+        "package-windows",
+        help="Deprecated compatibility command. Use package-desktop for the canonical layout.",
+    )
     package.add_argument("--model-dir", type=Path, default=SPEAKER_SEPARATOR_DIR)
-    package.add_argument("--output", type=Path, default=DEFAULT_EXPORT_ROOT / "windows_bundle")
+    package.add_argument("--output", type=Path, default=DEFAULT_DESKTOP_BUNDLE)
     package.add_argument("--tsextract-onnx", type=Path, default=None)
     package.add_argument("--hash-assets", action="store_true")
     package.add_argument(

@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-DEFAULT_TARGET_SPEAKER_ENGINE = "clearvoice"
+DEFAULT_TARGET_SPEAKER_ENGINE = "tsextract_onnx"
 TARGET_SPEAKER_ENGINE_ALIASES = {
     "clearvoice": "clearvoice",
     "quality": "clearvoice",
@@ -60,8 +60,9 @@ def add_target_speaker_runtime_arguments(
         default=None,
         help=(
             "Target-speaker model directory override. Defaults to ai/models/SpeakerSeperator. "
-            "For --target-speaker-engine clearvoice_bundle, point this at the packaged "
-            "clearvoice_native folder."
+            "The default tsextract_onnx engine uses the packaged ONNX from "
+            "ai/models/Exports/TargetSpeakerWindows. For --target-speaker-engine "
+            "clearvoice_bundle, point this at the packaged clearvoice_native folder."
         ),
     )
     parser.add_argument(
@@ -70,7 +71,7 @@ def add_target_speaker_runtime_arguments(
         default=None,
         help=(
             "Optional TSExcalibur checkpoint path override. For "
-            "--target-speaker-engine tsextract_onnx, point this at the exported .onnx file."
+            "--target-speaker-engine tsextract_onnx, this can override the packaged .onnx file."
         ),
     )
     parser.add_argument(
@@ -85,10 +86,10 @@ def add_target_speaker_runtime_arguments(
         choices=TARGET_SPEAKER_ENGINE_CHOICES,
         default=DEFAULT_TARGET_SPEAKER_ENGINE,
         help=(
-            "Selected-speaker extractor: clearvoice uses the native slower/high-quality "
+            "Selected-speaker extractor: tsextract_onnx uses the packaged fixed-window "
+            "ONNX artifact and is the default; clearvoice uses the native slower/high-quality "
             "separate+match pipeline; clearvoice_bundle uses the packaged native bundle; "
-            "tsextract uses the fast TSExcalibur target extractor; tsextract_onnx uses "
-            "the exported fixed-window ONNX artifact."
+            "tsextract uses the PyTorch TSExcalibur target extractor."
         ),
     )
     parser.add_argument(

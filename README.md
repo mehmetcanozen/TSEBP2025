@@ -1,190 +1,70 @@
 # Semantic Noise Mixer
 
-Semantic Noise Mixer is a desktop-first audio suppression project built around
-semantic detection, source separation, spectral masking, and profile-driven
-control. The repository contains the active AI runtime, a Tauri desktop app,
-setup scripts, tests, and local model layouts for multiple separator backends.
+Semantic Noise Mixer is a local-first semantic audio suppression project for
+Windows desktop, Android, and Python research workflows. The active product
+path uses packaged model artifacts under `ai/models/Exports`, with
+`waveformer_edge_100ms` as the default semantic suppressor.
 
-For detailed operator guidance, see the
-[Master User Manual](docs/project/usage/USER_MANUAL.md).
+The root README is intentionally short. It explains what the repository is,
+where the major pieces live, and which document to open next.
 
-## Current Scope
+## Current status
 
-- Real-time and offline audio suppression tooling
-- Multiple separator backends behind one runtime interface
-- Profile-based control and backend-specific suppression settings
-- Local model asset management under `ai/models/`
-- Desktop app, command-line tools, tests, and research documentation
+| Area | Current path |
+| --- | --- |
+| Default semantic model | `waveformer_edge_100ms` |
+| Desktop runtime | Tauri, Rust audio, ONNX Runtime CPU, optional VB-CABLE virtual mic |
+| Android runtime | On-device Waveformer ORT, ONNX Runtime Android CPU, Oboe/AAudio first with Kotlin fallback |
+| Mobile backend | Generic FastAPI backend for auth, history, and devices only |
+| Model artifacts | Restored from the portable `ai/models/Exports` bundle, not committed to Git |
+| Historical paths | Native UNet, TFLite, old `WFExports`, and lowercase `exports` are not the active product path |
 
-## Main Components
+## Start here
 
-### YAMNet
+1. Restore the model artifact bundle:
+   [Model artifacts](docs/project/usage/MODEL_ARTIFACTS.md)
+1. Set up the repository:
+   [Getting started](docs/project/usage/GETTING_STARTED.md)
+1. Choose the workflow you need:
+   [Usage guide index](docs/project/usage/README.md)
 
-YAMNet is the semantic detector used by the legacy detector-driven runtime. It
-maps AudioSet classes into the higher-level categories defined under
-`ai/ai_runtime/config/`.
+## Common workflows
 
-### Waveformer
+| Goal | Guide |
+| --- | --- |
+| Run the Python CLI and batch processors | [Python CLI](docs/project/usage/PYTHON_CLI.md) |
+| Run the Windows desktop app | [Desktop app](docs/project/usage/DESKTOP_APP.md) |
+| Use desktop virtual microphone routing | [Virtual mic](docs/project/usage/VIRTUAL_MIC.md) |
+| Run the Android app with on-device suppression | [Mobile app](docs/project/usage/MOBILE_APP.md) |
+| Run the generic backend for app accounts/history | [Backend](docs/project/usage/BACKEND.md) |
+| Diagnose setup/runtime problems | [Troubleshooting](docs/project/usage/TROUBLESHOOTING.md) |
 
-Waveformer is the default target-separation backend. In the current runtime it
-works together with YAMNet and the legacy semantic category surface such as
-`typing`, `traffic`, `wind`, `pets`, `alarm`, and `siren`.
-
-### CodecSep
-
-CodecSep is an optional separator backend for broader nuisance-removal and
-research workflows. The current runtime supports fixed-category execution as the
-main path, while retaining compatibility and legacy prompt-based modes for
-debugging and comparison.
-
-### AudioSepHive15Cat
-
-AudioSepHive15Cat is an ONNX-based exact-15 backend with a smaller, explicit
-category surface. It is intended for deterministic fixed-category suppression
-such as `keyboard typing`, `alarm`, `wind`, `rain`, `music`, and
-`background noise`.
-
-### AudioSep
-
-AudioSep is the optional open-vocabulary backend used by the `--universal`
-workflow. It is intended for prompt-based extraction when a fixed category is
-not sufficient.
-
-### DeepFilterNet
-
-DeepFilterNet provides the `--suppress-all` path for speech-focused cleanup
-without category selection.
-
-## Backend Summary
-
-| Backend | Control surface | Typical use | Asset notes |
-| --- | --- | --- | --- |
-| `waveformer` | Legacy semantic categories plus YAMNet gating | Default desktop suppression | Uses local `Waveformer` and `YAMNet` assets |
-| `codecsep` | Fixed product categories, Hive class IDs, or legacy prompt modes | Broader nuisance removal and research runtime | Expects local `ai/models/CodecSep/` assets |
-| `audiosep_hive15cat` | Exact-15 fixed categories | Deterministic ONNX inference | Expects local `ai/models/AudioSepHive15Cat/` assets |
-| `--universal` | Free-text prompts | Open-vocabulary extraction | Uses local `ai/models/AudioSep/` assets |
-| `--suppress-all` | No category selection | Speech-focused cleanup | Uses the enhancement path rather than a separator backend |
-
-## Repository Layout
+## Repository map
 
 ```text
 TSEBP2025/
 |-- ai/
-|   |-- ai_runtime/     # Active runtime: detection, suppression, separation, config
-|   |-- data/           # Raw and processed audio
-|   |-- export/         # ONNX and TFLite export helpers
-|   |-- models/         # Local model trees and downloaded assets
-|   |-- scripts/        # Setup, demos, diagnostics
-|   |-- tests/          # Runtime and integration tests
-|   `-- training/       # Training-side dependencies and related code
-|-- desktop/
-|   |-- src/            # React desktop UI
-|   |-- src-tauri/      # Tauri host and native Rust audio runtime
-|   `-- tests/          # Desktop-side tests
-|-- docs/               # Project documentation and research notes
-|-- shared/
-|   `-- scripts/        # Shared environment setup
-|-- pyproject.toml
+|   |-- ai_runtime/     # Python runtime, separators, profiles, mappings
+|   |-- data/           # Local raw and processed audio
+|   |-- export/         # Model packaging and historical conversion tools
+|   |-- models/         # Model manifests plus local model/artifact trees
+|   |-- scripts/        # Demos, diagnostics, utilities
+|   `-- tests/          # Runtime tests
+|-- desktop/            # Tauri desktop app and Rust audio runtime
+|-- mobile-part/        # React Native Android app and native suppression module
+|-- mobile-backend/     # Generic FastAPI backend: auth, history, devices
+|-- docs/project/       # Architecture, codebase, model, knowledge, and usage docs
+|-- shared/scripts/     # Shared environment setup helpers
 `-- README.md
 ```
 
-## Configuration Surfaces
+## Model layout
 
-The runtime now has multiple category surfaces. The most important config files
-are:
-
-- `ai/ai_runtime/config/yamnet_to_waveformer.yaml`
-  Legacy semantic categories for detector-driven Waveformer suppression
-- `ai/ai_runtime/config/audiosep_hive15cat_categories.yaml`
-  Exact-15 categories for the AudioSepHive15Cat backend
-- `ai/ai_runtime/config/product_to_hive_fixedset.json`
-  Fixed-category product catalog for the current CodecSep runtime
-- `ai/ai_runtime/config/category_to_codecsep.yaml`
-  Legacy CodecSep prompt and slot compatibility mapping
-- `ai/ai_runtime/config/default_profiles.json`
-  Built-in profiles for default desktop usage
-- `ai/ai_runtime/config/profile_schema.json`
-  Schema for profile validation and backend-specific overrides
-
-## Setup
-
-### Recommended environment setup
-
-From the repository root:
-
-```powershell
-.\shared\scripts\setup_env.ps1
-.\.venv\Scripts\Activate.ps1
-```
-
-### Manual environment setup
-
-```powershell
-python -m venv .\.venv
-.\.venv\Scripts\Activate.ps1
-pip install -r desktop\requirements.txt
-pip install -r ai\training\requirements.txt
-```
-
-If you need export tooling as well:
-
-```powershell
-pip install -r ai\export\requirements.txt
-```
-
-## Model Assets
-
-Model directories under `ai/models/` are local assets and large checkpoints are
-generally not intended to be committed to Git.
-
-### Standard asset download
-
-```powershell
-python ai\scripts\setup\download_models.py
-```
-
-This downloader stores the standard Waveformer archive and YAMNet packages
-under `ai/models/`.
-
-### Optional AudioSep installation
-
-```powershell
-python ai\scripts\setup\install_audiosep.py
-```
-
-This clones the AudioSep repository into `ai/models/AudioSep/` and downloads the
-required checkpoints.
-
-### Current local model layout
-
-- `ai/models/Waveformer/`
-  Vendored Waveformer code plus `assets/config/`, `assets/checkpoints/`, and
-  `assets/archives/`
-- `ai/models/YAMNet/`
-  Local SavedModel, metadata CSV, archives, and TFLite copy
-- `ai/models/AudioSep/`
-  Optional open-vocabulary AudioSep checkout and weights
-- `ai/models/AudioSepHive15Cat/`
-  Local exact-15 ONNX assets
-- `ai/models/ClapSepHive15Cat/`
-  Local companion assets for fixed-category experiments
-- `ai/models/CodecSep/`
-  Optional local CodecSep runtime tree when that backend is used
-
-## Packaged Model Selection
-
-Desktop, mobile backend, and the mobile app now resolve their suppression model
-from shared manifests under `ai/models/`. There is no user-facing model picker:
-we switch the active separator centrally so one model can be swapped for another
-without rewriting each client.
+Small source-of-truth manifests stay in Git:
 
 - `ai/models/model_selection.json`
-  Source of truth for packaged suppression models. `default_model_id` selects
-  the repo-wide default and `models` maps model IDs to their package manifests.
 - `ai/models/Waveformer/model_package.json`
-  Declares the `waveformer_edge_100ms` package, including categories, presets,
-  suppression strategy, and per-platform artifacts for desktop ONNX and Android
-  ExecuTorch.
+- `ai/models/TargetSpeakerWindows/model_package.json`
 - `ai/models/AudioSepHive15Cat/model_package.json`
   Declares the `audiosep_hive15cat` package, including the exact-15 category
   surface and ONNX artifacts for desktop and Android.
@@ -435,269 +315,21 @@ CABLE Output (VB-Audio Virtual Cable)
 
 This test does not use speakers, a headset microphone, or a second cable pair.
 
-If the app says VB-CABLE is missing, install VB-CABLE, reboot if prompted, then
-click **Refresh devices** in the desktop app. If the target app does not see
-`CABLE Output`, open Windows Sound settings and confirm the VB-CABLE recording
-device is enabled.
-
-The Python feeder remains available for cable-routing checks. It plays a WAV
-into a virtual cable playback endpoint and does not run suppression. Do not
-use it for the full one-cable Virtual Mic validation path above.
-
-```powershell
-python -m ai.scripts.demos.virtual_mic_streamer --list-devices
-python -m ai.scripts.demos.virtual_mic_streamer --input C:\path\to\test.wav --device-name "CABLE Input"
-```
-
-### Fixed-category CodecSep example
-
-```powershell
-python -m ai.ai_runtime.batch.batch_processor `
-  --input ai\data\audio\raw\speech_siren.wav `
-  --output ai\data\audio\processed\speech_siren_codecsep.wav `
-  --separator-backend codecsep `
-  --codecsep-product-category keyboard_typing `
-  --codecsep-product-category siren `
-  --output-noise
-```
-
-### Exact-15 AudioSepHive15Cat example
-
-```powershell
-python -m ai.ai_runtime.batch.batch_processor `
-  --input ai\data\audio\raw\speech_alarm.wav `
-  --output ai\data\audio\processed\speech_alarm_hive15.wav `
-  --separator-backend audiosep_hive15cat `
-  --suppress "keyboard typing,alarm"
-```
-
-### Open-vocabulary AudioSep example
-
-```powershell
-python -m ai.ai_runtime.batch.batch_processor `
-  --input ai\data\audio\raw\speech_boat.wav `
-  --output ai\data\audio\processed\speech_boat_universal.wav `
-  --universal "boat engine, water noise"
-```
-
-### Mobile app on Android emulator
-
-The mobile app lives in `mobile-part/` and the mobile API lives in
-`mobile-backend/`. The app is an Expo development-client/native Android build
-because it uses native audio and model-runtime modules. It cannot run in the
-standard Expo Go app.
-
-Use two terminals: one for the FastAPI backend and one for the mobile app.
-
-#### 1. Prepare the mobile backend once
-
-Create `mobile-backend/.env` if it does not already exist:
-
-```env
-DATABASE_URL=sqlite:///./audioapp.db
-SECRET_KEY=dev-local-secret-change-me
-DEBUG=True
-MODELS_DIR=./models_store
-```
-
-Install backend dependencies from `mobile-backend/`:
-
-```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-backend
-python -m venv venv
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-`onnxruntime` is required by the `/separation` route and is listed in
-`mobile-backend/requirements.txt`.
-
-#### 2. Start the mobile backend
-
-From `mobile-backend/`:
-
-```powershell
-.\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Leave this terminal open. Confirm the API is reachable from Windows:
-
-```text
-http://localhost:8000/docs
-http://localhost:8000/
-```
-
-#### 3. Start an Android emulator
-
-Use Android Studio Device Manager and start an emulator, for example:
-
-```text
-Medium_Phone_API_36.1
-```
-
-If running from PowerShell, make sure Android SDK tools are on PATH for that
-terminal:
-
-```powershell
-$env:Path = "$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:Path"
-```
-
-The Android emulator reaches the Windows host through `10.0.2.2`, not
-`localhost`.
-
-#### 4. Configure the mobile app for the emulator
-
-Create `mobile-part/.env` if it does not already exist:
-
-```env
-EXPO_PUBLIC_API_URL=http://10.0.2.2:8000
-```
-
-If Gradle cannot find the Android SDK, create
-`mobile-part/android/local.properties`:
-
-```properties
-sdk.dir=C:\\Users\\omehm\\AppData\\Local\\Android\\Sdk
-```
-
-These files are local machine settings and are intentionally ignored by Git.
-
-#### 5. Build and run the mobile app
-
-Open a second terminal and run:
-
-```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-part
-npm run android
-```
-
-The first run builds the native Android app, so it can take a while. A successful
-build should end with `BUILD SUCCESSFUL`, then install/open the app named `SNC`
-on the emulator.
-
-If the build succeeds but the app does not open, start the Expo dev-client
-server from `mobile-part/`:
-
-```powershell
-npx expo start --dev-client
-```
-
-Then press `a` to open the installed Android app.
-
-#### 6. Basic checks
-
-- Keep the backend terminal running while using the mobile app.
-- In the app, allow microphone permission.
-- If login/register or model checks work, the backend terminal should show
-  requests such as `/auth/register`, `/auth/login`, `/model/latest`, or
-  `/separation/separate`.
-- If the app cannot reach the backend, confirm `EXPO_PUBLIC_API_URL` is
-  `http://10.0.2.2:8000` and that `http://localhost:8000/docs` still works on
-  Windows.
-- If emulator recording is silent, check the emulator microphone setting in
-  Android Emulator extended controls.
-
-#### 7. Test mobile live suppression with `speech_barking.wav`
-
-Use this workflow when you want the mobile app to receive a local WAV file as
-live microphone input through VB-CABLE. It is intended for the Android emulator
-on the Windows host. The app workflow is the same on a physical phone, but
-changing the Windows default recording device only affects the emulator, not a
-real phone microphone.
-
-The signal path is:
-
-```text
-speech_barking.wav
--> CABLE Input
--> CABLE Output
--> Android emulator host microphone
--> mobile app live suppression
--> saved recording
-```
-
-VB-CABLE exposes two endpoints:
-
-```text
-CABLE Input  - playback endpoint that receives the WAV stream
-CABLE Output - recording endpoint that Windows and the emulator use as a mic
-```
-
-Use three terminals/windows while testing.
-
-Terminal 1: stream the WAV into VB-CABLE from the repository root:
-
-```powershell
-cd C:\SoftwareProjects\TSEBP2025
-.\mobile-backend\venv\Scripts\python.exe -m ai.scripts.demos.virtual_mic_streamer --input C:\SoftwareProjects\TSEBP2025\ai\data\audio\raw\speech_barking.wav --device-name "CABLE Input"
-```
-
-The streamer loops the file. Stop it with `Ctrl+C` when you are done.
-
-Terminal 2: start the mobile backend:
-
-```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-backend
-.\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-Windows sound settings: open the Recording tab:
-
-```powershell
-Start-Process control.exe -ArgumentList 'mmsys.cpl,,1'
-```
-
-In the Recording tab, set `CABLE Output (VB-Audio Virtual Cable)` as the default
-recording device. Write down the previous default device first. After the test,
-switch the default recording device back to the original microphone.
-
-In the Android Emulator, open **Extended Controls -> Microphone** and enable
-host microphone input. The emulator should now receive the audio coming through
-`CABLE Output`.
-
-In the mobile app:
-
-1. Make sure the recording toggle is enabled.
-1. Choose the target category `dog`.
-1. Tap **Tap to start listening**.
-1. Let the sample play for a few seconds.
-1. Tap stop to finish the session and save the processed WAV.
-1. Open the app's recordings/library view to play or locate the saved output.
-
-The active mobile Waveformer package exposes barking as `dog`, not
-`dog barking`. If the app hears silence, check that the streamer is still
-running, Windows input is set to `CABLE Output`, and the emulator microphone is
-using host audio input.
-
-### Desktop UI
-
-```powershell
-cd desktop
-npm run tauri:dev
-```
-
-## Tests
-
-Run the automated test suites with:
-
-```powershell
-python -m pytest ai\tests\runtime desktop\tests
-```
-
-Additional diagnostics and manual smoke tools live under `ai/scripts/diagnostics/`
-and `ai/tests/manual/`.
-
-## Notes
-
-- Waveformer is detector-driven and uses the YAMNet-based semantic mapping.
-- AudioSepHive15Cat is manual-first and uses its own exact-15 category surface.
-- CodecSep fixed-category mode uses `product_to_hive_fixedset.json` rather than
-  the older prompt-routing file.
-- Some backends require local model trees that are not provisioned by the base
-  downloader.
+Large model artifacts live under `ai/models/Exports` and are restored from a
+separate artifact bundle. Do not rename `Exports` to lowercase `exports`.
 
 ## Documentation
 
-- [Master User Manual](docs/project/usage/USER_MANUAL.md)
-- [Model Details](docs/project/knowledge/model_details.md)
-- [Semantic Mappings](docs/project/knowledge/semantic_mappings.md)
-- [Architecture Overview](docs/project/architecture/overview.md)
+- [Project documentation home](docs/project/README.md)
+- [Architecture overview](docs/project/architecture/overview.md)
+- [Audio pipeline](docs/project/architecture/pipeline.md)
+- [Model catalogue](docs/project/model/README.md)
+- [Models and training](docs/project/codebase/models_and_training.md)
+- [Mobile deployment reference](docs/project/usage/MOBILE_DEPLOYMENT.md)
+
+## Documentation approach
+
+The operational details live in `docs/project/usage` so the repository front
+page stays readable. This follows common README guidance: keep the top-level
+README focused on what the project does, why it matters, how to get started,
+and where to find the deeper documentation.

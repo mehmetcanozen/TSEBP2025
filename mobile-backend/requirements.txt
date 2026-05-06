@@ -5,10 +5,3 @@ pydantic[email]
 pydantic-settings
 passlib[bcrypt]
 python-jose[cryptography]
-python-multipart
-aiofiles
-torch
-torchaudio
-numpy
-soundfile
-onnxruntime

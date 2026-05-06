@@ -32,9 +32,12 @@ from ai.ai_runtime.suppression import SemanticSuppressor
 from ai.ai_runtime.separation.waveformer_onnx_stream import WaveformerOnnxStream
 from ai.ai_runtime.utils.paths import (
     get_audiosep_hive15cat_onnx_path,
+    get_audiosep_hive15cat_export_root_path,
+    get_clapsep_hive15cat_onnx_path,
     get_codecsep_dnrv2_15cat_executorch_path,
     get_codecsep_dnrv2_15cat_onnx_path,
     get_data_audio_path,
+    get_model_exports_path,
     get_waveformer_desktop_onnx_path,
     get_waveformer_checkpoint_path,
     get_waveformer_config_path,
@@ -127,13 +130,18 @@ class WaveformerOnnxBatchProcessor:
 def _model_specs() -> dict[str, ModelSpec]:
     waveformer_onnx = get_waveformer_desktop_onnx_path()
     waveformer_pte = (
-        get_waveformer_model_path()
-        / "WFExports"
-        / "executorch_recommended_100ms"
+        get_model_exports_path()
+        / "Waveformer"
+        / "waveformer_edge_100ms"
+        / "executorch"
         / "semantic_hearing_100ms_portable.pte"
     )
-    audiosep_hive_pte = PROJECT_ROOT / "ai" / "models" / "AudioSepHive15Cat" / "frozensep_hive_15cat.pte"
-    clapsep_onnx = PROJECT_ROOT / "ai" / "models" / "ClapSepHive15Cat" / "frozensep_clapsep_15cat.onnx"
+    audiosep_hive_pte = (
+        get_audiosep_hive15cat_export_root_path()
+        / "android"
+        / "frozensep_hive_15cat.pte"
+    )
+    clapsep_onnx = get_clapsep_hive15cat_onnx_path()
 
     specs = [
         ModelSpec(

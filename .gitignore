@@ -19,6 +19,7 @@ env/
 *.pth
 
 # Models (large files - use Git LFS / Checkpoints)
+ai/models/Exports/
 ai/models/exports/
 ai/models/SpeakerSeperator/
 ai/models/AudioSep/
@@ -165,3 +166,4 @@ lerna-debug.log*
 *.njsproj
 *.sln
 ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx
+ai/models/Exports/Waveformer/waveformer_edge_100ms/

@@ -7,9 +7,9 @@ from typing import Optional, Union
 
 from .packaged_executorch_category_separator import PackagedExecuTorchCategorySeparator
 from ai.ai_runtime.utils.paths import (
+    get_codecsep_dnrv2_15cat_android_export_path,
     get_codecsep_dnrv2_15cat_categories_path,
     get_codecsep_dnrv2_15cat_executorch_path,
-    get_codecsep_dnrv2_15cat_model_path,
 )
 
 TARGET_SAMPLE_RATE = 16000
@@ -31,7 +31,7 @@ class CodecSepDNRv2_15CatExecuTorchSeparator(PackagedExecuTorchCategorySeparator
         super().__init__(
             model_label="CodecSepDNRv2_15Cat",
             default_model_path=get_codecsep_dnrv2_15cat_executorch_path(),
-            default_model_dir=get_codecsep_dnrv2_15cat_model_path(),
+            default_model_dir=get_codecsep_dnrv2_15cat_android_export_path(),
             default_categories_path=get_codecsep_dnrv2_15cat_categories_path(),
             default_model_filename="codecsep_dnrv2_15cat.pte",
             model_path=model_path,

@@ -1,80 +1,114 @@
 # Semantic Mappings Knowledge Item
 
-This document describes how runtime suppression categories map into the active backends.
+Semantic mapping is where many stale explanations can go wrong. The project has
+multiple category surfaces, and they are not interchangeable.
 
-## Core Mapping Logic
+## Current Product Surface: Waveformer 20
 
-The runtime uses two backend-specific mapping files:
+The active default package exposes these 20 ids:
 
-- `ai/ai_runtime/config/yamnet_to_waveformer.yaml`
-- `ai/ai_runtime/config/category_to_codecsep.yaml`
+```text
+alarm_clock
+baby_cry
+birds_chirping
+cat
+car_horn
+cock_a_doodle_doo
+cricket
+computer_typing
+dog
+glass_breaking
+gunshot
+hammer
+music
+ocean
+door_knock
+singing
+siren
+speech
+thunderstorm
+toilet_flush
+```
 
-Waveformer and CodecSep now use those mappings differently:
+Desktop and Android product UIs should display categories from the active
+package manifest. Do not substitute YAMNet aliases or exact-15 labels when the
+runtime reports `waveformer_edge_100ms`.
 
-- Waveformer remains detector-oriented and YAMNet-aware.
-- CodecSep explicit suppression is now **AudioCaps-native and detector-free**.
+## Exact-15 Surface
 
-Waveformer remains the default backend unless a command or profile explicitly switches to CodecSep.
+AudioSepHive15Cat and CodecSepDNRv2_15Cat use a different fixed surface:
 
-## CodecSep AudioCaps-Native Mapping
+```text
+speech
+music
+dog barking
+car engine
+footsteps
+rain
+wind
+keyboard typing
+phone ringing
+crowd noise
+bird singing
+water flowing
+door knocking
+alarm
+background noise
+```
 
-When `separator_backend=codecsep` is used explicitly:
+This surface is useful for exact-category package experiments. It should be
+presented as exact-15, not as the current Waveformer category list.
 
-- YAMNet is bypassed
-- requested categories are compiled directly into fixed-slot CodecSep plans
-- nuisance/environmental suppression targets the `sfx` slot
-- `speech` suppression targets `speech`
-- `music` suppression targets `music`
+## Python Legacy Mapping
 
-The active default mode is `codecsep_mode=audiocaps_native`.
+The Python reference runtime still contains mapping files such as:
 
-`experimental_search` still exists, but it is no longer the default contract.
+- `yamnet_class_map.yaml`
+- `yamnet_to_waveformer.yaml`
+- `category_to_codecsep.yaml`
+- `product_to_hive_fixedset.json`
+- `default_profiles.json`
 
-## Runtime Defaults
+These are used for detection, aliasing, profile defaults, and bridging product
+categories to backend-specific category names. They are especially relevant for
+offline Python commands and legacy Waveformer/YAMNet flows.
 
-- Offline batch CodecSep: `audiocaps_native`, mono-shared stereo by default
-- Realtime CodecSep: `audiocaps_native`, single-pass fixed-slot behavior
-- `codecsep_mode=experimental_search` enables the older slot-search / CLAP-rescoring / multistep path
-- `codecsep_mode=compat` forces the old stem-routing fallback
+## Detection Thresholds
 
-## Runtime Notes
+The YAMNet-based path uses confidence thresholds and category-specific mapping
+rules. Some categories are effectively manual or always-suppress in certain
+backend paths because exact packaged category separators do not need YAMNet to
+detect the sound first.
 
-| Category | Waveformer | CodecSep | Notes |
-| :--- | :--- | :--- | :--- |
-| **Typing** | `Computer_keyboard`, `Writing` | fixed-slot `sfx` prompt profile | Explicit CodecSep suppression does not wait for YAMNet. |
-| **Pets** | `Bark`, `Meow` | fixed-slot `sfx` prompt profile | Barking stays on `sfx`; no slot search by default. |
-| **Traffic** | `Bus` | fixed-slot `sfx` prompt profile | Prompt text is more specific than the Waveformer target name. |
-| **Wind** | No direct target | fixed-slot `sfx` prompt profile | CodecSep covers open-vocabulary nuisance classes through `sfx`. |
-| **Speech** | Not suppressed by target mapping | fixed-slot `speech` profile | Clean audio is built from the normalized complement. |
-| **Music** | Not suppressed by target mapping | fixed-slot `music` profile | Clean audio is built from the normalized complement. |
+For product packaged runtimes, category selection is explicit: the UI sends the
+selected package category id and aggressiveness to the runtime.
 
-## Threshold Logic
+## Backend-Specific Mapping Rules
 
-- Default threshold is `0.5` for detector-driven Waveformer usage.
-- Category-specific detection overrides live in `yamnet_to_waveformer.yaml`.
-- CodecSep prompt/slot profiles live in `category_to_codecsep.yaml`.
-- Explicit CodecSep suppression does not depend on YAMNet thresholds or detector state.
+- Waveformer package: use the 20 manifest ids directly.
+- AudioSepHive15Cat: resolve exact-15 ids/class ids.
+- CodecSepDNRv2_15Cat: resolve exact-15 ids and runtime-specific category
+  vector/index inputs.
+- Generic CodecSep: compile prompts or fixed-slot plans depending on mode.
+- TargetSpeakerWindows: ignore category labels and use a reference speaker.
 
-## CodecSep Default Runtime Source
+## Common Mistakes
 
-- Default CodecSep source: `ai/models/CodecSep/codecsep_supplementary_material/codecsep_code/model-checkpoints/CodecSep_AudioCaps_400k_Run1`
-- Checkpoint resolution order inside that run directory:
-  - `ckpt_best/pytorch_model.bin`
-  - `ckpt_best/ckpt_model_best.pth`
-  - `ckpt_final/ckpt_model_final.pth`
+- Using `barking` as a category. The current Waveformer id is `dog`; exact-15
+  uses `dog barking`.
+- Calling the current desktop/mobile model AudioSepHive15Cat. The default is
+  Waveformer unless `model_selection.json` changes.
+- Treating Native UNet/TFLite labels as current mobile truth. That path is
+  historical.
+- Mixing human display labels with backend ids in command examples.
 
-## Why Native Fixed-Slot
+## Documentation Rule
 
-This redesign aligns the runtime with the AudioCaps training/eval contract found in the paper and archived code:
+When documenting a category, state which surface it belongs to:
 
-- fixed `speech/music/sfx` slots per forward pass
-- detailed nuisance prompts live on `sfx`
-- normalized stem outputs are treated as the authoritative separation result
-- nuisance `sfx` requests subtract the extracted target from the original mix
-- `speech` and `music` requests keep the normalized complement
-
-Supporting references:
-
-- CodecSep OpenReview: <https://openreview.net/forum?id=MDHVDfUrDz>
-- AudioCaps dataset card: <https://huggingface.co/datasets/OpenSound/AudioCaps>
-- LAION-CLAP README: <https://github.com/LAION-AI/CLAP>
+```text
+Waveformer 20: dog
+Exact-15: dog barking
+Generic CodecSep prompt: dog barking sounds
+Target speaker: reference clip, no semantic category
+```

@@ -8,7 +8,7 @@ from typing import Optional, Union
 from .packaged_onnx_category_separator import PackagedOnnxCategorySeparator
 from ai.ai_runtime.utils.paths import (
     get_codecsep_dnrv2_15cat_categories_path,
-    get_codecsep_dnrv2_15cat_model_path,
+    get_codecsep_dnrv2_15cat_desktop_export_path,
     get_codecsep_dnrv2_15cat_onnx_path,
 )
 
@@ -31,7 +31,7 @@ class CodecSepDNRv2_15CatSeparator(PackagedOnnxCategorySeparator):
         super().__init__(
             model_label="CodecSepDNRv2_15Cat",
             default_model_path=get_codecsep_dnrv2_15cat_onnx_path(),
-            default_model_dir=get_codecsep_dnrv2_15cat_model_path(),
+            default_model_dir=get_codecsep_dnrv2_15cat_desktop_export_path(),
             default_categories_path=get_codecsep_dnrv2_15cat_categories_path(),
             default_model_filename="codecsep_dnrv2_15cat.onnx",
             model_path=model_path,

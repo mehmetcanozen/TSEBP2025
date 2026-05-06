@@ -1,7 +1,8 @@
-"""
-TFLite Model Export - Mobile Deployment
+"""Historical Waveformer TFLite exporter.
 
-Export Waveformer to TFLite (via ONNX -> TensorFlow) for mobile inference.
+The active mobile deployment path uses the shared package manifest plus
+ONNX Runtime/ORT artifacts from ``export_waveformer_edge.py``. This script is
+kept only to explain and reproduce the older TFLite-era experiment.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class TFLiteExporter:
-    """Export Waveformer to TFLite format."""
+    """Export the legacy full-window Waveformer graph to TFLite format."""
 
     def __init__(self, separator: WaveformerSeparator):
         self.separator = separator
@@ -114,7 +115,7 @@ class TFLiteExporter:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Export Waveformer to TFLite")
+    parser = argparse.ArgumentParser(description="Historical Waveformer TFLite export")
     parser.add_argument(
         "--output", "-o",
         type=Path,

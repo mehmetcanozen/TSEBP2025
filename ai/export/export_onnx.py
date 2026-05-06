@@ -1,7 +1,9 @@
-"""
-ONNX Model Export - Desktop Deployment
+"""Legacy full-window Waveformer ONNX exporter.
 
-Export Waveformer to ONNX with FP16 quantization for desktop GPU acceleration.
+The current deployable Waveformer path is ``export_waveformer_edge.py``, which
+packages the validated 100 ms streaming ONNX into ``ai/models/Exports`` for
+desktop and Android. This module is retained for historical/full-window export
+experiments only.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class ONNXExporter:
-    """Export Waveformer to ONNX format."""
+    """Export the legacy full-window Waveformer graph to ONNX format."""
 
     def __init__(self, separator: WaveformerSeparator):
         self.separator = separator
@@ -30,7 +32,7 @@ class ONNXExporter:
     def export(
         self,
         output_path: Path,
-        opset_version: int = 17, # Use 17 for max compatibility with onnxrt/TFLite
+        opset_version: int = 17, # Historical full-window export compatibility value
         use_fp16: bool = True,
         use_int8: bool = False,
     ) -> Path:
@@ -48,7 +50,7 @@ class ONNXExporter:
         logger.info(f"Exporting Waveformer to ONNX: {output_path}")
 
         # Create dummy inputs (batch=1, channels=1, samples=44100*3 = 132300)
-        # STATIC SHAPE required for TFLite stability
+        # Historical TFLite-era path used a static shape for converter stability.
         dummy_audio = torch.randn(1, 1, 132300)  # ~3s at 44.1kHz
         dummy_query = torch.ones(1, 41)  # 41 Waveformer targets
 

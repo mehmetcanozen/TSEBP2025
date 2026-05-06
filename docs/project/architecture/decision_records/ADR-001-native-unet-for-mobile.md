@@ -1,22 +1,46 @@
-# ADR 001: Native UNet implementation for Mobile TFLite
+# ADR 001: Native UNet For Mobile TFLite
 
 ## Status
-Approved
 
-## Context
-The primary desktop model (Waveformer) uses complex-valued STFT/ISTFT operations for signal processing. While efficient on desktop GPUs, these operations present significant hurdles for mobile deployment:
-1.  **TFLite Compatibility**: Standard TFLite kernels do not support complex tensors natively without custom ops or complex mapping configurations.
-2.  **ONNX to TFLite Conversion**: Toolchains like `onnx2tf` struggle with high-order complex number graphs.
-3.  **Performance**: Near-real-time STFT on mobile processors incurs significant overhead.
+Superseded.
 
-## Decision
-We decided to implement a **Native UNet** architecture specifically for the mobile pipeline (`mobile-test`). 
-- The model operates directly in the **time-domain**.
-- It uses standard 1D convolutional layers, Skip Connections, and Max Pooling.
-- It omits any complex-number math.
+This was a valid historical experiment, but it is not the current Android
+product runtime. The current approach is documented in
+[ADR 002: Shared Packaged Model Runtime](ADR-002-shared-packaged-model-runtime.md).
 
-## Consequences
-- **Positive**: The model is extremely lightweight (~514 KB) and runs reliably on Android via `react-native-fast-tflite`.
-- **Positive**: Simplified export pipeline (ONNX -> TFLite) without custom C++ kernels.
-- **Neutral**: The UNet requires a larger 3-second context window to compensate for the lack of frequency-domain features.
-- **Negative**: Current weights are less performant than the full Waveformer model; requires dedicated training on the mobile dataset.
+## Historical Context
+
+The early mobile direction attempted to avoid complex STFT/ISTFT conversion
+problems by exporting a small time-domain Native UNet to TFLite. At that time,
+the project expected the mobile app to use `react-native-fast-tflite` and a
+single `waveformer.tflite` style asset.
+
+The motivation was reasonable:
+
+- Waveformer-style complex-valued signal operations were hard to lower through
+  ONNX-to-TFLite tooling.
+- A time-domain convolutional model used TFLite-friendly operations.
+- A small model was attractive for mobile latency and app packaging.
+
+## Decision At The Time
+
+The project created a lightweight Native UNet mobile path, intended to operate
+directly on waveform chunks and avoid custom complex-number kernels.
+
+## Why It Was Superseded
+
+The product architecture later moved to shared model packages:
+
+- `ai/models/model_selection.json` chooses the active model.
+- Each `model_package.json` declares desktop and Android runtime contracts.
+- Android Gradle generates a suppression model bundle from the active package.
+- Native Android code supports ONNX Runtime and ExecuTorch runtime kinds.
+
+The current default Android bundle is `waveformer_edge_100ms` using
+`onnx_streaming_target_extractor`, not Native UNet/TFLite.
+
+## Current Consequence
+
+Do not use this ADR as implementation guidance for new mobile work. Keep it as
+project history explaining why TFLite was explored and why stale docs may still
+mention Native UNet.

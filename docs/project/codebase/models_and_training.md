@@ -1,67 +1,182 @@
-# 🤖 Models & Training - AI Stabilization
+# Models, Training, Exports, And Validation
 
-> [!NOTE]
-> This module handles the raw neural network weights and the "Signal Conditioning" required to make AI predictions usable in a real-time audio pipeline.
+This project contains multiple model lines. The important documentation rule is:
+the active product default comes from `ai/models/model_selection.json`, while
+training and export scripts describe possible or historical paths.
 
----
+## Active Model Taxonomy
 
-## ⚡ Quick Reference: Stabilization Heuristics
+| Model id | Role | Runtime contract | Current status |
+| --- | --- | --- | --- |
+| `waveformer_edge_100ms` | Default semantic suppressor | Desktop and Android `onnx_streaming_target_extractor` | Current default product path. |
+| `audiosep_hive15cat` | Exact-15 category separator | Desktop and Android `onnx_category_separator` | Packaged alternative/comparison path. |
+| `codecsep_dnrv2_15cat` | Frozen exact-15 CodecSep separator | Desktop `onnx_category_separator`, Android `executorch_category_separator` | Packaged export/runtime experiment and alternative. |
+| `target_speaker_windows` | Reference-speaker suppression | Desktop `target_speaker_windows_bundle` | Windows target-speaker package; offline-first. |
+| Native UNet/TFLite | Early mobile experiment | Historical `.tflite` asset idea | Superseded. |
 
-| Component | Logic Pattern | Heuristic / Constants | Rationale |
-| :--- | :--- | :--- | :--- |
-| **`SchmittTrigger`** | Hysteresis | `On: 0.7, Off: 0.4` | Stops toggle-flipping when noise volume is borderline. |
-| **`ConfidenceBuffer`** | Majority Vote | `2-of-3 frames` | Ignores momentary spikes (e.g. a single hand clap) from triggering profiles. |
-| **`Waveformer`** | Per-Category Query | `TARGETS (41)` | Each category gets its own query to prevent loud sources from masking quiet targets. |
-| **`Waveformer`** | Batched Inference | `separate_multi_query()` | Multiple queries batched into a single GPU forward pass for real-time performance. |
-| **`AdaptiveDuty`** | Energy Control | `3s / 8s / 15s` | Scales detection cadence based on system battery percentage. |
+## Waveformer Edge 100ms
 
----
+`waveformer_edge_100ms` is the current default. Its package declares a direct
+residual strategy:
 
-## 📈 Signal Stabilization Pipeline
-
-Raw AI detections are too unstable for direct audio mixing. Every prediction passes through this filter chain:
-
-```mermaid
-graph LR
-    RAW[Raw YAMNet Scores] --> MED[Median Filter]
-    MED --> CONF[Majority Voting Buffer]
-    CONF --> SCHMITT{Schmitt Trigger}
-    SCHMITT -- "On (High Confidence)" --> ON[Active Category]
-    SCHMITT -- "Off (Low Confidence)" --> OFF[Inactive Category]
-    
-    style SCHMITT fill:#f1c40f,stroke:#333
-    style CONF fill:#3498db,stroke:#333,color:#fff
+```text
+clean = mixture - aggressiveness * target_chunk
 ```
 
----
+The ONNX contract uses stereo chunks of `4416` samples at `44100 Hz` plus three
+state tensors:
 
-## 📂 Component Deep Dive
+- `enc_buf`
+- `dec_buf`
+- `out_buf`
 
-### [semantic_detective.py](../../../ai/ai_runtime/detection/semantic_detective.py)
-*   **The "Schmitt Trigger" (Hysteresis)**:
-    - **Logic**: A sound must hit **0.7** confidence to turn "On", but only needs to drop below **0.4** to turn "Off".
-    - **Why**: Imagine a dog barking far away. The AI confidence might jump between 0.45 and 0.55. Without hysteresis, the noise suppression would rapidly click on and off.
-*   **Majority Voting**:
-    - **Logic**: We keep a history of the last 3 frames. A sound is "Stable" only if it was present in 2 out of those 3.
+The validation summary in the package reports an ONNX CPU contract audit and
+known reference cases for dog and computer typing suppression. The relevant
+audit path is `ai/scripts/audit_waveformer_onnx.py`; the reusable runtime
+adapter is `ai/ai_runtime/separation/waveformer_onnx_stream.py`.
 
-### [waveformer_separator.py](../../../ai/ai_runtime/separation/waveformer_separator.py)
-*   **Method**: `_build_query()`
-*   **Detail**: Translates semantic group names (e.g., "Computer_keyboard") into a 41-dimensional multi-hot vector.
-*   **Why**: Waveformer is a **Unified Architecture**. Instead of loading 41 different models, we load one model and "tell" it what to separate using these query vectors.
-*   **Method**: `separate_multi_query()`
-*   **Detail**: Preprocesses audio once (numpy→torch, resampling, GPU transfer) and batches multiple queries into a single `(N, C, T)` / `(N, Q)` forward pass.
-*   **Why**: Per-category separation requires one query per active category. Without batching, each pass repeats all preprocessing. Batching eliminates redundant work and exploits GPU parallelism.
+The product category surface is 20 labels:
 
-### [yamnet_to_waveformer.yaml](../../../ai/ai_runtime/config/yamnet_to_waveformer.yaml)
-*   **Logic**: This YAML bridges the 521 AudioSet classes to our 73 Waveformer target heads.
-*   **Heuristic Overrides**: Keyboard noise (`typing`) has a lower detection threshold than `wind` because keyboards produce quiet but consistent high-frequency energy that YAMNet often under-scores.
+```text
+alarm_clock, baby_cry, birds_chirping, cat, car_horn,
+cock_a_doodle_doo, cricket, computer_typing, dog, glass_breaking,
+gunshot, hammer, music, ocean, door_knock, singing, siren,
+speech, thunderstorm, toilet_flush
+```
 
----
+Do not confuse these with the older Python/YAMNet category aliases or with the
+exact-15 AudioSep/CodecSep labels.
 
-> [!IMPORTANT]
-> **Thread Safety**: `SemanticDetective` is **NOT** thread-safe. Each instance contains rolling history buffers. If shared across threads, the "Schmitt Trigger" states will become corrupted.
->
-> **Ownership Boundary (2026 Refactor):**
-> - `ai/ai_runtime/` = AI-owned runtime inference package (canonical).
-> - Former `ai/training/models/*.py` wrappers were removed; runtime lives in `ai/ai_runtime/`.
-> - `ai/models/Waveformer/` = vendored training/inference backbone code.
+## AudioSepHive15Cat
+
+`audiosep_hive15cat` packages an exact-15 ONNX separator with a fixed category
+index input. It is not the current default, but it remains important because it
+represents a simpler fixed-category deployment contract and a quality comparison
+point.
+
+The package manifest stays in `ai/models/AudioSepHive15Cat/model_package.json`.
+The generated ONNX, category YAML/TXT, and embedding source asset live under:
+
+```text
+ai/models/Exports/AudioSepHive15Cat/audiosep_hive15cat_exact15/
+```
+
+Its categories use human-readable labels such as `dog barking`, `keyboard
+typing`, `phone ringing`, `door knocking`, `alarm`, and `background noise`.
+Runtime code treats it as `onnx_category_separator` with longer segment windows
+and overlap, followed by suppression reconstruction.
+
+## CodecSepDNRv2_15Cat
+
+`codecsep_dnrv2_15cat` freezes a prompt-conditioned CodecSep model into a
+15-category deployment form. Text prompts are not part of the exported runtime
+contract; the packaged form uses category ids/vectors.
+
+The export script `ai/export/freeze_codecsep_dnrv2_15cat.py` builds:
+
+- frozen checkpoint
+- ONNX artifact and sidecar
+- ExecuTorch `.pte` artifact and sidecar
+- freeze manifest and category metadata
+
+Those generated files are centralized under:
+
+```text
+ai/models/Exports/CodecSepDNRv2_15Cat/codecsep_dnrv2_15cat_exact15/
+```
+
+The model package folder `ai/models/CodecSepDNRv2_15Cat` should contain the
+manifest, not the deployable ONNX/PTE/PT payloads.
+
+Desktop currently describes the ONNX path. Android describes the ExecuTorch
+path. This model is useful for export/runtime demonstrations and comparison,
+not as the selected product default unless `model_selection.json` is changed.
+
+## Generic CodecSep Runtime
+
+The Python `codecsep` backend still exists separately from the frozen exact-15
+package. It supports query-first behavior, AudioCaps-native fixed-slot plans,
+compatibility mappings, prompt overrides, negative prompts, preserve prompts,
+and several reconstruction policies.
+
+This path is valuable for research and experiments, but product desktop/mobile
+packaging should prefer explicit package manifests over ad hoc prompt runtime
+behavior.
+
+## TargetSpeakerWindows
+
+`target_speaker_windows` is a separate Windows package for suppressing or
+isolating a speaker that matches a reference clip.
+
+The default engine is TSExtract ONNX:
+
+- sample rate: `8000`
+- mixture window: `80000` samples
+- reference window: `24000` samples
+- external data sidecar: `tsextract_fp32.onnx.data`
+
+ClearVoice is also packaged as an offline quality fallback when its native
+runtime is available. It should not be presented as the default live engine.
+
+## Training And Export Tooling
+
+Important script groups:
+
+- `ai/export/export_onnx.py` and `ai/export/export_tflite.py`: older Waveformer
+  export utilities; TFLite is historical for product mobile.
+- `ai/export/export_waveformer_edge.py`: current Waveformer edge packager. It
+  takes the trusted 100 ms source ONNX, writes canonical source metadata,
+  produces the desktop optimized ONNX and Android ORT artifacts under
+  `ai/models/Exports`, and can update `model_package.json`.
+- `ai/scripts/audit_waveformer_onnx.py`: current Waveformer ONNX contract audit.
+- `ai/scripts/run_android_waveformer_audition.py`: audition the generated
+  Android Waveformer bundle from Python.
+- `ai/scripts/prepare_waveformer_wide_eval.py`: build reproducible demo/eval
+  mixtures for the Waveformer 20-label surface.
+- `ai/scripts/run_model_comparison.py`: compare available model runtimes for
+  final-pitch style evidence.
+- `ai/export/freeze_codecsep_dnrv2_15cat.py`: freeze/export exact-15 CodecSep
+  into the canonical `ai/models/Exports/CodecSepDNRv2_15Cat/codecsep_dnrv2_15cat_exact15/`
+  layout.
+- `ai/export/export_codecsep_dnrv2_15cat_pte_only.py`: rebuild only the
+  CodecSepDNRv2 exact-15 ExecuTorch artifact from the canonical frozen source
+  checkpoint under `Exports`.
+- `ai/export/export_target_speaker_windows.py`: export/package TSExtract ONNX
+  and ClearVoice runtime assets for Windows. The canonical desktop output root
+  is `ai/models/Exports/TargetSpeakerWindows/target_speaker_windows_desktop/`;
+  `ai/models/SpeakerSeperator` stays the source/toy workspace.
+- `ai/scripts/setup/*`: install/download setup helpers for model dependencies.
+
+Generated datasets, downloaded corpora, and heavyweight model outputs are often
+ignored by Git. `ai/models/Exports` is one of those generated roots. Check local
+file existence, and restore the portable `Exports` folder when needed, before
+assuming a fresh clone can run the same demo.
+
+## Validation Caveats
+
+What is validated:
+
+- Current Waveformer package declares a CPU ONNX contract audit.
+- Android generated bundle manifest matches the active Waveformer package when
+  Gradle has prepared assets.
+- Desktop config resolves model packages and the ONNX Runtime DLL.
+- Runtime tests cover many parser, mapping, target-speaker, Waveformer ONNX,
+  mobile package, and exact-15 behaviors.
+
+What is not proven by the docs alone:
+
+- Full perceptual quality across all real-world sounds.
+- That ignored model artifacts exist on another machine.
+- That VB-CABLE or Android native dev-client setup is correct on a fresh
+  environment.
+- Historical TFLite/Native UNet behavior as a product path; it is specifically
+  documented as superseded, not current.
+
+## Future Model Direction
+
+The strongest future direction for better edge quality is an AudioSep-like
+teacher/student path: use high-quality AudioSep outputs as teacher targets, then
+train a smaller category-conditioned student that predicts the unwanted source
+for fixed product categories and exports cleanly to ONNX or another edge
+runtime. That direction is planning guidance, not current validated product
+state in this repo.

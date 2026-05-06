@@ -347,7 +347,7 @@ def load_package(
     model_package_path: str | Path = DEFAULT_MODEL_PACKAGE,
     platform: str = "desktop",
 ) -> WaveformerOnnxPackage:
-    package_path = Path(model_package_path)
+    package_path = Path(model_package_path).resolve()
     package = json.loads(package_path.read_text(encoding="utf-8"))
     root = package_path.parent
     selected_platform = package["platforms"][platform]
@@ -356,10 +356,13 @@ def load_package(
         name: tuple(int(value) for value in shape)
         for name, shape in selected_platform["state_tensors"].items()
     }
-    metadata_paths = tuple(root / item for item in selected_platform.get("metadata_artifacts", []))
+    metadata_paths = tuple(
+        (root / item).resolve()
+        for item in selected_platform.get("metadata_artifacts", [])
+    )
     return WaveformerOnnxPackage(
         package_path=package_path,
-        model_path=root / selected_platform["artifact"],
+        model_path=(root / selected_platform["artifact"]).resolve(),
         metadata_paths=metadata_paths,
         sample_rate=int(selected_platform["sample_rate"]),
         chunk_samples=int(selected_platform["chunk_samples"]),
@@ -370,7 +373,7 @@ def load_package(
 
 
 def load_android_bundle(bundle_dir: str | Path) -> WaveformerOnnxPackage:
-    bundle_path = Path(bundle_dir)
+    bundle_path = Path(bundle_dir).resolve()
     manifest_path = bundle_path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     model_artifact = next(
@@ -390,13 +393,13 @@ def load_android_bundle(bundle_dir: str | Path) -> WaveformerOnnxPackage:
         for name, shape in manifest["state_tensors"].items()
     }
     metadata_paths = tuple(
-        bundle_path / item["filename"]
+        (bundle_path / item["filename"]).resolve()
         for item in manifest.get("artifacts", [])
         if item.get("role") == "metadata"
     )
     return WaveformerOnnxPackage(
         package_path=manifest_path,
-        model_path=bundle_path / model_artifact["filename"],
+        model_path=(bundle_path / model_artifact["filename"]).resolve(),
         metadata_paths=metadata_paths,
         sample_rate=int(manifest["sample_rate"]),
         chunk_samples=int(manifest["chunk_samples"]),

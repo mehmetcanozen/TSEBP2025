@@ -17,7 +17,7 @@ const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
     // ── Auth & Engine ────────────────────────────────────────────
-    const { userInfo, userToken } = useAuth();
+    const { userInfo } = useAuth();
     const {
         startLive, stopLive,
         status, phase, isLive,
@@ -27,7 +27,7 @@ export default function DashboardScreen() {
         isRecordEnabled, setIsRecordEnabled,
         lastRecordingUri, lastRecordingFileName, lastRecordingFilePath,
         lastRecordingFileSizeBytes, clearLastRecording,
-    } = useSuppressionDemo({ accessToken: userToken });
+    } = useSuppressionDemo();
 
     const { colors, isDarkMode } = useTheme();
     const navigation = useNavigation<any>();
@@ -294,16 +294,20 @@ export default function DashboardScreen() {
                 <View style={[styles.card, { backgroundColor: card }]}>
                     <View style={styles.recogRow}>
                         <View style={{ flex: 1 }}>
-                            <Text style={[styles.cardLabel, { color: sub, marginBottom: 2 }]}>Sound Recognition</Text>
+                            <Text style={[styles.cardLabel, { color: sub, marginBottom: 2 }]}>Save Processed Audio</Text>
                             <Text style={[styles.recogTitle, { color: txt }]}>
-                                {selectedTarget?.label ?? 'No target selected'}
+                                {'Recording enabled'}
+                            </Text>
+                            <Text style={[styles.recogHint, { color: sub, marginTop: 4 }]}>
+                                {selectedTarget?.label ? `Target: ${selectedTarget.label}` : 'Choose a target sound before starting.'}
                             </Text>
                         </View>
                         <Switch
-                            value={isRecordEnabled}
-                            onValueChange={setIsRecordEnabled}
+                            value={true}
+                            onValueChange={() => setIsRecordEnabled(true)}
                             trackColor={{ false: div, true: primary }}
                             thumbColor="#FFF"
+                            disabled
                         />
                     </View>
                     {meter && isLive && (
@@ -324,7 +328,7 @@ export default function DashboardScreen() {
                         </View>
                     )}
                     <Text style={[styles.recogHint, { color: sub }]}>
-                        Identifies sounds in your environment using on-device analysis.
+                        Keep this on to write a WAV into the Recordings library after stop.
                     </Text>
                 </View>
 
@@ -382,11 +386,19 @@ export default function DashboardScreen() {
                                 {[
                                     ['Provider', runtimeInfo?.displayName ?? runtimeInfo?.provider ?? '—'],
                                     ['Model', runtimeInfo?.modelVersion ?? '—'],
+                                    ['Audio Engine', liveStatus?.audioEngine ?? runtimeInfo?.audioEngine ?? 'auto'],
+                                    ['Oboe Available', runtimeInfo?.nativeOboeAvailable ? 'yes' : 'no'],
                                     ['Sample Rate', `${runtimeInfo?.sampleRate ?? '—'} Hz`],
+                                    ['Native Rate', `${liveStatus?.nativeSampleRate ?? '—'} Hz`],
+                                    ['Frames/Burst', String(liveStatus?.framesPerBurst ?? '—')],
                                     ['Inference', `${liveStatus?.inferenceMs?.toFixed(1) ?? '—'} ms`],
+                                    ['Inference p95', `${liveStatus?.inferenceP95Ms?.toFixed(1) ?? '—'} ms`],
                                     ['Queue', `${liveStatus?.queueDepthMs?.toFixed(1) ?? '—'} ms`],
                                     ['XRuns', String(liveStatus?.xruns ?? 0)],
                                     ['AudioTrack Underruns', String(liveStatus?.audioTrackUnderruns ?? 0)],
+                                    ['Callback Underruns', String(liveStatus?.callbackUnderruns ?? 0)],
+                                    ['Input Overflows', String(liveStatus?.inputOverflows ?? 0)],
+                                    ['Render Underruns', String(liveStatus?.renderUnderruns ?? 0)],
                                     ['Limiter Hits', String(liveStatus?.limiterHits ?? 0)],
                                     ['Fail-open', String(liveStatus?.failOpenCount ?? 0)],
                                     ['Boundary Repairs', String(liveStatus?.boundaryRepairHits ?? 0)],

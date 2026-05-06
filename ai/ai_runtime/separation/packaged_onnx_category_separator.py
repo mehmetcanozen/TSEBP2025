@@ -58,7 +58,11 @@ class PackagedOnnxCategorySeparator:
             raise FileNotFoundError(f"{self.model_label} ONNX model not found: {self.model_path}")
 
         self.categories_yaml_path = Path(categories_path) if categories_path else default_categories_path
-        self.categories_txt_path = self.model_dir / "categories_15.txt"
+        self.categories_txt_path = (
+            self.categories_yaml_path.with_suffix(".txt")
+            if self.categories_yaml_path.name == "categories_15.yaml"
+            else self.model_dir / "categories_15.txt"
+        )
         metadata, self.categories = self._load_categories()
         self._category_lookup = {
             str(label).strip().casefold(): index

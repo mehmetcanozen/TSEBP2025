@@ -6,18 +6,23 @@ ROOT = Path(__file__).resolve().parents[3]
 PACKAGE_PATH = ROOT / "ai" / "models" / "Waveformer" / "model_package.json"
 
 
-def test_waveformer_android_uses_validated_onnx_contract():
+def test_waveformer_android_uses_validated_streaming_contract():
     package = json.loads(PACKAGE_PATH.read_text(encoding="utf-8"))
     desktop = package["platforms"]["desktop"]
     android = package["platforms"]["android"]
 
     assert android["runtime_kind"] == "onnx_streaming_target_extractor"
-    assert android["artifact"] == desktop["artifact"]
-    assert android["metadata_artifacts"] == desktop["metadata_artifacts"]
+    assert desktop["artifact"].endswith(
+        "../Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx"
+    )
+    assert android["artifact"].endswith(
+        "../Exports/Waveformer/waveformer_edge_100ms/android/model_fixed.ort"
+    )
     assert android["sample_rate"] == 44_100
     assert android["chunk_samples"] == 4_416
     assert android["mix_channels"] == 2
     assert android["state_tensors"] == desktop["state_tensors"]
+    assert "required_operators.config" in android["metadata_artifacts"][-1]
 
 
 def test_waveformer_android_metadata_names_match_export_contract():
@@ -27,8 +32,10 @@ def test_waveformer_android_metadata_names_match_export_contract():
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 
     assert (PACKAGE_PATH.parent / android["artifact"]).exists()
+    assert (PACKAGE_PATH.parent / android["metadata_artifacts"][-1]).exists()
     assert metadata["sample_rate"] == android["sample_rate"]
     assert metadata["chunk_samples"] == android["chunk_samples"]
+    assert metadata["format"] == "ort"
     assert [item["name"] for item in metadata["inputs"]] == [
         "mixture",
         "label_vector",

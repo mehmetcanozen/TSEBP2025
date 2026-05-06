@@ -1,109 +1,94 @@
-# CodecSep AudioCaps-Native Runtime
+# CodecSep Query-First Runtime
 
-This note documents the active runtime integration strategy for CodecSep after the AudioCaps-native overhaul.
+CodecSep appears in two different roles:
 
-## Why This Exists
+1. A Python research/runtime backend with query-first and AudioCaps-native
+   behavior.
+2. A frozen exact-15 deployment package named `codecsep_dnrv2_15cat`.
 
-The previous runtime treated the AudioCaps-trained CodecSep checkpoint as if it were a slot-searchable query engine. That diverged from the paper and archived AudioCaps eval path, which use CodecSep as a **fixed three-slot separator** with prompt-conditioned semantics:
+This document covers the first role and explains how it differs from packaged
+product runtimes.
 
-- `speech` stays speech-like
-- `music` stays music-like
-- `sfx` carries the open-vocabulary nuisance/environmental prompt
+## Why Query-First Exists
 
-The active runtime now defaults to that native contract.
+Generic CodecSep can separate sources using text-like semantic descriptions.
+That is useful for research because the desired sound may not fit a fixed
+product category. The runtime can compile target prompts, preserve prompts,
+negative prompts, and reconstruction policies before calling the separator.
 
-## Active Runtime Contract
-
-Default mode is `codecsep_mode=audiocaps_native`.
-
-In this mode:
-
-- one fixed forward pass predicts `speech`, `music`, and `sfx`
-- explicit suppression does **not** use YAMNet gating
-- nuisance/environmental categories route to `sfx`
-- `speech` suppression routes to `speech`
-- `music` suppression routes to `music`
-- nuisance `sfx` requests subtract the extracted target from the original mix
-- `speech` and `music` requests keep the normalized complement stems
-- extracted/noise audio is the target stem itself
-
-`CodecSepQueryPlan` is still used internally, but in native mode it is much simpler:
-
-- `target_prompts`
-- `preferred_slot`
-- optional prompt overrides for the non-target anchor slots
-- `subtract_target` for nuisance `sfx`
-- `keep_complement` for `speech` and `music`
+The tradeoff is complexity: query-first behavior is less package-friendly than
+a fixed category id or label vector.
 
 ## Modes
 
 ### `audiocaps_native`
 
-This is the default and recommended mode.
+AudioCaps-native mode treats the runtime as a fixed-slot query problem. It can
+compile a plan, route prompts into slots, and choose policies such as keeping
+the complement when suppressing speech-like categories.
 
-- fixed-slot AudioCaps behavior
-- no external CLAP rescoring
-- no slot search
-- no multistep refinement
+This is the preferred generic CodecSep research mode when the goal is faithful
+query behavior rather than legacy compatibility.
 
 ### `experimental_search`
 
-This preserves the older search-heavy runtime for debugging and research only.
-
-- slot search can inspect alternate slots
-- external CLAP rescoring is allowed
-- negative/preserve prompts are used
-- multistep refinement is allowed
+Experimental search tries broader prompt/slot exploration. Use it for
+investigation, not as product documentation or a default app behavior.
 
 ### `compat`
 
-Legacy stem-routing fallback.
+Compatibility mode preserves older behavior for legacy category mappings. It is
+useful when old commands or tests depend on earlier category names, but it
+should not be presented as the future product interface.
 
-- uses the old `stems:` / `prompts:` path
-- kept only for debugging and regression checks
+### `fixed_category`
 
-## Offline vs Realtime
+The batch CLI defaults CodecSep-related arguments toward fixed-category
+behavior where appropriate. For the packaged exact-15 derivative, use
+`codecsep_dnrv2_15cat` rather than generic query-first mode.
 
-### Offline batch
+## Inputs And Overrides
 
-- defaults to `audiocaps_native`
-- mono-shared stereo policy by default
-- lightweight overlap/crossfade chunking
-- `--codecsep-stereo-mode per_channel` is available as a slower debug path
+The Python CLI/runtime can accept:
 
-### Realtime
+- `--separator-backend codecsep`
+- `--universal` prompts
+- prompt overrides
+- negative prompts
+- preserve prompts
+- product categories
+- hive class ids
+- query strategy and multistep settings
 
-- defaults to `audiocaps_native`
-- low-latency single-pass fixed-slot behavior
-- no search/refinement by default
+These options are intentionally research-facing. They are not part of the
+current desktop/mobile packaged Waveformer default.
 
-## Config Shape
+## Reconstruction
 
-`ai/ai_runtime/config/category_to_codecsep.yaml` still contains:
+Generic CodecSep can reconstruct clean audio through residual subtraction,
+normalized stem reconstruction, or complement policies depending on the plan.
+This is different from the current Waveformer package, which predicts a target
+chunk and directly subtracts it.
 
-- `stems`
-- `prompts`
-- `queries`
+## Relation To CodecSepDNRv2_15Cat
 
-But the intent is now:
+`codecsep_dnrv2_15cat` freezes a selected fixed-category behavior into
+deployable artifacts:
 
-- `queries` primarily define the **fixed slot + target prompt profile**
-- `stems` / `prompts` remain the compatibility fallback
-- richer fields such as `negative_prompts`, `preserve_prompts`, `alternate_slots`, and `use_multistep` are only used by `experimental_search`
+- desktop ONNX category separator
+- Android ExecuTorch category separator
+- exact-15 category metadata
+- package manifest
 
-## Safety
+At that point, runtime prompts are no longer the public interface. The app uses
+category ids/vectors declared by the package.
 
-This redesign is runtime-only.
+## Safety And Documentation Boundary
 
-It does **not** modify:
+When writing docs or demos:
 
-- the active 400k training process
-- training configs
-- training checkpoints
-- training code under `ai/models/CodecSep/.../codecsep_code`
-
-## External Grounding
-
-- CodecSep OpenReview: <https://openreview.net/forum?id=MDHVDfUrDz>
-- AudioCaps dataset card: <https://huggingface.co/datasets/OpenSound/AudioCaps>
-- LAION-CLAP README: <https://github.com/LAION-AI/CLAP>
+- Say "generic CodecSep query-first" for the Python research backend.
+- Say "CodecSepDNRv2 exact-15" for the packaged deployment model.
+- Do not describe query-first prompt behavior as the desktop/mobile product
+  default.
+- Do not use CodecSep wording to explain the current Waveformer ONNX default.

@@ -13,12 +13,15 @@ class WavWriter(private val file: File, private val sampleRate: Int) : AutoClose
     private var totalPcmBytes = 0L
     private var maxAmplitude = 0f
     private var nonZeroSamples = 0L
+    private var pcmBytes = ByteArray(8192)
+    private val headerBytes = ByteArray(44)
+    private val headerBuffer = ByteBuffer.wrap(headerBytes).order(ByteOrder.LITTLE_ENDIAN)
 
 
     init {
         file.parentFile?.mkdirs()
         raf.setLength(0)
-        writeHeader(0) // Write initial dummy header
+        writeHeader(0) // Write initial dummy header; close patches the final size.
     }
 
     fun write(buffer: FloatArray, length: Int) = synchronized(this) {
@@ -26,7 +29,11 @@ class WavWriter(private val file: File, private val sampleRate: Int) : AutoClose
         val safeLength = kotlin.math.min(length, buffer.size)
         if (safeLength <= 0) return
 
-        val pcm = ByteBuffer.allocate(safeLength * 2).order(ByteOrder.LITTLE_ENDIAN)
+        val requiredBytes = safeLength * 2
+        if (pcmBytes.size < requiredBytes) {
+            pcmBytes = ByteArray(requiredBytes)
+        }
+        val pcm = ByteBuffer.wrap(pcmBytes, 0, requiredBytes).order(ByteOrder.LITTLE_ENDIAN)
         for (i in 0 until safeLength) {
           val valFloat = buffer[i]
           val safeFloat = if (valFloat.isNaN() || valFloat.isInfinite()) 0f else valFloat
@@ -38,12 +45,8 @@ class WavWriter(private val file: File, private val sampleRate: Int) : AutoClose
           pcm.putShort((sample * 32767.0f).toInt().toShort())
         }
 
-        raf.write(pcm.array())
+        raf.write(pcmBytes, 0, requiredBytes)
         totalPcmBytes += safeLength * 2L
-
-        val endPosition = raf.filePointer
-        writeHeader(totalPcmBytes)
-        raf.seek(endPosition)
     }
 
     override fun close() = synchronized(this) {
@@ -61,28 +64,28 @@ class WavWriter(private val file: File, private val sampleRate: Int) : AutoClose
 
 
     private fun writeHeader(pcmBytes: Long) {
-        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        headerBuffer.clear()
         
         // RIFF header
-        header.put("RIFF".toByteArray())
-        header.putInt((36 + pcmBytes).toInt())
-        header.put("WAVE".toByteArray())
+        headerBuffer.put("RIFF".toByteArray())
+        headerBuffer.putInt((36 + pcmBytes).toInt())
+        headerBuffer.put("WAVE".toByteArray())
         
         // FMT chunk
-        header.put("fmt ".toByteArray())
-        header.putInt(16) // Subchunk1Size (16 for PCM)
-        header.putShort(1.toShort()) // AudioFormat (1 for PCM)
-        header.putShort(1.toShort()) // NumChannels (1 for Mono)
-        header.putInt(sampleRate)
-        header.putInt(sampleRate * 2) // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
-        header.putShort(2.toShort()) // BlockAlign (NumChannels * BitsPerSample/8)
-        header.putShort(16.toShort()) // BitsPerSample
+        headerBuffer.put("fmt ".toByteArray())
+        headerBuffer.putInt(16) // Subchunk1Size (16 for PCM)
+        headerBuffer.putShort(1.toShort()) // AudioFormat (1 for PCM)
+        headerBuffer.putShort(1.toShort()) // NumChannels (1 for Mono)
+        headerBuffer.putInt(sampleRate)
+        headerBuffer.putInt(sampleRate * 2) // ByteRate (SampleRate * NumChannels * BitsPerSample/8)
+        headerBuffer.putShort(2.toShort()) // BlockAlign (NumChannels * BitsPerSample/8)
+        headerBuffer.putShort(16.toShort()) // BitsPerSample
         
         // DATA chunk
-        header.put("data".toByteArray())
-        header.putInt(pcmBytes.toInt())
+        headerBuffer.put("data".toByteArray())
+        headerBuffer.putInt(pcmBytes.toInt())
         
         raf.seek(0)
-        raf.write(header.array())
+        raf.write(headerBytes)
     }
 }

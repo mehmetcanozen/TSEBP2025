@@ -25,6 +25,9 @@ from torch import nn
 
 from ai.ai_runtime.separation.codecsep.model import CodecSep
 from ai.ai_runtime.utils.paths import (
+    get_codecsep_dnrv2_15cat_freeze_manifest_path,
+    get_codecsep_dnrv2_15cat_freeze_spec_path,
+    get_codecsep_dnrv2_15cat_frozen_checkpoint_path,
     get_codecsep_dnrv2_15cat_executorch_path,
     get_codecsep_dnrv2_15cat_model_path,
 )
@@ -398,17 +401,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--package-dir",
         default=str(default_package_dir),
-        help="Package directory containing the frozen checkpoint and freeze spec.",
+        help=(
+            "CodecSepDNRv2_15Cat manifest/package directory. The default frozen "
+            "checkpoint and freeze spec live under ai/models/Exports/CodecSepDNRv2_15Cat/"
+            "codecsep_dnrv2_15cat_exact15/source."
+        ),
     )
     parser.add_argument(
         "--frozen-checkpoint",
         default=None,
-        help="Path to codecsep_dnrv2_15cat_frozen.pt. Defaults to <package-dir>/codecsep_dnrv2_15cat_frozen.pt.",
+        help=(
+            "Path to codecsep_dnrv2_15cat_frozen.pt. Defaults to the canonical "
+            "Exports/CodecSepDNRv2_15Cat/codecsep_dnrv2_15cat_exact15/source copy."
+        ),
     )
     parser.add_argument(
         "--freeze-spec",
         default=None,
-        help="Path to freeze_spec_15.yaml. Defaults to <package-dir>/freeze_spec_15.yaml.",
+        help=(
+            "Path to freeze_spec_15.yaml. Defaults to the canonical "
+            "Exports/CodecSepDNRv2_15Cat/codecsep_dnrv2_15cat_exact15/source copy."
+        ),
     )
     parser.add_argument(
         "--executorch-output",
@@ -436,11 +449,19 @@ def main() -> None:
     args = build_arg_parser().parse_args()
 
     package_dir = Path(args.package_dir).resolve()
-    frozen_checkpoint_path = Path(args.frozen_checkpoint).resolve() if args.frozen_checkpoint else package_dir / "codecsep_dnrv2_15cat_frozen.pt"
-    freeze_spec_path = Path(args.freeze_spec).resolve() if args.freeze_spec else package_dir / "freeze_spec_15.yaml"
+    frozen_checkpoint_path = (
+        Path(args.frozen_checkpoint).resolve()
+        if args.frozen_checkpoint
+        else get_codecsep_dnrv2_15cat_frozen_checkpoint_path()
+    )
+    freeze_spec_path = (
+        Path(args.freeze_spec).resolve()
+        if args.freeze_spec
+        else get_codecsep_dnrv2_15cat_freeze_spec_path()
+    )
     executorch_path = Path(args.executorch_output).resolve()
     sidecar_path = executorch_path.with_suffix(".pte.json")
-    manifest_path = package_dir / "freeze_manifest.json"
+    manifest_path = get_codecsep_dnrv2_15cat_freeze_manifest_path()
 
     package_spec = load_package_spec(freeze_spec_path)
     model, metadata = load_frozen_model(

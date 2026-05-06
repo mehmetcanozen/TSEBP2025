@@ -38,6 +38,11 @@ def get_models_path() -> Path:
     return _AI_ROOT / "models"
 
 
+def get_model_exports_path() -> Path:
+    """Return the canonical generated model artifact root (ai/models/Exports/)."""
+    return get_models_path() / "Exports"
+
+
 def get_waveformer_model_path() -> Path:
     """Return the Waveformer model directory (ai/models/Waveformer/)."""
     return get_models_path() / "Waveformer"
@@ -73,14 +78,39 @@ def get_waveformer_model_package_path() -> Path:
     return get_waveformer_model_path() / "model_package.json"
 
 
+def get_waveformer_export_root_path() -> Path:
+    """Return the canonical generated Waveformer edge export root."""
+    return get_model_exports_path() / "Waveformer" / "waveformer_edge_100ms"
+
+
+def get_waveformer_source_onnx_path() -> Path:
+    """Return the canonical trusted Waveformer source ONNX copy."""
+    return get_waveformer_export_root_path() / "source" / "semantic_hearing_100ms_source.onnx"
+
+
 def get_waveformer_desktop_onnx_path() -> Path:
     """Return the Waveformer desktop streaming ONNX export path."""
-    return (
-        get_waveformer_model_path()
-        / "WFExports"
-        / "windows_desktop_onnx"
-        / "semantic_hearing_100ms_windows.onnx"
-    )
+    return get_waveformer_export_root_path() / "desktop" / "semantic_hearing_100ms_desktop.onnx"
+
+
+def get_waveformer_desktop_metadata_path() -> Path:
+    """Return the Waveformer desktop ONNX sidecar metadata path."""
+    return get_waveformer_desktop_onnx_path().with_suffix(".onnx.json")
+
+
+def get_waveformer_android_ort_path() -> Path:
+    """Return the Waveformer Android ORT-format export path."""
+    return get_waveformer_export_root_path() / "android" / "model_fixed.ort"
+
+
+def get_waveformer_android_metadata_path() -> Path:
+    """Return the Waveformer Android ORT sidecar metadata path."""
+    return get_waveformer_android_ort_path().with_suffix(".ort.json")
+
+
+def get_waveformer_android_required_operators_path() -> Path:
+    """Return the Waveformer Android required-operators config path."""
+    return get_waveformer_android_ort_path().with_name("required_operators.config")
 
 
 def get_yamnet_model_path() -> Path:
@@ -155,9 +185,82 @@ def get_audiosep_hive15cat_model_path() -> Path:
     return get_models_path() / "AudioSepHive15Cat"
 
 
+def get_audiosep_hive15cat_export_root_path() -> Path:
+    """Return the canonical generated AudioSepHive15Cat exact-15 export root."""
+    return get_model_exports_path() / "AudioSepHive15Cat" / "audiosep_hive15cat_exact15"
+
+
+def get_audiosep_hive15cat_shared_export_path() -> Path:
+    """Return the shared AudioSepHive15Cat exact-15 export assets directory."""
+    return get_audiosep_hive15cat_export_root_path() / "shared"
+
+
+def get_audiosep_hive15cat_source_export_path() -> Path:
+    """Return the AudioSepHive15Cat exact-15 source/reproducibility assets directory."""
+    return get_audiosep_hive15cat_export_root_path() / "source"
+
+
+def get_audiosep_hive15cat_onnx_path() -> Path:
+    """Return the default AudioSepHive15Cat ONNX export path."""
+    return get_audiosep_hive15cat_shared_export_path() / "frozensep_hive_15cat.onnx"
+
+
+def get_audiosep_hive15cat_categories_path() -> Path:
+    """Return the default AudioSepHive15Cat category catalog YAML path."""
+    return get_audiosep_hive15cat_shared_export_path() / "categories_15.yaml"
+
+
+def get_audiosep_hive15cat_category_embeddings_path() -> Path:
+    """Return the AudioSepHive15Cat frozen category embedding source asset."""
+    return get_audiosep_hive15cat_source_export_path() / "category_embeddings.pt"
+
+
 def get_speaker_separator_model_path() -> Path:
     """Return the target-speaker separator model directory."""
     return get_models_path() / "SpeakerSeperator"
+
+
+def get_target_speaker_windows_model_package_path() -> Path:
+    """Return the TargetSpeakerWindows package manifest path."""
+    return get_models_path() / "TargetSpeakerWindows" / "model_package.json"
+
+
+def get_target_speaker_windows_export_root_path() -> Path:
+    """Return the canonical generated TargetSpeakerWindows export root."""
+    return (
+        get_model_exports_path()
+        / "TargetSpeakerWindows"
+        / "target_speaker_windows_desktop"
+    )
+
+
+def get_target_speaker_windows_desktop_bundle_path() -> Path:
+    """Return the canonical TargetSpeakerWindows desktop bundle directory."""
+    return get_target_speaker_windows_export_root_path() / "desktop"
+
+
+def get_target_speaker_windows_bundle_manifest_path() -> Path:
+    """Return the TargetSpeakerWindows desktop bundle manifest path."""
+    return get_target_speaker_windows_desktop_bundle_path() / "windows_bundle_manifest.json"
+
+
+def get_target_speaker_tsextract_source_onnx_path() -> Path:
+    """Return the canonical source TSExtract ONNX path."""
+    return get_target_speaker_windows_export_root_path() / "source" / "tsextract_fp32.onnx"
+
+
+def get_target_speaker_tsextract_desktop_onnx_path() -> Path:
+    """Return the desktop-optimized TSExtract ONNX path."""
+    return (
+        get_target_speaker_windows_desktop_bundle_path()
+        / "tsextract_onnx"
+        / "tsextract_fp32.onnx"
+    )
+
+
+def get_target_speaker_clearvoice_bundle_path() -> Path:
+    """Return the packaged ClearVoice native bundle path."""
+    return get_target_speaker_windows_desktop_bundle_path() / "clearvoice_native"
 
 
 def get_codecsep_dnrv2_15cat_model_path() -> Path:
@@ -165,29 +268,93 @@ def get_codecsep_dnrv2_15cat_model_path() -> Path:
     return get_models_path() / "CodecSepDNRv2_15Cat"
 
 
-def get_audiosep_hive15cat_onnx_path() -> Path:
-    """Return the default AudioSepHive15Cat ONNX path."""
-    return get_audiosep_hive15cat_model_path() / "frozensep_hive_15cat.onnx"
+def get_codecsep_dnrv2_15cat_export_root_path() -> Path:
+    """Return the canonical generated CodecSepDNRv2_15Cat exact-15 export root."""
+    return (
+        get_model_exports_path()
+        / "CodecSepDNRv2_15Cat"
+        / "codecsep_dnrv2_15cat_exact15"
+    )
+
+
+def get_codecsep_dnrv2_15cat_source_export_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat exact-15 source/reproducibility assets directory."""
+    return get_codecsep_dnrv2_15cat_export_root_path() / "source"
+
+
+def get_codecsep_dnrv2_15cat_shared_export_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat exact-15 shared metadata directory."""
+    return get_codecsep_dnrv2_15cat_export_root_path() / "shared"
+
+
+def get_codecsep_dnrv2_15cat_desktop_export_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat exact-15 desktop export directory."""
+    return get_codecsep_dnrv2_15cat_export_root_path() / "desktop"
+
+
+def get_codecsep_dnrv2_15cat_android_export_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat exact-15 Android export directory."""
+    return get_codecsep_dnrv2_15cat_export_root_path() / "android"
 
 
 def get_codecsep_dnrv2_15cat_onnx_path() -> Path:
-    """Return the default CodecSepDNRv2_15Cat ONNX path."""
-    return get_codecsep_dnrv2_15cat_model_path() / "codecsep_dnrv2_15cat.onnx"
+    """Return the default CodecSepDNRv2_15Cat ONNX export path."""
+    return get_codecsep_dnrv2_15cat_desktop_export_path() / "codecsep_dnrv2_15cat.onnx"
 
 
 def get_codecsep_dnrv2_15cat_executorch_path() -> Path:
-    """Return the default CodecSepDNRv2_15Cat ExecuTorch path."""
-    return get_codecsep_dnrv2_15cat_model_path() / "codecsep_dnrv2_15cat.pte"
-
-
-def get_audiosep_hive15cat_categories_path() -> Path:
-    """Return the default AudioSepHive15Cat category catalog YAML path."""
-    return get_audiosep_hive15cat_model_path() / "categories_15.yaml"
+    """Return the default CodecSepDNRv2_15Cat ExecuTorch export path."""
+    return get_codecsep_dnrv2_15cat_android_export_path() / "codecsep_dnrv2_15cat.pte"
 
 
 def get_codecsep_dnrv2_15cat_categories_path() -> Path:
     """Return the default CodecSepDNRv2_15Cat category catalog YAML path."""
-    return get_codecsep_dnrv2_15cat_model_path() / "categories_15.yaml"
+    return get_codecsep_dnrv2_15cat_shared_export_path() / "categories_15.yaml"
+
+
+def get_codecsep_dnrv2_15cat_frozen_checkpoint_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat frozen source checkpoint path."""
+    return get_codecsep_dnrv2_15cat_source_export_path() / "codecsep_dnrv2_15cat_frozen.pt"
+
+
+def get_codecsep_dnrv2_15cat_embedding_init_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat frozen class embedding init path."""
+    return get_codecsep_dnrv2_15cat_source_export_path() / "embedding_init.pt"
+
+
+def get_codecsep_dnrv2_15cat_freeze_manifest_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat freeze manifest path."""
+    return get_codecsep_dnrv2_15cat_source_export_path() / "freeze_manifest.json"
+
+
+def get_codecsep_dnrv2_15cat_freeze_spec_path() -> Path:
+    """Return the CodecSepDNRv2_15Cat freeze specification path."""
+    return get_codecsep_dnrv2_15cat_source_export_path() / "freeze_spec_15.yaml"
+
+
+def get_clapsep_hive15cat_model_path() -> Path:
+    """Return the ClapSepHive15Cat model directory."""
+    return get_models_path() / "ClapSepHive15Cat"
+
+
+def get_clapsep_hive15cat_export_root_path() -> Path:
+    """Return the canonical generated ClapSepHive15Cat prototype export root."""
+    return get_model_exports_path() / "ClapSepHive15Cat" / "clapsep_hive15cat_prototype"
+
+
+def get_clapsep_hive15cat_onnx_path() -> Path:
+    """Return the ClapSepHive15Cat prototype ONNX export path."""
+    return get_clapsep_hive15cat_export_root_path() / "desktop" / "frozensep_clapsep_15cat.onnx"
+
+
+def get_clapsep_hive15cat_source_checkpoint_path() -> Path:
+    """Return the ClapSepHive15Cat prototype source checkpoint path."""
+    return get_clapsep_hive15cat_export_root_path() / "source" / "frozensep_clapsep_15cat.pt"
+
+
+def get_clapsep_hive15cat_queries_path() -> Path:
+    """Return the ClapSepHive15Cat prototype query catalog path."""
+    return get_clapsep_hive15cat_export_root_path() / "source" / "clapsep_queries_15.yaml"
 
 
 def get_codecsep_code_path() -> Path:
@@ -306,8 +473,8 @@ def resolve_codecsep_checkpoint_path(
 
 
 def get_exports_onnx_path(name: str = "waveformer.onnx") -> Path:
-    """Return path to ONNX export (ai/models/exports/onnx/)."""
-    return get_models_path() / "exports" / "onnx" / name
+    """Return path to a legacy/general ONNX export under ai/models/Exports/onnx/."""
+    return get_model_exports_path() / "onnx" / name
 
 
 def setup_project_path() -> None:

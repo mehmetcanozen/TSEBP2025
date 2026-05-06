@@ -243,9 +243,11 @@ impl TargetSpeakerAssetCatalog {
             .unwrap_or_else(|| {
                 package_root
                     .join("..")
-                    .join("exports")
-                    .join("target_speaker_windows")
-                    .join("tsextract")
+                    .join("Exports")
+                    .join("TargetSpeakerWindows")
+                    .join("target_speaker_windows_desktop")
+                    .join("desktop")
+                    .join("tsextract_onnx")
                     .join("tsextract_fp32.validation.json")
             });
         let validation_status = read_validation_status(

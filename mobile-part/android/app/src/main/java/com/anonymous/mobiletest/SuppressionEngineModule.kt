@@ -36,11 +36,7 @@ class SuppressionEngineModule(
       try {
         val prepared = runtimeStore.prepare(
           PrepareOptions(
-            bundleDownloadUrl = options?.getStringOrNull("bundleDownloadUrl"),
-            accessToken = options?.getStringOrNull("accessToken"),
-            expectedVersion = options?.getStringOrNull("expectedVersion"),
-            expectedChecksum = options?.getStringOrNull("expectedChecksum"),
-            forceRefresh = options?.getBooleanOrDefault("forceRefresh", false) ?: false,
+            reinstallBundled = options?.getBooleanOrDefault("reinstallBundled", false) ?: false,
           )
         )
         promise.resolve(prepared.toWritableMap())
@@ -89,9 +85,10 @@ class SuppressionEngineModule(
           config = LiveConfig(
             categoryId = categoryId,
             aggressiveness = config.getDoubleOrDefault("aggressiveness", category.defaultAggressiveness.toDouble()).toFloat(),
-            hopMs = config.getIntOrDefault("hopMs", 500),
+            hopMs = config.getIntOrDefault("hopMs", 200),
             lookaheadMs = config.getIntOrDefault("lookaheadMs", 350),
-            waveformerPostFilter = "off",
+            audioEngine = config.getStringOrDefault("audioEngine", "legacy"),
+            waveformerPostFilter = config.getStringOrDefault("waveformerPostFilter", "off"),
           ),
           recordFile = recordFile,
           onStatus = { snapshot -> emitEvent("SuppressionEngineStatus", snapshot.toWritableMap()) },
@@ -205,6 +202,10 @@ private fun ReadableMap.getStringOrNull(key: String): String? {
   return if (hasKey(key) && !isNull(key)) getString(key) else null
 }
 
+private fun ReadableMap.getStringOrDefault(key: String, defaultValue: String): String {
+  return if (hasKey(key) && !isNull(key)) getString(key) ?: defaultValue else defaultValue
+}
+
 private fun ReadableMap.getBooleanOrDefault(key: String, defaultValue: Boolean): Boolean? {
   return if (hasKey(key) && !isNull(key)) getBoolean(key) else defaultValue
 }
@@ -231,6 +232,8 @@ private fun RuntimeInfo.toWritableMap(): WritableMap {
     putInt("sampleRate", sampleRate)
     putInt("categoryCount", categoryCount)
     putArray("availableProviders", availableProviders.toWritableArray())
+    putString("audioEngine", audioEngine)
+    putBoolean("nativeOboeAvailable", nativeOboeAvailable)
   }
 }
 
@@ -249,9 +252,19 @@ private fun StatusSnapshot.toWritableMap(): WritableMap {
     putString("state", state)
     putString("provider", provider)
     if (inferenceMs != null) putDouble("inferenceMs", inferenceMs) else putNull("inferenceMs")
+    if (inferenceP50Ms != null) putDouble("inferenceP50Ms", inferenceP50Ms) else putNull("inferenceP50Ms")
+    if (inferenceP95Ms != null) putDouble("inferenceP95Ms", inferenceP95Ms) else putNull("inferenceP95Ms")
+    if (inferenceP99Ms != null) putDouble("inferenceP99Ms", inferenceP99Ms) else putNull("inferenceP99Ms")
     if (queueDepthMs != null) putDouble("queueDepthMs", queueDepthMs) else putNull("queueDepthMs")
     putInt("xruns", xruns)
     putInt("audioTrackUnderruns", audioTrackUnderruns)
+    putString("audioEngine", audioEngine)
+    putInt("nativeSampleRate", nativeSampleRate)
+    putInt("framesPerBurst", framesPerBurst)
+    putDouble("callbackUnderruns", callbackUnderruns.toDouble())
+    putDouble("inputOverflows", inputOverflows.toDouble())
+    putDouble("renderUnderruns", renderUnderruns.toDouble())
+    putDouble("renderOverflows", renderOverflows.toDouble())
     putInt("limiterHits", limiterHits)
     putInt("failOpenCount", failOpenCount)
     putInt("boundaryRepairHits", boundaryRepairHits)

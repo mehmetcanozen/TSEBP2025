@@ -1,69 +1,142 @@
-# 🎧 Desktop Audio - Intensive Documentation
+# Desktop Audio Runtime
 
-> [!IMPORTANT]
-> The audio module is the high-performance heart of the Semantic Noise Mixer. It is designed to bypass Python's GIL (Global Interpreter Lock) using **Multiprocessing** and **Lock-based Ring Buffers**.
+The Windows desktop product is a Tauri app with a React frontend and a Rust
+native audio/runtime layer. It supports offline jobs, live monitoring, Debug WAV
+input, VB-CABLE virtual mic routing, and target-speaker workflows.
 
----
+## Runtime Ownership
 
-## ⚡ Quick Reference: Methods & Heuristics
+| Area | Main files | Responsibility |
+| --- | --- | --- |
+| Model/package resolution | `desktop/src-tauri/src/config.rs` | Read shared model manifests, resolve active package, locate artifacts and `onnxruntime.dll`. |
+| Tauri commands | `desktop/src-tauri/src/commands.rs` | Expose categories, devices, metrics, jobs, live start/stop, and target-speaker APIs to React. |
+| App state/jobs | `desktop/src-tauri/src/state.rs` | Hold shared engine, target-speaker runtime, speaker profiles, offline jobs, and live sessions. |
+| Live audio | `desktop/src-tauri/src/audio/live.rs` | CPAL capture/render, Debug WAV source, ring buffers, lookahead, health metrics, and output routing. |
+| Device detection | `desktop/src-tauri/src/audio/devices.rs` | Enumerate devices and identify VB-CABLE playback/recording roles. |
+| Inference/DSP | `desktop/src-tauri/src/engine/` | ONNX Runtime execution, overlap/windowing, resampling, masking, direct residual suppression, and target-speaker support. |
 
-| Component | Key Method | Heuristic / Constants | Rationale |
-| :--- | :--- | :--- | :--- |
-| **`AudioProcess`** | `_inference_loop` | `RingBuffer(300ms)` | Decouples steady I/O from variable AI inference. |
-| **`GainSmoother`** | `smooth()` | `Factor: 0.9, Floor: 0.1` | Prevents "zipper noise" and "watery" artifacts (via noise floor). |
-| **`RingBuffer`** | `read()` | `deque(maxlen=N)` | Standard lists are too slow; `deque` provides $O(1)$ pop/push. |
-| **`Suppressor`** | `suppress()` | `Scale: 1.0 / peak` | Models require normalized input; fails on quiet mics without this. |
-| **`Suppressor`** | Adaptive Boost | `relative < 0.1 → boost ≤ 4×` | Compensates for Waveformer under-extraction of quiet targets. |
+## Active Semantic Runtime
 
----
+Desktop resolves the active semantic model from `ai/models/model_selection.json`.
+The current default is Waveformer:
 
-## 🏗️ Multiprocessing Data Flow
-
-To ensure 0ms latency in audio I/O, we isolate the heavy AI separation into a dedicated OS process.
-
-```mermaid
-graph TD
-    UI[UI Thread] -- Gains/Profiles --> GQ[Gain Queue]
-    subgraph AudioProcess
-        direction TB
-        CL[Capture Loop] --> IRB[Input Ring Buffer]
-        IRB --> IL[Inference Loop]
-        IL --> ORB[Output Ring Buffer]
-        ORB --> PL[Playback Loop]
-        IL -- RMS/Detections --> DQ[Detection Queue]
-    end
-    DQ --> UI
-    GQ --> IL
-    
-    style IL fill:#f96,stroke:#333,stroke-width:2px
-    style IRB fill:#bbf,stroke:#333
-    style ORB fill:#bbf,stroke:#333
+```text
+model_id: waveformer_edge_100ms
+runtime_kind: onnx_streaming_target_extractor
+sample_rate: 44100
+chunk_samples: 4416
+artifact: semantic_hearing_100ms_desktop.onnx
 ```
 
----
+The streaming target-extractor path maintains recurrent state tensors and
+subtracts the selected category estimate from the mixture. The desktop engine
+also supports `onnx_category_separator` for packaged exact-category alternatives
+such as AudioSepHive15Cat and CodecSepDNRv2 ONNX.
 
-## 📂 Component Deep Dive
+## Live Session Flow
 
-### [audio_io.py](../../../ai/ai_runtime/audio/audio_io.py)
-*   **Method**: `set_high_priority()`
-*   **Logic**: Uses `psutil` to set `psutil.HIGH_PRIORITY_CLASS`.
-*   **Why**: This makes the Windows scheduler prioritize our audio buffers over background tasks like Windows Update, preventing pops/clicks during heavy CPU load.
+```text
+React state
+    -> start_live_monitor Tauri command
+    -> AppState creates a live session
+    -> CPAL input device or Debug WAV source
+    -> processing queue and lookahead buffer
+    -> SharedEngine suppression
+    -> CPAL output device
+    -> status and meter events back to React
+```
 
-### [gain_smoother.py](../../../ai/ai_runtime/audio/gain_smoother.py)
-*   **Heuristic**: `max(smoothed, self.noise_floor)`
-*   **Detail**: We maintain a **10% noise floor** (`0.1`). 
-*   **Why**: Total silence (0.0) sounds "dead" and highlights processing artifacts. Keeping 10% of the original atmosphere makes the transition between "loud noise" and "suppressed noise" feel natural to the human ear.
+The live code tracks:
 
-### [semantic_suppressor.py](../../../ai/ai_runtime/suppression/semantic_suppressor.py)
-*   **Per-Category Separation**: Each suppression category gets a dedicated Waveformer query to prevent loud sources from dominating quiet targets. Uses `separate_multi_query()` for batched GPU inference.
-*   **Adaptive Stem Boosting**: When a category's separated stem is under-extracted (< 10% of mix energy), it is boosted by up to 4× to make the spectral ratio mask effective.
-*   **Decision-Directed Wiener Filter**: Uses the Ephraim-Malah (1984) algorithm to track a priori SNR across time, eliminating musical noise without blurring frequency bins. Includes a perceptual A-weighting floor.
+- queue depth and realtime health
+- inference duration
+- underruns and limiter behavior
+- RMS/peak meters
+- output mode and selected output device
+- session lifecycle
 
-> [!TIP]
-> Use the [profiler.py](../../../ai/ai_runtime/profiles/profiler.py) to debug "Buffer Underruns". If the `waveformer_separation` step takes longer than 20ms consistently, the audio will stutter.
+The UI default lookahead is low-latency but intentionally buffered enough to
+avoid unstable audio under CPU pressure.
 
----
+## Debug WAV Source
 
-### 🛡️ Safety & Stability
-- **`DetectionThread`**: Runs YAMNet on a separate cadence (default 3s) from `ai/ai_runtime/detection`.
-- **Adaptive Duty**: Automatically sleeps longer if the battery is low (checks `psutil.sensors_battery`).
+Debug WAV mode replaces the physical microphone input with a WAV file while
+still using the real live session path. This is the preferred repeatable demo
+route because it exercises the same runtime, buffering, and output code as a
+real microphone without depending on room noise.
+
+Use it to validate category selectivity, for example:
+
+```text
+speech_barking.wav + category dog
+speech_keyboard.wav + category computer_typing
+```
+
+## Monitor vs Virtual Mic
+
+The desktop app has two output modes:
+
+- Monitor: write processed audio to a normal playback device for local
+  listening.
+- Virtual Mic: write processed audio to the VB-CABLE playback endpoint so other
+  apps can receive it as a microphone.
+
+VB-CABLE naming is easy to reverse:
+
+```text
+App output sink: CABLE Input
+Other app microphone source: CABLE Output
+```
+
+Virtual Mic mode should not overwrite the user's saved monitor output device.
+The app chooses the VB-CABLE sink at live-start time when Virtual Mic is active.
+
+## Target-Speaker Runtime
+
+Target-speaker jobs use the `target_speaker_windows` package. TSExtract ONNX is
+the default engine and requires both `tsextract_fp32.onnx` and
+`tsextract_fp32.onnx.data`. ClearVoice is available only as an offline quality
+fallback when its native bundle is present.
+
+The desktop UI should block unsupported live combinations, especially ClearVoice
+realtime and selecting the VB-CABLE recording endpoint as the live microphone.
+
+## Fresh-Clone Checks
+
+Before assuming desktop suppression logic is broken, verify the runtime DLL and
+generated model artifacts. `ai/models/Exports` is ignored by Git, so these
+model checks can fail after a clean clone or stale cleanup until the portable
+`Exports` folder is present locally.
+
+```powershell
+Test-Path .\desktop\src-tauri\runtime\onnxruntime.dll
+Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\source\semantic_hearing_100ms_source.onnx
+Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\desktop\semantic_hearing_100ms_desktop.onnx
+Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\desktop\semantic_hearing_100ms_desktop.onnx.json
+Test-Path .\ai\models\Exports\TargetSpeakerWindows\target_speaker_windows_desktop\desktop\tsextract_onnx\tsextract_fp32.onnx
+Test-Path .\ai\models\Exports\TargetSpeakerWindows\target_speaker_windows_desktop\desktop\tsextract_onnx\tsextract_fp32.onnx.data
+Test-Path .\ai\models\Exports\TargetSpeakerWindows\target_speaker_windows_desktop\desktop\windows_bundle_manifest.json
+```
+
+If the Waveformer files are missing, restore the portable `ai/models/Exports`
+folder before treating the desktop runtime as broken.
+
+Also confirm VB-CABLE is installed and visible in Windows audio devices if
+Virtual Mic mode is needed.
+
+## Relevant Checks
+
+For code changes, narrow verification usually starts with:
+
+```powershell
+cd desktop
+npm test
+npm run build
+
+cd src-tauri
+cargo test --lib
+cargo check
+```
+
+For documentation-only changes, do not run these unless the docs need to verify
+a live command or runtime behavior.
