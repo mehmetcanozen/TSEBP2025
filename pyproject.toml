@@ -1,7 +1,7 @@
 [project]
-name = "semantic-noise-mixer"
+name = "tsebp2025"
 version = "0.1.0"
-description = "Context-Aware Adaptive Noise Cancellation with Semantic Control"
+description = "Semantic hearing, suppression, desktop, mobile, and model tooling"
 requires-python = ">=3.11"
 
 [tool.black]
@@ -13,7 +13,21 @@ profile = "black"
 line_length = 100
 
 [tool.pytest.ini_options]
-testpaths = ["ai/tests", "desktop/tests"]
-python_files = "test_*.py"
-norecursedirs = ["audioset_hf_test_*", "tmp*"]
+testpaths = ["ai/tests"]
+python_files = ["test_*.py"]
+norecursedirs = [
+  ".git",
+  ".venv",
+  "venv",
+  "env",
+  "node_modules",
+  "backend/node_modules",
+  "desktop/node_modules",
+  "mobile-part/node_modules",
+  "desktop/src-tauri/target",
+  "ai/data/audio/waveformertestdownloads",
+  "ai/models",
+  "audioset_hf_test_*",
+  "tmp*",
+]
 
