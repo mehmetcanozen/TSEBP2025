@@ -6,7 +6,7 @@ param(
     [int]$BackendPort = 4000,
     [string]$DatabaseUrl = "postgresql://postgres:postgres@localhost:5432/tsebp2025?schema=public",
     [string]$DesktopBackendUrl = "http://localhost:4000/api/v1",
-    [string]$MobileBackendUrl = "http://10.0.2.2:4000/api/v1",
+    [string]$MobileBackendUrl = "http://10.253.52.35:4000/api/v1",
     [switch]$SkipPostgres,
     [switch]$SkipPrismaGenerate,
     [switch]$SkipMigrations,

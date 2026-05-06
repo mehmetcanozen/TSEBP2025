@@ -177,7 +177,7 @@ else {
 
 $env:PGPASSWORD = $PostgresPassword
 $encodedPassword = [uri]::EscapeDataString($PostgresPassword)
-$databaseUrl = "postgresql://${DatabaseUser}:$encodedPassword@localhost:$PostgresPort/$DatabaseName?schema=public"
+$databaseUrl = "postgresql://${DatabaseUser}:${encodedPassword}@localhost:${PostgresPort}/${DatabaseName}" + "?schema=public"
 
 Write-Step "Verifying PostgreSQL connection"
 Invoke-CheckedNative -FilePath $psql -ArgumentList @("-h", "localhost", "-p", [string]$PostgresPort, "-U", $DatabaseUser, "-c", "SELECT version();")

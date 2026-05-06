@@ -8,8 +8,6 @@ buildscript {
     }
 }
 
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
 import java.security.MessageDigest
 
 apply plugin: "com.android.application"
@@ -36,7 +34,7 @@ def computeSha256 = { File file ->
 
 def resolveBundledSuppressionModelContext = {
     def selectionFile = new File(sharedModelsRoot, "model_selection.json")
-    def selectionManifest = new JsonSlurper().parse(selectionFile)
+    def selectionManifest = new groovy.json.JsonSlurper().parse(selectionFile)
     def activeModelId = (
         project.findProperty("tsebpActiveSuppressionModel")
             ?: System.getenv("TSEBP_ACTIVE_SUPPRESSION_MODEL")
@@ -48,7 +46,7 @@ def resolveBundledSuppressionModelContext = {
     }
 
     def packageFile = new File(sharedModelsRoot, packageRelativePath.toString())
-    def packageManifest = new JsonSlurper().parse(packageFile)
+    def packageManifest = new groovy.json.JsonSlurper().parse(packageFile)
     def androidPlatform = packageManifest.platforms.android
     if (!androidPlatform) {
         throw new GradleException("Shared model '${activeModelId}' does not define an android platform")
@@ -160,7 +158,7 @@ tasks.register("prepareBundledSuppressionModel") {
         }
 
         new File(generatedSuppressionBundleDir, "manifest.json").text =
-            JsonOutput.prettyPrint(JsonOutput.toJson(manifest))
+            groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifest))
     }
 }
 
