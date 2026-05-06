@@ -30,7 +30,12 @@ from ai.ai_runtime.separation.codecsep.model import CodecSep
 from ai.ai_runtime.separation.codecsep_separator import CodecSepSeparator
 from ai.ai_runtime.utils.paths import (
     get_codecsep_default_run_dir,
+    get_codecsep_dnrv2_15cat_categories_path,
+    get_codecsep_dnrv2_15cat_embedding_init_path,
     get_codecsep_dnrv2_15cat_executorch_path,
+    get_codecsep_dnrv2_15cat_freeze_manifest_path,
+    get_codecsep_dnrv2_15cat_freeze_spec_path,
+    get_codecsep_dnrv2_15cat_frozen_checkpoint_path,
     get_codecsep_dnrv2_15cat_model_path,
     get_codecsep_dnrv2_15cat_onnx_path,
     resolve_codecsep_checkpoint_path,
@@ -83,18 +88,19 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def resolve_artifact_paths(package_dir: Path) -> FreezeArtifacts:
+    categories_yaml = get_codecsep_dnrv2_15cat_categories_path()
     return FreezeArtifacts(
         package_dir=package_dir,
-        categories_yaml=package_dir / "categories_15.yaml",
-        categories_txt=package_dir / "categories_15.txt",
-        freeze_spec_yaml=package_dir / "freeze_spec_15.yaml",
-        embedding_init_path=package_dir / "embedding_init.pt",
-        freeze_manifest_path=package_dir / "freeze_manifest.json",
-        frozen_checkpoint_path=package_dir / "codecsep_dnrv2_15cat_frozen.pt",
-        onnx_path=package_dir / "codecsep_dnrv2_15cat.onnx",
-        onnx_sidecar_path=package_dir / "codecsep_dnrv2_15cat.onnx.json",
-        executorch_path=package_dir / "codecsep_dnrv2_15cat.pte",
-        executorch_sidecar_path=package_dir / "codecsep_dnrv2_15cat.pte.json",
+        categories_yaml=categories_yaml,
+        categories_txt=categories_yaml.with_suffix(".txt"),
+        freeze_spec_yaml=get_codecsep_dnrv2_15cat_freeze_spec_path(),
+        embedding_init_path=get_codecsep_dnrv2_15cat_embedding_init_path(),
+        freeze_manifest_path=get_codecsep_dnrv2_15cat_freeze_manifest_path(),
+        frozen_checkpoint_path=get_codecsep_dnrv2_15cat_frozen_checkpoint_path(),
+        onnx_path=get_codecsep_dnrv2_15cat_onnx_path(),
+        onnx_sidecar_path=get_codecsep_dnrv2_15cat_onnx_path().with_suffix(".onnx.json"),
+        executorch_path=get_codecsep_dnrv2_15cat_executorch_path(),
+        executorch_sidecar_path=get_codecsep_dnrv2_15cat_executorch_path().with_suffix(".pte.json"),
     )
 
 
@@ -687,12 +693,14 @@ def build_freeze_manifest(
             for category in categories
         ],
         "expected_artifacts": [
+            "../shared/categories_15.yaml",
+            "../shared/categories_15.txt",
             "codecsep_dnrv2_15cat_frozen.pt",
             "embedding_init.pt",
-            "codecsep_dnrv2_15cat.onnx",
-            "codecsep_dnrv2_15cat.onnx.json",
-            "codecsep_dnrv2_15cat.pte",
-            "codecsep_dnrv2_15cat.pte.json",
+            "../desktop/codecsep_dnrv2_15cat.onnx",
+            "../desktop/codecsep_dnrv2_15cat.onnx.json",
+            "../android/codecsep_dnrv2_15cat.pte",
+            "../android/codecsep_dnrv2_15cat.pte.json",
         ],
     }
 
@@ -705,6 +713,19 @@ def run_export(args: argparse.Namespace) -> None:
         onnx_path=Path(args.onnx_output),
         executorch_path=Path(args.executorch_output),
     )
+    for path in (
+        artifacts.categories_yaml,
+        artifacts.categories_txt,
+        artifacts.freeze_spec_yaml,
+        artifacts.embedding_init_path,
+        artifacts.freeze_manifest_path,
+        artifacts.frozen_checkpoint_path,
+        artifacts.onnx_path,
+        artifacts.onnx_sidecar_path,
+        artifacts.executorch_path,
+        artifacts.executorch_sidecar_path,
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
     categories = load_freeze_categories(artifacts.freeze_spec_yaml)
     write_repro_assets(artifacts, categories)
 
@@ -890,7 +911,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--package-dir",
         type=Path,
         default=get_codecsep_dnrv2_15cat_model_path(),
-        help="CodecSepDNRv2_15Cat package directory to populate.",
+        help=(
+            "CodecSepDNRv2_15Cat manifest/package directory. Generated exports are "
+            "written under ai/models/Exports/CodecSepDNRv2_15Cat/codecsep_dnrv2_15cat_exact15."
+        ),
     )
     parser.add_argument(
         "--onnx-output",

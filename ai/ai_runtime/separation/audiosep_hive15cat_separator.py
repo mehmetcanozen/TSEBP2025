@@ -8,8 +8,8 @@ from typing import Optional, Union
 from .packaged_onnx_category_separator import PackagedOnnxCategorySeparator
 from ai.ai_runtime.utils.paths import (
     get_audiosep_hive15cat_categories_path,
-    get_audiosep_hive15cat_model_path,
     get_audiosep_hive15cat_onnx_path,
+    get_audiosep_hive15cat_shared_export_path,
 )
 
 TARGET_SAMPLE_RATE = 32000
@@ -31,7 +31,7 @@ class AudioSepHive15CatSeparator(PackagedOnnxCategorySeparator):
         super().__init__(
             model_label="AudioSepHive15Cat",
             default_model_path=get_audiosep_hive15cat_onnx_path(),
-            default_model_dir=get_audiosep_hive15cat_model_path(),
+            default_model_dir=get_audiosep_hive15cat_shared_export_path(),
             default_categories_path=get_audiosep_hive15cat_categories_path(),
             default_model_filename="frozensep_hive_15cat.onnx",
             model_path=model_path,
