@@ -4,7 +4,10 @@ Batch Audio Processor - Offline Semantic Noise Suppression
 Process audio files offline with semantic-aware noise suppression.
 Useful for cleaning recorded audio, podcasts, or conference recordings.
 
-Usage:
+Preferred CLI:
+    python -m ai suppress file --input noisy.wav --target typing,wind --output clean.wav
+
+Legacy module path:
     python -m ai.ai_runtime.batch.batch_processor --input noisy.wav --suppress typing,wind --output clean.wav
 """
 
@@ -755,4 +758,9 @@ def main(argv: Optional[list[str]] = None) -> None:
 
 
 if __name__ == "__main__":
+    print(
+        "Legacy path notice: use `python -m ai suppress file ...` or "
+        "`tsebp-ai suppress file ...` for new workflows.",
+        file=sys.stderr,
+    )
     main()

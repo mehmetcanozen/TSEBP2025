@@ -3,6 +3,47 @@ name = "tsebp2025"
 version = "0.1.0"
 description = "Semantic hearing, suppression, desktop, mobile, and model tooling"
 requires-python = ">=3.11"
+dependencies = [
+  "typer>=0.12",
+  "numpy>=1.24",
+  "soundfile>=0.12",
+  "PyYAML>=6.0",
+  "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+audio-device = [
+  "sounddevice>=0.4.6",
+]
+onnx = [
+  "onnxruntime>=1.15",
+  "onnx>=1.14",
+]
+training = [
+  "torch>=2.0",
+  "torchaudio>=2.0",
+]
+export = [
+  "onnx>=1.16",
+  "onnxruntime>=1.15",
+]
+
+[project.scripts]
+tsebp-ai = "ai.cli.main:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ai*"]
+exclude = [
+  "backend*",
+  "desktop*",
+  "mobile-part*",
+  "shared*",
+  "docs*",
+]
 
 [tool.black]
 line-length = 100
@@ -15,6 +56,16 @@ line_length = 100
 [tool.pytest.ini_options]
 testpaths = ["ai/tests"]
 python_files = ["test_*.py"]
+markers = [
+  "cli: fast command-line interface tests",
+  "runtime: AI runtime unit and contract tests",
+  "integration: cross-module integration tests",
+  "manual: tests intended for manual or local-device execution",
+  "requires_artifacts: tests requiring restored ai/models/Exports artifacts",
+  "requires_audio_device: tests requiring a local audio device or virtual cable",
+  "requires_onnxruntime: tests requiring onnxruntime",
+  "slow: longer-running tests",
+]
 norecursedirs = [
   ".git",
   ".venv",

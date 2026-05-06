@@ -1,11 +1,21 @@
 """Audio runtime components used by desktop integration."""
 
 from .audio_io import AudioBackend, PyAudioBackend, StreamConfig, set_high_priority
-from .audio_process import AudioProcess
 from .gain_smoother import GainSmoother
 from .latency_profiler import LatencyProfiler
-from .mixer_controller import MixerController
 from .ring_buffer import RingBuffer
+
+
+def __getattr__(name: str):
+    if name == "AudioProcess":
+        from .audio_process import AudioProcess
+
+        return AudioProcess
+    if name == "MixerController":
+        from .mixer_controller import MixerController
+
+        return MixerController
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "AudioBackend",

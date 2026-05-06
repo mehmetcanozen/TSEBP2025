@@ -70,6 +70,15 @@ EXACT15_TARGETS = (
 )
 
 
+def print_legacy_notice() -> None:
+    """Tell direct script users about the supported CLI path without breaking them."""
+    print(
+        "Legacy path notice: use `python -m ai compare run ...` or "
+        "`tsebp-ai compare run ...` for new workflows.",
+        file=sys.stderr,
+    )
+
+
 @dataclass(frozen=True)
 class ModelSpec:
     model_id: str
@@ -854,4 +863,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    print_legacy_notice()
     raise SystemExit(main())

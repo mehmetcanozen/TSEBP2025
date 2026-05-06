@@ -1,0 +1,12 @@
+# Lightweight AI CLI/runtime stack.
+# This is for local file suppression, artifact checks, model listing, and docs smoke tests.
+# Heavy training/export stacks stay in ai/training/requirements.txt and ai/export/requirements*.txt.
+
+typer>=0.12
+numpy>=1.24
+soundfile>=0.12
+PyYAML>=6.0
+tqdm>=4.65
+
+# Optional but useful for default packaged ONNX diagnostics/runtime.
+onnxruntime>=1.15
