@@ -283,7 +283,7 @@ function Set-DotEnvValue {
 
     $pattern = "^\s*$([regex]::Escape($Key))="
     $updated = $false
-    $newLines = foreach ($line in $lines) {
+    $newLines = @(foreach ($line in $lines) {
         if ($line -match $pattern) {
             $updated = $true
             "$Key=$Value"
@@ -291,7 +291,7 @@ function Set-DotEnvValue {
         else {
             $line
         }
-    }
+    })
 
     if (-not $updated) {
         $newLines += "$Key=$Value"

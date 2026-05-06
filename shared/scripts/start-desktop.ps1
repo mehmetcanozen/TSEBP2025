@@ -4,6 +4,8 @@ param(
     [switch]$Install,
     [switch]$RunChecks,
     [switch]$WebOnly,
+    [switch]$DevUi,
+    [switch]$WriteEnvOnly,
     [switch]$NoCargoPath
 )
 
@@ -13,9 +15,17 @@ $ErrorActionPreference = "Stop"
 $desktopDir = Resolve-RepoPath "desktop"
 $desktopEnv = Join-Path $desktopDir ".env"
 $healthUri = "$(Convert-LocalhostToIPv4 -Url $BackendUrl)/health"
+$desktopUiSurface = if ($DevUi) { "dev" } else { "user" }
 
 Write-Step "Starting TSEBP2025 desktop app"
 Set-DotEnvValue -Path $desktopEnv -Key "VITE_BACKEND_API_URL" -Value $BackendUrl
+Set-DotEnvValue -Path $desktopEnv -Key "VITE_DESKTOP_UI_SURFACE" -Value $desktopUiSurface
+Write-SuccessLog "Desktop UI surface: $desktopUiSurface"
+
+if ($WriteEnvOnly) {
+    Write-SuccessLog "Desktop environment updated. Skipping launch because -WriteEnvOnly was provided."
+    return
+}
 
 if (-not $SkipBackendCheck) {
     Write-InfoLog "Checking backend health at $healthUri"
