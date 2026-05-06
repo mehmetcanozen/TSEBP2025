@@ -1,96 +1,71 @@
 from contextlib import asynccontextmanager
+import sys
+import traceback
 
 from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-import traceback
-import sys
+from fastapi.responses import JSONResponse
 
 from core.config import settings
-from database.db import engine, Base
-from routers import auth, model_update, history, devices, separation
+from database.db import Base, engine
+from routers import auth, devices, history
 
 
-# ──────────────────────────────────────────────
-# Startup / Shutdown
-# ──────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tabloları oluştur (production'da alembic kullan)
     Base.metadata.create_all(bind=engine)
-    print(f"[OK] {settings.APP_NAME} v{settings.APP_VERSION} baslatildi")
+    print(f"[OK] {settings.APP_NAME} v{settings.APP_VERSION} started")
     yield
-    print("[EXIT] Uygulama kapatiliyor")
+    print("[EXIT] Application shutting down")
 
 
-# ──────────────────────────────────────────────
-# Uygulama
-# ──────────────────────────────────────────────
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="""
-## 🎵 Audio Extractor Backend
+## Audio Extractor Backend
 
-Edge deployment mimarisi için backend API.
-Model işleme cihazda (edge) yapılır; bu API şu işlemleri yönetir:
+The mobile suppression model is app-local. This backend does not serve model
+files, model update metadata, or server-side suppression inference for the
+mobile app.
 
-- **Auth** → Kayıt, giriş, çıkış, token yenileme
-- **Model** → Versiyon sorgulama ve güncelleme indirme
-- **Geçmiş** → İşlem logları
-- **Cihaz** → Cihaz kaydı
+- **Auth**: registration, login, logout, token refresh
+- **History**: processing/session logs
+- **Devices**: device registration
     """,
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# ──────────────────────────────────────────────
-# CORS (Windows app ve mobil için)
-# ──────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.DEBUG else [
-        # Production'da buraya domain ekle
-        # "https://yourdomain.com"
-    ],
+    allow_origins=["*"] if settings.DEBUG else [],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Ensure temp directory exists
-import os
-if not os.path.exists("temp_separation"):
-    os.makedirs("temp_separation")
-
-app.mount("/outputs", StaticFiles(directory="temp_separation"), name="outputs")
-
-# ──────────────────────────────────────────────
-# Router'lar
-# ──────────────────────────────────────────────
 app.include_router(auth.router)
-app.include_router(model_update.router)
 app.include_router(history.router)
 app.include_router(devices.router)
-app.include_router(separation.router)
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    error_msg = f"GLOBAL ERROR: {str(exc)}\n{traceback.format_exc()}"
+    error_msg = f"GLOBAL ERROR: {exc}\n{traceback.format_exc()}"
     print(error_msg, file=sys.stderr)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal Server Error", "error": str(exc), "traceback": traceback.format_exc()},
+        content={
+            "detail": "Internal Server Error",
+            "error": str(exc),
+            "traceback": traceback.format_exc(),
+        },
     )
 
 
-# ──────────────────────────────────────────────
-# Sağlık Kontrolü
-# ──────────────────────────────────────────────
-@app.get("/health", tags=["Sistem"])
+@app.get("/health", tags=["System"])
 def health_check():
     return {
         "status": "ok",
@@ -99,6 +74,6 @@ def health_check():
     }
 
 
-@app.get("/", tags=["Sistem"])
+@app.get("/", tags=["System"])
 def root():
-    return {"message": f"{settings.APP_NAME} calisiyor", "docs": "/docs"}
+    return {"message": f"{settings.APP_NAME} is running", "docs": "/docs"}

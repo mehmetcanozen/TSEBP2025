@@ -1,11 +1,8 @@
 from datetime import datetime
-from typing import Optional, List
-from pydantic import BaseModel, EmailStr, field_validator
+from typing import List, Optional
 
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
-# ══════════════════════════════════════════════
-# AUTH
-# ══════════════════════════════════════════════
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -14,20 +11,20 @@ class RegisterRequest(BaseModel):
 
     @field_validator("username")
     @classmethod
-    def username_valid(cls, v):
-        v = v.strip()
-        if len(v) < 3 or len(v) > 50:
-            raise ValueError("Kullanıcı adı 3-50 karakter olmalı")
-        if not v.replace("_", "").replace("-", "").isalnum():
-            raise ValueError("Sadece harf, rakam, _ ve - kullanılabilir")
-        return v
+    def username_valid(cls, value: str):
+        value = value.strip()
+        if len(value) < 3 or len(value) > 50:
+            raise ValueError("Username must be 3-50 characters")
+        if not value.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username can only contain letters, numbers, '_' and '-'")
+        return value
 
     @field_validator("password")
     @classmethod
-    def password_strong(cls, v):
-        if len(v) < 8:
-            raise ValueError("Şifre en az 8 karakter olmalı")
-        return v
+    def password_strong(cls, value: str):
+        if len(value) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return value
 
 
 class LoginRequest(BaseModel):
@@ -57,6 +54,8 @@ class ProfileUpdateRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     username: str
@@ -67,49 +66,6 @@ class UserResponse(BaseModel):
     is_admin: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
-
-# ══════════════════════════════════════════════
-# MODEL
-# ══════════════════════════════════════════════
-
-class ModelVersionResponse(BaseModel):
-    version: str
-    description: Optional[str]
-    file_size_mb: Optional[float]
-    checksum: Optional[str]
-    platform: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ModelVersionCreate(BaseModel):
-    version: str
-    description: Optional[str] = None
-    file_path: str
-    file_size_mb: Optional[float] = None
-    checksum: Optional[str] = None
-    platform: str = "all"
-
-
-class LatestModelResponse(BaseModel):
-    has_update: bool
-    current_version: Optional[str]
-    latest_version: str
-    download_url: Optional[str]
-    file_size_mb: Optional[float]
-    checksum: Optional[str]
-    bundle_kind: Optional[str] = None
-    filename: Optional[str] = None
-
-
-# ══════════════════════════════════════════════
-# GEÇMİŞ
-# ══════════════════════════════════════════════
 
 class HistoryCreate(BaseModel):
     file_name: Optional[str] = None
@@ -121,6 +77,8 @@ class HistoryCreate(BaseModel):
 
 
 class HistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     file_name: Optional[str]
     duration_seconds: Optional[float]
@@ -128,9 +86,6 @@ class HistoryResponse(BaseModel):
     platform: Optional[str]
     status: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class PaginatedHistory(BaseModel):
@@ -140,19 +95,11 @@ class PaginatedHistory(BaseModel):
     items: List[HistoryResponse]
 
 
-# ══════════════════════════════════════════════
-# CİHAZ
-# ══════════════════════════════════════════════
-
 class DeviceRegisterRequest(BaseModel):
     device_id: str
     platform: str
     app_version: Optional[str] = None
 
-
-# ══════════════════════════════════════════════
-# GENEL
-# ══════════════════════════════════════════════
 
 class MessageResponse(BaseModel):
     message: str
