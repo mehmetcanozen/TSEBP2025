@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
 
@@ -17,6 +18,28 @@ export const AuthContext = createContext<AuthContextType>({} as AuthContextType)
 const ACCESS_TOKEN_KEY = 'ACCESS_TOKEN';
 const REFRESH_TOKEN_KEY = 'REFRESH_TOKEN';
 const USER_INFO_KEY = 'USER_INFO';
+const DEVICE_ID_KEY = 'DEVICE_ID';
+
+const getOrCreateDeviceId = async () => {
+    const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (existing) {
+        return existing;
+    }
+    const generated = `mobile-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    await AsyncStorage.setItem(DEVICE_ID_KEY, generated);
+    return generated;
+};
+
+const registerDevice = async () => {
+    const deviceId = await getOrCreateDeviceId();
+    await api.post('/devices/register', {
+        device_id: deviceId,
+        platform: Platform.OS,
+        app_version: 'mobile-part',
+    }).catch((error) => {
+        console.log(`Device registration skipped: ${error?.message || error}`);
+    });
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const meResponse = await api.get('/auth/me');
             const user = meResponse.data;
             await AsyncStorage.setItem(USER_INFO_KEY, JSON.stringify(user));
+            await registerDevice();
 
             setUserToken(access_token);
             setUserInfo(user);
@@ -60,6 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             await api.post('/auth/register', {
                 username: sanitizedUsername,
+                full_name: name.trim(),
                 email,
                 password,
             });
@@ -68,7 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const detail = e?.response?.data?.detail;
             let message: string;
             if (Array.isArray(detail)) {
-                // FastAPI Pydantic validation hataları dizi döndürür
+                // Backend validation adapters can return detail arrays.
                 message = detail.map((err: any) => err?.msg || JSON.stringify(err)).join('\n');
             } else if (typeof detail === 'string') {
                 message = detail;
@@ -103,15 +128,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setIsLoading(true);
 
             const accessToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
-            const userInfoJson = await AsyncStorage.getItem(USER_INFO_KEY);
 
-            if (accessToken && userInfoJson) {
+            if (accessToken) {
                 api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+                const meResponse = await api.get('/auth/me');
+                const user = meResponse.data;
+                await AsyncStorage.setItem(USER_INFO_KEY, JSON.stringify(user));
+                await registerDevice();
                 setUserToken(accessToken);
-                setUserInfo(JSON.parse(userInfoJson));
+                setUserInfo(user);
             }
         } catch (e: any) {
             console.log(`isLoggedIn error: ${e}`);
+            await AsyncStorage.multiRemove([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_INFO_KEY]);
+            delete api.defaults.headers.common['Authorization'];
+            setUserToken(null);
+            setUserInfo(null);
         } finally {
             setIsLoading(false);
         }
