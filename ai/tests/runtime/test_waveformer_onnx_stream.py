@@ -8,8 +8,23 @@ from ai.ai_runtime.separation.waveformer_onnx_stream import (
 
 
 def test_waveformer_onnx_package_contract_matches_manifest():
+    from ai.ai_runtime.utils.paths import (
+        get_waveformer_android_ort_path,
+        get_waveformer_android_required_operators_path,
+        get_waveformer_desktop_metadata_path,
+        get_waveformer_desktop_onnx_path,
+        get_waveformer_export_root_path,
+        get_waveformer_source_onnx_path,
+    )
+
     package = load_package()
-    assert package.model_path.name == "semantic_hearing_100ms_windows.onnx"
+    assert package.model_path == get_waveformer_desktop_onnx_path()
+    assert package.metadata_paths == (get_waveformer_desktop_metadata_path(),)
+    assert get_waveformer_source_onnx_path().parent == get_waveformer_export_root_path() / "source"
+    assert get_waveformer_android_ort_path() == (
+        get_waveformer_export_root_path() / "android" / "model_fixed.ort"
+    )
+    assert get_waveformer_android_required_operators_path().name == "required_operators.config"
     assert package.sample_rate == 44_100
     assert package.chunk_samples == 4_416
     assert package.mix_channels == 2

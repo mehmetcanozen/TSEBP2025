@@ -1,7 +1,8 @@
-# Export-specific dependencies (ONNX / TFLite).
+# Export-specific dependencies.
 # IMPORTANT: Use a dedicated venv for export. TensorFlow 2.15 and numpy<2 conflict with
 # the desktop/training stack (TF 2.13+, numpy>=1.24). The main setup_env.ps1 installs
-# a subset of export tools into the shared venv; for full ONNX/TFLite export workflows:
+# a subset of export tools into the shared venv. The current Waveformer edge packager
+# needs ONNX Runtime. TensorFlow/TFLite dependencies below are for historical exporters:
 #
 #   python -m venv .venv-export
 #   .venv-export\Scripts\Activate.ps1
@@ -14,7 +15,7 @@ torch
 numpy<2
 tensorflow==2.15.0
 
-# ONNX / TFLite export toolchain
+# Current ONNX/ORT package tooling plus historical TFLite conversion tooling
 onnx==1.16.0
 onnxruntime
 onnx-tf

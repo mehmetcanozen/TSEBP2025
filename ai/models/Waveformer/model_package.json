@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "model_id": "waveformer_edge_100ms",
-  "package_version": "waveformer_edge_100ms_20260430_mobile_onnx",
+  "package_version": "waveformer_edge_100ms_exports_20260505",
   "family": "waveformer",
   "display_name": "Waveformer Edge 100ms",
-  "description": "Streaming Waveformer target extractor using the validated 100 ms ONNX deployment for desktop and Android edge runtimes.",
+  "description": "Streaming Waveformer target extractor using the validated 100 ms ONNX contract, canonical ai/models/Exports packaging, a desktop optimized ONNX artifact, and an Android ORT-format artifact.",
   "suppression_strategy": {
     "kind": "direct_residual",
     "formula": "clean = mixture - aggressiveness * target_chunk",
@@ -51,12 +51,15 @@
     ]
   },
   "validation_summary": {
-    "status": "onnx_contract_validated_cpu",
+    "status": "onnx_contract_validated_cpu_and_android_ort_packaged",
     "audit_script": "ai/scripts/audit_waveformer_onnx.py",
     "last_audit": {
       "provider": "CPUExecutionProvider",
       "opset": 20,
-      "two_step_stateful_smoke": "passed"
+      "two_step_stateful_smoke": "passed",
+      "desktop_artifact": "ai/models/Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx",
+      "android_artifact": "ai/models/Exports/Waveformer/waveformer_edge_100ms/android/model_fixed.ort",
+      "required_operators_config": "ai/models/Exports/Waveformer/waveformer_edge_100ms/android/required_operators.config"
     },
     "known_reference_cases": [
       {
@@ -73,7 +76,7 @@
       }
     ]
   },
-  "optimized_model_path": "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
+  "optimized_model_path": "../Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx",
   "edge_profile": {
     "primary_target": "windows_desktop_cpu_and_android_cpu",
     "live_category_budget": 2,
@@ -242,9 +245,9 @@
   "platforms": {
     "desktop": {
       "runtime_kind": "onnx_streaming_target_extractor",
-      "artifact": "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
+      "artifact": "../Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx",
       "metadata_artifacts": [
-        "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json"
+        "../Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx.json"
       ],
       "sample_rate": 44100,
       "chunk_samples": 4416,
@@ -271,9 +274,10 @@
     },
     "android": {
       "runtime_kind": "onnx_streaming_target_extractor",
-      "artifact": "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx",
+      "artifact": "../Exports/Waveformer/waveformer_edge_100ms/android/model_fixed.ort",
       "metadata_artifacts": [
-        "WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json"
+        "../Exports/Waveformer/waveformer_edge_100ms/android/model_fixed.ort.json",
+        "../Exports/Waveformer/waveformer_edge_100ms/android/required_operators.config"
       ],
       "sample_rate": 44100,
       "chunk_samples": 4416,

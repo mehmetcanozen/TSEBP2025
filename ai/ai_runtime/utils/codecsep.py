@@ -369,8 +369,10 @@ def add_codecsep_runtime_arguments(
                 "Separation model: waveformer (default), codecsep, audiosep_hive15cat, "
                 "codecsep_dnrv2_15cat, or target_speaker. "
                 "CodecSep defaults to the active AudioCaps run directory under ai/models/CodecSep/. "
-                "AudioSepHive15Cat defaults to ai/models/AudioSepHive15Cat/frozensep_hive_15cat.onnx. "
-                "CodecSepDNRv2_15Cat defaults to ai/models/CodecSepDNRv2_15Cat/ and uses "
+                "AudioSepHive15Cat defaults to ai/models/Exports/AudioSepHive15Cat/"
+                "audiosep_hive15cat_exact15/shared/frozensep_hive_15cat.onnx. "
+                "CodecSepDNRv2_15Cat defaults to ai/models/Exports/CodecSepDNRv2_15Cat/"
+                "codecsep_dnrv2_15cat_exact15/ and uses "
                 "--codecsep15-runtime to choose ONNX or ExecuTorch. "
                 "target_speaker uses --target-speaker-reference and the selected target-speaker engine."
             ),
@@ -392,7 +394,8 @@ def add_codecsep_runtime_arguments(
         default=None,
         help=(
             "AudioSepHive15Cat ONNX file or model directory override. "
-            "Defaults to ai/models/AudioSepHive15Cat/frozensep_hive_15cat.onnx."
+            "Defaults to ai/models/Exports/AudioSepHive15Cat/"
+            "audiosep_hive15cat_exact15/shared/frozensep_hive_15cat.onnx."
         ),
     )
     parser.add_argument(
