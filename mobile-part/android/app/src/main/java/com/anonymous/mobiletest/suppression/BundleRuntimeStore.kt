@@ -4,13 +4,8 @@ import android.content.Context
 import android.content.res.AssetManager
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
-import java.util.zip.ZipInputStream
 
 class BundleRuntimeStore(private val context: Context) : AutoCloseable {
   companion object {
@@ -18,7 +13,6 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
   }
 
   private val baseDir = File(context.filesDir, "semantic-noise-suppression")
-  private val downloadDir = File(baseDir, "downloads")
   private val bundleRoot = File(baseDir, "bundles")
 
   @Volatile
@@ -30,45 +24,15 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
 
   fun prepare(options: PrepareOptions): RuntimeInfo {
     baseDir.mkdirs()
-    downloadDir.mkdirs()
     bundleRoot.mkdirs()
 
-    val bundledBundle = installBundledBundleIfPresent()
-    val targetVersion = options.expectedVersion
-
-    var resolvedBundle = if (!targetVersion.isNullOrBlank()) {
-      File(bundleRoot, targetVersion).takeIf { it.exists() }
-    } else {
-      newestAvailableBundle()
-    } ?: bundledBundle
-
-    val shouldDownload =
-      options.forceRefresh && !options.bundleDownloadUrl.isNullOrBlank() && !targetVersion.isNullOrBlank()
-    if (shouldDownload) {
-      val zipFile = File(downloadDir, "$targetVersion.zip")
-      downloadBundle(zipFile, requireNotNull(options.bundleDownloadUrl), options.accessToken)
-      if (!options.expectedChecksum.isNullOrBlank()) {
-        val checksum = sha256(zipFile)
-        require(checksum.equals(options.expectedChecksum, ignoreCase = true)) {
-          "Downloaded bundle checksum did not match the expected server checksum."
-        }
-      }
-      val outputDir = File(bundleRoot, targetVersion)
-      if (outputDir.exists()) {
-        outputDir.deleteRecursively()
-      }
-      unzipBundle(zipFile, outputDir)
-      resolvedBundle = outputDir
-    }
+    val resolvedBundle = installBundledBundleIfPresent(options.reinstallBundled)
 
     require(resolvedBundle != null && resolvedBundle.exists()) {
-      "No local model bundle is available and no download URL was provided."
+      "No bundled on-device suppression model is available in the Android app assets."
     }
 
     val loadedManifest = parseManifest(File(resolvedBundle, "manifest.json"))
-    require(targetVersion.isNullOrBlank() || loadedManifest.version == targetVersion) {
-      "Prepared bundle version ${loadedManifest.version} did not match expected version $targetVersion."
-    }
 
     if (runtime != null && manifest?.version != loadedManifest.version) {
       runtime?.close()
@@ -82,14 +46,14 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
 
     bundleDir = resolvedBundle
     manifest = loadedManifest
-    return activeRuntime.runtimeInfo(resolvedBundle.absolutePath)
+    return withAudioRuntimeInfo(activeRuntime.runtimeInfo(resolvedBundle.absolutePath))
   }
 
   fun runtimeInfo(): RuntimeInfo {
     val activeRuntime = runtime
     val loadedManifest = manifest
     return if (activeRuntime != null && loadedManifest != null && bundleDir != null) {
-      activeRuntime.runtimeInfo(bundleDir!!.absolutePath)
+      withAudioRuntimeInfo(activeRuntime.runtimeInfo(bundleDir!!.absolutePath))
     } else {
       RuntimeInfo(
         provider = "cpu",
@@ -104,6 +68,8 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
         sampleRate = 32_000,
         categoryCount = 0,
         availableProviders = listOf("cpu"),
+        audioEngine = "auto",
+        nativeOboeAvailable = NativeOboeAudioEngine.isAvailable(),
       )
     }
   }
@@ -119,7 +85,13 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
     runtime = null
   }
 
-  private fun installBundledBundleIfPresent(): File? {
+  private fun withAudioRuntimeInfo(info: RuntimeInfo): RuntimeInfo =
+    info.copy(
+      audioEngine = "auto",
+      nativeOboeAvailable = NativeOboeAudioEngine.isAvailable(),
+    )
+
+  private fun installBundledBundleIfPresent(reinstallBundled: Boolean): File? {
     val assetManifestPath = "$ASSET_BUNDLE_ROOT/manifest.json"
     val assetManager = context.assets
     val bundledManifestJson = try {
@@ -130,10 +102,20 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
 
     val bundledManifest = parseManifest(JSONObject(bundledManifestJson))
     val outputDir = File(bundleRoot, bundledManifest.version)
-    if (outputDir.exists()) {
+    val manifestFile = File(outputDir, "manifest.json")
+    val manifestMatches = manifestFile.exists() &&
+      manifestFile.readText(Charsets.UTF_8) == bundledManifestJson
+    val artifactsPresent = bundledManifest.artifacts.all { artifact ->
+      File(outputDir, artifact.filename).exists()
+    }
+
+    if (outputDir.exists() && !reinstallBundled && manifestMatches && artifactsPresent) {
       return outputDir
     }
 
+    if (outputDir.exists()) {
+      outputDir.deleteRecursively()
+    }
     copyAssetDirectory(assetManager, ASSET_BUNDLE_ROOT, outputDir)
     return outputDir
   }
@@ -162,60 +144,6 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
         }
       } else {
         copyAssetDirectory(assetManager, childAssetPath, target)
-      }
-    }
-  }
-
-  private fun downloadBundle(outputFile: File, downloadUrl: String, accessToken: String?) {
-    val connection = URL(downloadUrl).openConnection() as HttpURLConnection
-    connection.requestMethod = "GET"
-    connection.connectTimeout = 30_000
-    connection.readTimeout = 60_000
-    if (!accessToken.isNullOrBlank()) {
-      connection.setRequestProperty("Authorization", "Bearer $accessToken")
-    }
-    connection.connect()
-    require(connection.responseCode in 200..299) {
-      "Bundle download failed with HTTP ${connection.responseCode}"
-    }
-
-    outputFile.parentFile?.mkdirs()
-    connection.inputStream.use { input ->
-      FileOutputStream(outputFile).use { output ->
-        input.copyTo(output)
-      }
-    }
-    connection.disconnect()
-  }
-
-  private fun newestAvailableBundle(): File? {
-    val bundles = bundleRoot.listFiles().orEmpty()
-      .filter { candidate -> candidate.isDirectory && File(candidate, "manifest.json").exists() }
-    return bundles.maxByOrNull { candidate ->
-      val manifestFile = File(candidate, "manifest.json")
-      maxOf(candidate.lastModified(), manifestFile.lastModified())
-    }
-  }
-
-  private fun unzipBundle(zipFile: File, outputDir: File) {
-    outputDir.mkdirs()
-    ZipInputStream(BufferedInputStream(zipFile.inputStream())).use { zip ->
-      var entry = zip.nextEntry
-      while (entry != null) {
-        val outputFile = File(outputDir, entry.name)
-        require(outputFile.canonicalPath.startsWith(outputDir.canonicalPath)) {
-          "Refusing to extract bundle entry outside target directory"
-        }
-        if (entry.isDirectory) {
-          outputFile.mkdirs()
-        } else {
-          outputFile.parentFile?.mkdirs()
-          FileOutputStream(outputFile).use { output ->
-            zip.copyTo(output)
-          }
-        }
-        zip.closeEntry()
-        entry = zip.nextEntry
       }
     }
   }
@@ -324,18 +252,4 @@ class BundleRuntimeStore(private val context: Context) : AutoCloseable {
     throw IllegalStateException("No loadable runtime artifact was found in ${bundleDirectory.absolutePath}")
   }
 
-  private fun sha256(file: File): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    file.inputStream().use { input ->
-      val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-      while (true) {
-        val read = input.read(buffer)
-        if (read <= 0) {
-          break
-        }
-        digest.update(buffer, 0, read)
-      }
-    }
-    return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-  }
 }

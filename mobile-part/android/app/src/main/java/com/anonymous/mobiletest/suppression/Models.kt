@@ -33,11 +33,7 @@ data class ModelBundleManifest(
 )
 
 data class PrepareOptions(
-  val bundleDownloadUrl: String?,
-  val accessToken: String?,
-  val expectedVersion: String?,
-  val expectedChecksum: String?,
-  val forceRefresh: Boolean,
+  val reinstallBundled: Boolean,
 )
 
 data class LiveConfig(
@@ -45,6 +41,7 @@ data class LiveConfig(
   val aggressiveness: Float,
   val hopMs: Int,
   val lookaheadMs: Int,
+  val audioEngine: String = "legacy",
   val waveformerPostFilter: String = "off",
 )
 
@@ -66,6 +63,8 @@ data class RuntimeInfo(
   val sampleRate: Int,
   val categoryCount: Int,
   val availableProviders: List<String>,
+  val audioEngine: String = "auto",
+  val nativeOboeAvailable: Boolean = false,
 )
 
 data class StatusSnapshot(
@@ -73,9 +72,19 @@ data class StatusSnapshot(
   val state: String,
   val provider: String,
   val inferenceMs: Double?,
+  val inferenceP50Ms: Double?,
+  val inferenceP95Ms: Double?,
+  val inferenceP99Ms: Double?,
   val queueDepthMs: Double?,
   val xruns: Int,
   val audioTrackUnderruns: Int,
+  val audioEngine: String,
+  val nativeSampleRate: Int,
+  val framesPerBurst: Int,
+  val callbackUnderruns: Long,
+  val inputOverflows: Long,
+  val renderUnderruns: Long,
+  val renderOverflows: Long,
   val limiterHits: Int,
   val failOpenCount: Int,
   val boundaryRepairHits: Int,

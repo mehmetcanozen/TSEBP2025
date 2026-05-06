@@ -12,10 +12,6 @@ import {
   suppressionEngineService,
 } from '../services/SuppressionEngineService';
 
-interface UseSuppressionDemoOptions {
-  accessToken: string | null;
-}
-
 interface UseSuppressionDemoResult {
   startLive: () => Promise<void>;
   stopLive: () => Promise<void>;
@@ -53,6 +49,7 @@ interface CategoryDecoration {
 }
 
 const STOP_FINISHED_TIMEOUT_MS = 12000;
+const ALWAYS_SAVE_PROCESSED_AUDIO = true;
 
 const CATEGORY_DECORATIONS: Record<string, CategoryDecoration> = {
   alarm: { icon: 'alarm-outline', transient: true },
@@ -165,9 +162,7 @@ function filenameFromPath(path: string | null): string {
   return path?.split('/').pop() || `suppression_${Date.now()}.wav`;
 }
 
-export const useSuppressionDemo = ({
-  accessToken,
-}: UseSuppressionDemoOptions): UseSuppressionDemoResult => {
+export const useSuppressionDemo = (): UseSuppressionDemoResult => {
   const nativeEngineAvailable = suppressionEngineService.isAvailable();
   const [status, setStatus] = useState<string>('Idle');
   const [phase, setPhaseState] = useState<LivePhase>('idle');
@@ -229,13 +224,9 @@ export const useSuppressionDemo = ({
       setStatus('Live suppression requires a native Android build.');
       return null;
     }
-    if (!accessToken) {
-      setStatus('Login required');
-      return null;
-    }
 
     setStatus('Preparing on-device model...');
-    const prepared = await modelBundleService.ensurePrepared(accessToken);
+    const prepared = await modelBundleService.ensurePrepared();
     setRuntimeInfo(prepared.runtimeInfo);
 
     const categories = await suppressionEngineService.getCategories().catch(() => []);
@@ -249,7 +240,7 @@ export const useSuppressionDemo = ({
 
     setStatus(prepared.message ?? (prepared.runtimeInfo.warmed ? 'Engine ready' : 'Engine loaded'));
     return prepared.runtimeInfo;
-  }, [accessToken, nativeEngineAvailable]);
+  }, [nativeEngineAvailable]);
 
   useEffect(() => {
     if (!nativeEngineAvailable) {
@@ -342,7 +333,7 @@ export const useSuppressionDemo = ({
   }, [addRecording, clearStopTimeout, isCurrentSessionEvent, nativeCategories, nativeEngineAvailable, setPhase, target]);
 
   useEffect(() => {
-    if (!accessToken || !nativeEngineAvailable) {
+    if (!nativeEngineAvailable) {
       return;
     }
 
@@ -351,7 +342,7 @@ export const useSuppressionDemo = ({
       setStatus(`Error: ${message}`);
       setPhase('error');
     });
-  }, [accessToken, nativeEngineAvailable, setPhase, syncEngine]);
+  }, [nativeEngineAvailable, setPhase, syncEngine]);
 
   useEffect(() => {
     if (!nativeEngineAvailable) {
@@ -396,13 +387,20 @@ export const useSuppressionDemo = ({
 
       setStatus(`Starting live suppression for ${category.label}...`);
       activeCategory.current = category;
-      console.log(`[useSuppressionDemo] Starting live, recordEnabled: ${isRecordEnabled}`);
+      const shouldRecord = ALWAYS_SAVE_PROCESSED_AUDIO || isRecordEnabled;
+      if (shouldRecord && !isRecordEnabled) {
+        setIsRecordEnabled(true);
+      }
+
+      console.log(`[useSuppressionDemo] Starting live, recordEnabled: ${shouldRecord}`);
       const result = await suppressionEngineService.startLive({
         categoryId: category.id,
         aggressiveness: category.defaultAggressiveness,
         hopMs: 200,
         lookaheadMs: 350,
-        recordEnabled: isRecordEnabled,
+        audioEngine: 'legacy',
+        waveformerPostFilter: 'off',
+        recordEnabled: shouldRecord,
       });
 
       console.log(`[useSuppressionDemo] Starting session: ${result.sessionId}`);
@@ -480,16 +478,24 @@ export const useSuppressionDemo = ({
       `Model: ${runtimeInfo?.displayName ?? runtimeInfo?.modelVersion ?? 'none'}`,
       `Provider: ${runtimeInfo?.provider ?? 'unknown'}`,
       `Runtime: ${runtimeInfo?.runtimeKind ?? 'unknown'}`,
+      `Audio engine: ${liveStatus?.audioEngine ?? runtimeInfo?.audioEngine ?? 'auto'}`,
+      `Native Oboe available: ${runtimeInfo?.nativeOboeAvailable ? 'yes' : 'no'}`,
       `Latency: ${liveStatus?.inferenceMs?.toFixed(1) ?? '--'} ms`,
+      `Latency p95: ${liveStatus?.inferenceP95Ms?.toFixed(1) ?? '--'} ms`,
       `Queue: ${liveStatus?.queueDepthMs?.toFixed(1) ?? '--'} ms`,
+      `Native rate: ${liveStatus?.nativeSampleRate ?? runtimeInfo?.sampleRate ?? '--'} Hz`,
+      `Frames/burst: ${liveStatus?.framesPerBurst ?? '--'}`,
       `XRuns: ${liveStatus?.xruns ?? 0}`,
       `AudioTrack underruns: ${liveStatus?.audioTrackUnderruns ?? 0}`,
+      `Callback underruns: ${liveStatus?.callbackUnderruns ?? 0}`,
+      `Input overflows: ${liveStatus?.inputOverflows ?? 0}`,
+      `Render underruns: ${liveStatus?.renderUnderruns ?? 0}`,
       `Limiter hits: ${liveStatus?.limiterHits ?? 0}`,
       `Fail-open: ${liveStatus?.failOpenCount ?? 0}`,
       `Boundary repairs: ${liveStatus?.boundaryRepairHits ?? 0}`,
       `Startup blend: ${liveStatus?.startupBlendMs ?? 0} ms`,
       `Waveformer post-filter: ${liveStatus?.waveformerPostFilter ?? '--'}`,
-      `Wiener bypassed: ${liveStatus?.wienerBypassed ? 'yes' : 'no'}`,
+      `STFT Wiener bypassed: ${liveStatus?.wienerBypassed ? 'yes' : 'no'}`,
       `Input RMS: ${meter?.rmsIn?.toFixed(3) ?? '--'}`,
       `Output RMS: ${meter?.rmsOut?.toFixed(3) ?? '--'}`,
       `Raw out peak: ${meter?.rawOutPeak?.toFixed(3) ?? '--'}`,

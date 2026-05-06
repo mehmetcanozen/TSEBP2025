@@ -24,16 +24,14 @@ export interface EngineRuntimeInfo {
   sampleRate: number;
   categoryCount: number;
   availableProviders: string[];
+  audioEngine?: 'auto' | 'oboe' | 'legacy' | string;
+  nativeOboeAvailable?: boolean;
 }
 
 export type LivePhase = 'idle' | 'preparing' | 'running' | 'stopping' | 'error';
 
 export interface EnginePrepareOptions {
-  bundleDownloadUrl?: string;
-  accessToken?: string;
-  expectedVersion?: string;
-  expectedChecksum?: string;
-  forceRefresh?: boolean;
+  reinstallBundled?: boolean;
 }
 
 export interface EngineStartLiveConfig {
@@ -41,6 +39,8 @@ export interface EngineStartLiveConfig {
   aggressiveness: number;
   hopMs?: number;
   lookaheadMs?: number;
+  audioEngine?: 'auto' | 'oboe' | 'legacy';
+  waveformerPostFilter?: 'off' | 'direct_residual';
   recordEnabled?: boolean;
   recordPath?: string;
 }
@@ -58,9 +58,19 @@ export interface EngineStatusEvent {
   state: string;
   provider: string;
   inferenceMs: number | null;
+  inferenceP50Ms?: number | null;
+  inferenceP95Ms?: number | null;
+  inferenceP99Ms?: number | null;
   queueDepthMs: number | null;
   xruns: number;
   audioTrackUnderruns?: number;
+  audioEngine?: string;
+  nativeSampleRate?: number;
+  framesPerBurst?: number;
+  callbackUnderruns?: number;
+  inputOverflows?: number;
+  renderUnderruns?: number;
+  renderOverflows?: number;
   limiterHits?: number;
   failOpenCount?: number;
   boundaryRepairHits?: number;

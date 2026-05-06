@@ -1,99 +1,77 @@
-# Semantic Noise Mixer - Mobile Testbed
+# Semantic Noise Suppression Mobile App
 
-This is a standalone **React Native (Expo)** testbed used to validate the on-device AI pipeline for the Semantic Noise Mixer project. It demonstrates recording audio, processing it using a TFLite model, and playing back the cleaned result.
+This React Native Android app validates the on-device suppression pipeline for
+the shared packaged model runtime. The current default model is
+`waveformer_edge_100ms`, packaged from `ai/models/Waveformer/model_package.json`
+and copied into Android assets by the Gradle `prepareBundledSuppressionModel`
+task.
 
-> **Note**: This is a **Development Client** project. It uses native modules for AI inference (`react-native-fast-tflite`) and audio recording, meaning it **cannot** be run inside the standard "Expo Go" app. You must build the native binary.
+Older notes may mention `mobile-test`, Native UNet, or TFLite. Those are
+historical experiments. The active Android path uses ONNX Runtime Android and
+accepts ONNX/ORT packaged artifacts.
 
----
+## Build Inputs
 
-## 🛠 Prerequisites
+- Shared model selection: `ai/models/model_selection.json`
+- Waveformer package manifest: `ai/models/Waveformer/model_package.json`
+- Canonical Android artifact:
+  `ai/models/Exports/Waveformer/waveformer_edge_100ms/android/model_fixed.ort`
+- Android bundle output:
+  `mobile-part/android/app/build/generated/suppression-assets/suppression-model-bundle/`
 
-Before running the app, ensure you have the following installed:
+## Prepare Bundled Model
 
-1.  **Node.js** (LTS version recommended).
-2.  **Android Studio** (for Android) or **Xcode** (for macOS/iOS).
-3.  **Physical Device** recommended (Emulator microphone support can be flaky).
-    *   **Android**: Enable Developer Options and USB Debugging.
-    *   **iOS**: Requires a paid or free Apple Developer account for code signing.
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-part\android
+.\gradlew.bat :app:prepareBundledSuppressionModel
+```
 
----
+The generated bundle manifest should report:
 
-## 🚀 Installation & Build
+- `model_id`: `waveformer_edge_100ms`
+- `runtime_kind`: `onnx_streaming_target_extractor`
+- model artifact format: `ort`
+- sample rate: `44100`
+- chunk samples: `4416`
 
-If you just received this code as a zip file, follow these steps in order:
+## Run Android
 
-### 1. Install Dependencies
-Open a terminal in the `mobile-test` folder and run:
-```bash
+Install Java/Android tooling, connect a device or emulator, then run:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\mobile-part
 npm install
-```
-
-### 2. Generate Native Projects
-Since the native code is excluded from the repository to keep it clean, you must regenerate the `android/` and `ios/` folders:
-```bash
-npx expo prebuild --clean
-```
-
-### 3. Run the App
-Connect your device and run the appropriate command:
-
-**For Android:**
-```bash
 npx expo run:android
 ```
 
-**For iOS (Mac only):**
-```bash
-npx expo run:ios
-```
+The app uses native modules, so it cannot run inside standard Expo Go.
 
----
+## Live Audio Runtime
 
-## 📱 How to Use
+Live suppression is on-device end to end:
 
-The app provides a simple interface to test the AI suppression pipeline:
+- `SuppressionEngine.prepare()` installs the bundled Android asset copy.
+- `SuppressionEngine.startLive()` defaults to `audioEngine: "auto"`.
+- `"auto"` starts the native Oboe/AAudio-backed audio engine first and falls
+  back to the Kotlin `AudioRecord`/`AudioTrack` path if the native stream cannot
+  open on a device.
+- Model inference remains on a processor thread; the native audio callbacks only
+  move samples through preallocated rings.
+- The default live target is quality-stable realtime: 100 ms Waveformer hops,
+  300 ms lookahead, ONNX Runtime CPU, no default post-filter, and no default
+  quantization or accelerator path.
 
-1.  **Record**: Press **"Record (5s)"**. Speak into the microphone or make some noise (like typing).
-2.  **Listen to Raw**: Press **"Play Original"** to verify the recording worked.
-3.  **Process**: The app automatically processes the audio through the TFLite model in the background after recording.
-4.  **Listen to Clean**: Press **"Play Clean"** to hear the output of the AI suppression model.
-    *   *Note: In this testbed, the output may sound muffled or different as it validates the pipeline stability rather than final audio quality.*
+The runtime status panel reports the active audio engine, native sample rate,
+frames per burst, inference p95, queue depth, callback underruns, input
+overflows, render underruns, limiter hits, fail-open count, and boundary repair
+count. For device validation, Oboe should stay selected as the audio engine,
+inference p95 should remain under the 100 ms hop budget, and fail-open should
+stay at zero during ordinary live use.
 
----
+## Model Boundary
 
-## 🏗 Architecture & Assets
-
-*   **Models**: Located in `assets/models/`.
-    *   `waveformer.tflite`: The core suppression engine (Native UNet architecture).
-    *   `yamnet.tflite`: Used for semantic sound classification.
-*   **Pipeline**:
-    1.  **Capture**: `react-native-audio-record` captures 44.1kHz mono WAV.
-    2.  **Inference**: `react-native-fast-tflite` runs the model on-device.
-    3.  **Stitching**: Audio is processed in 3-second chunks and reassembled.
-    4.  **Playback**: `expo-av` handles audio output.
-
----
-
-## 📦 Sharing with Others
-
-If you need to zip this project for a teammate:
-
-1.  **Delete these folders first** (they are huge and will be regenerated):
-    *   `node_modules/`
-    *   `.expo/`
-    *   `android/`
-    *   `ios/`
-2.  **Ensure these are included**:
-    *   `assets/` (Critical: contains the `.tflite` models)
-    *   `package.json`
-    *   `app.json`
-    *   `metro.config.js`
-    *   All `.ts` and `.tsx` source files.
-
----
-
-## ❓ Troubleshooting
-
-*   **Silent Recording**: Ensure the app has Microphone permissions. On Android Emulator, check the "Extended Controls" -> "Microphone" settings to ensure the host mic is connected.
-*   **Model Load Failure**: Check if `metro.config.js` includes `'tflite'` in the `assetExts` array.
-*   **Build Errors**: Try running `npx expo prebuild --clean` to reset the native build state.
+Model preparation is local-only. `ModelBundleService` calls the native
+`SuppressionEngine.prepare()` method, and `BundleRuntimeStore` installs the
+bundle that is already packaged in Android assets. The mobile app does not call
+backend model update/download endpoints and does not upload audio for backend
+suppression.
