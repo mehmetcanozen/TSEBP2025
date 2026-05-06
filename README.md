@@ -36,6 +36,10 @@ Use these docs in order when setting up a new machine:
 1. Download the ignored `ai/models/Exports` zip from
    [Google Drive](https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing)
    and restore it with [Model artifacts](docs/project/usage/MODEL_ARTIFACTS.md).
+1. Set up the Python AI CLI:
+   `.\shared\scripts\setup-ai-runtime.ps1 -Profile runtime -UpgradePip`
+1. Verify local model tooling:
+   `python -m ai models list` and `python -m ai artifacts check --required-only`
 1. Set up PostgreSQL and the shared backend with
    [Backend Windows PostgreSQL](docs/project/usage/BACKEND_WINDOWS_POSTGRES.md), or use
    `.\shared\scripts\setup-backend-postgres.ps1`.
@@ -64,7 +68,8 @@ Use these docs in order when setting up a new machine:
 ```text
 TSEBP2025/
 |-- ai/
-|   |-- ai_runtime/     # Python runtime, separators, profiles, mappings
+|   |-- ai_runtime/     # Python runtime, contracts, registry, artifacts, separators
+|   |-- cli/            # Typer CLI: python -m ai / tsebp-ai
 |   |-- data/           # Local raw and processed audio
 |   |-- export/         # Model packaging and historical conversion tools
 |   |-- models/         # Model manifests plus local model/artifact trees

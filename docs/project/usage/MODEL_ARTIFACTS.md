@@ -80,7 +80,20 @@ ai\models\Exports\
 
 ## Verify required product artifacts
 
-Run this from the repository root:
+Preferred check:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+python -m ai artifacts check --required-only
+```
+
+For CI-style failure behavior, use:
+
+```powershell
+python -m ai artifacts check --strict
+```
+
+Manual PowerShell check:
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025
@@ -105,6 +118,9 @@ foreach ($path in $required) {
 "Model artifacts are present."
 ```
 
+The CLI check is the source of truth for new workflows because it uses the same
+central artifact helpers as the AI runtime commands.
+
 ## How the apps consume the bundle
 
 Desktop uses Tauri resources to copy or bundle the restored files during normal
@@ -116,6 +132,17 @@ shared manifests and place the active Android model into generated app assets.
 The shared backend is not involved in model selection, model delivery, or audio
 suppression.
 
+The AI CLI uses the same restored artifact root for local tests:
+
+```powershell
+python -m ai models list
+python -m ai suppress file `
+  --input .\ai\data\audio\raw\speech_barking.wav `
+  --output .\ai\data\audio\processed\speech_barking_waveformer_dog.wav `
+  --target dog `
+  --backend waveformer
+```
+
 ## Rules
 
 - Keep the folder name as `Exports`.
@@ -124,3 +151,5 @@ suppression.
 - Treat `WFExports` and lowercase `exports` as stale historical paths.
 - For the Android app, the current default artifact is
   `Waveformer/waveformer_edge_100ms/android/model_fixed.ort`.
+- Use `python -m ai artifacts check --required-only` after restoring or
+  changing the bundle.
