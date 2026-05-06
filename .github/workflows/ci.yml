@@ -5,9 +5,13 @@ on:
     paths:
       - ".github/workflows/**"
       - "ai/**"
+      - "backend/**"
       - "desktop/**"
-      - "mobile-backend/**"
+      - "docs/**"
       - "mobile-part/**"
+      - "shared/**"
+      - ".gitignore"
+      - "package.json"
       - "pyproject.toml"
       - "README.md"
   push:
@@ -18,12 +22,22 @@ on:
     paths:
       - ".github/workflows/**"
       - "ai/**"
+      - "backend/**"
       - "desktop/**"
-      - "mobile-backend/**"
+      - "docs/**"
       - "mobile-part/**"
+      - "shared/**"
+      - ".gitignore"
+      - "package.json"
       - "pyproject.toml"
       - "README.md"
   workflow_dispatch:
+    inputs:
+      run_android_gradle_smoke:
+        description: "Run optional Android Gradle asset/Kotlin smoke checks. Requires model artifacts to exist in the checkout."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -34,15 +48,16 @@ concurrency:
 
 env:
   CI: "true"
-  PYTHON_VERSION: "3.11"
   NODE_VERSION: "22"
+  PYTHON_VERSION: "3.11"
+  JAVA_VERSION: "21"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PYTHONDONTWRITEBYTECODE: "1"
   EXPO_NO_TELEMETRY: "1"
 
 jobs:
-  python-static:
-    name: Python syntax and model manifest checks
+  repo-contracts:
+    name: Repository contracts and docs
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -64,8 +79,8 @@ jobs:
 
           roots = [
               Path("ai/ai_runtime"),
+              Path("ai/export"),
               Path("ai/scripts"),
-              Path("mobile-backend"),
           ]
           ignored_parts = {
               "__pycache__",
@@ -75,9 +90,14 @@ jobs:
               "venv",
               "env",
               "node_modules",
+              "target",
+              "build",
+              "dist",
           }
 
           for root in roots:
+              if not root.exists():
+                  continue
               for path in root.rglob("*.py"):
                   if ignored_parts.intersection(path.parts):
                       continue
@@ -85,7 +105,7 @@ jobs:
                       ast.parse(handle.read(), filename=str(path))
           PY
 
-      - name: Validate packaged model selection
+      - name: Validate packaged model manifests
         run: |
           python - <<'PY'
           import json
@@ -97,14 +117,17 @@ jobs:
 
           default_model = selection["default_model_id"]
           models = selection["models"]
-          assert default_model in models, f"default_model_id {default_model!r} is not registered"
+          assert default_model == "waveformer_edge_100ms", (
+              f"default_model_id drifted to {default_model!r}"
+          )
+          assert default_model in models, f"default model {default_model!r} is not registered"
 
           for model_id, manifest_relpath in models.items():
               manifest_path = root / "ai" / "models" / manifest_relpath
               if not manifest_path.exists():
                   if model_id == default_model:
                       raise AssertionError(
-                          f"missing default model manifest for {model_id}: {manifest_relpath}"
+                          f"default model {model_id} points to missing manifest {manifest_relpath}"
                       )
                   print(
                       "::warning title=Optional model manifest missing::"
@@ -120,48 +143,262 @@ jobs:
               assert manifest.get("suppression_strategy", {}).get("kind"), (
                   f"{model_id} has no suppression strategy"
               )
+
+          waveformer = json.loads(
+              (root / "ai" / "models" / models["waveformer_edge_100ms"]).read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert len(waveformer.get("categories", [])) == 20
+
+          for platform in ("desktop", "android"):
+              artifact = waveformer["platforms"][platform]
+              assert artifact.get("runtime_kind") == "onnx_streaming_target_extractor"
+              assert artifact.get("sample_rate") == 44100
+              assert artifact.get("chunk_samples") == 4416
           PY
 
-  mobile-backend:
-    name: Mobile backend tests
+      - name: Ensure generated artifacts and deleted legacy backend are not tracked
+        run: |
+          set -euo pipefail
+          tracked="$(git ls-files \
+            'ai/models/Exports/**' \
+            'ai/models/exports/**' \
+            'models_store/**' \
+            'mobile-backend/**' \
+            'mobile-part/CodecSepAPI/**' \
+            'temp_separation/**' \
+            'test_shared.db*' || true)"
+
+          if [ -n "$tracked" ]; then
+            echo "Generated or retired paths are still tracked:"
+            echo "$tracked"
+            exit 1
+          fi
+
+      - name: Check for stale backend references
+        run: |
+          set -euo pipefail
+          if grep -RInE 'mobile-backend|CodecSepAPI|localhost:8000|10\.0\.2\.2:8000|EXPO_PUBLIC_API_URL=.*8000' \
+            backend desktop/src mobile-part docs/project README.md .gitignore; then
+            echo "Found stale backend reference."
+            exit 1
+          fi
+
+      - name: Check local Markdown links
+        run: |
+          python - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+          from urllib.parse import unquote
+
+          root = Path.cwd()
+          markdown_files = [root / "README.md", *sorted((root / "docs" / "project").rglob("*.md"))]
+          errors = []
+
+          for md_path in markdown_files:
+              text = md_path.read_text(encoding="utf-8")
+              for match in re.finditer(r"\[[^\]]+\]\(([^)]+)\)", text):
+                  raw_target = match.group(1).strip()
+                  if not raw_target or raw_target.startswith("#"):
+                      continue
+                  if raw_target.startswith(("http://", "https://", "mailto:")):
+                      continue
+                  target = raw_target.split("#", 1)[0].strip()
+                  if not target:
+                      continue
+                  target = target.strip("<>")
+                  target = unquote(target)
+                  candidate = (md_path.parent / target).resolve()
+                  try:
+                      candidate.relative_to(root)
+                  except ValueError:
+                      errors.append(f"{md_path.relative_to(root)} links outside repo: {raw_target}")
+                      continue
+                  if not candidate.exists():
+                      errors.append(f"{md_path.relative_to(root)} has missing link: {raw_target}")
+
+          if errors:
+              for error in errors:
+                  print(error)
+              sys.exit(1)
+          PY
+
+  backend:
+    name: Shared backend
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: tsebp2025
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tsebp2025"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
-        working-directory: mobile-backend
+        working-directory: backend
 
     env:
-      DATABASE_URL: sqlite:///./ci_audioapp.db
-      SECRET_KEY: ci-secret-key
-      DEBUG: "false"
-      MODELS_DIR: ./models_store
+      NODE_ENV: test
+      PORT: "4000"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tsebp2025?schema=public
+      AUTH_PROVIDER: local
+      LOCAL_JWT_SECRET: ci-local-secret-for-tsebp2025-backend-at-least-32-chars
+      LOCAL_ACCESS_TOKEN_SECONDS: "900"
+      LOCAL_REFRESH_TOKEN_DAYS: "30"
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Node
+        uses: actions/setup-node@v6
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: mobile-backend/requirements.txt
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
       - name: Install backend dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pytest httpx
+        run: npm ci
 
-      - name: Run backend tests
-        run: python -m pytest tests -q
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Apply database migrations
+        run: npm run db:deploy
+
+      - name: Type-check backend
+        run: npm run typecheck
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Audit backend production dependencies
+        run: npm audit --omit=dev
+
+      - name: Smoke-test backend API routes
+        run: |
+          set -euo pipefail
+          npm run start > "$RUNNER_TEMP/backend.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for _ in {1..30}; do
+            if curl -fsS http://localhost:4000/api/v1/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://localhost:4000/api/v1/health
+
+          node <<'NODE'
+          const base = "http://localhost:4000/api/v1";
+
+          async function request(path, options = {}) {
+            const response = await fetch(`${base}${path}`, {
+              ...options,
+              headers: {
+                "Content-Type": "application/json",
+                ...(options.headers ?? {}),
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`${options.method ?? "GET"} ${path} -> ${response.status}: ${await response.text()}`);
+            }
+            return response.json();
+          }
+
+          const suffix = Date.now();
+          const email = `ci-${suffix}@example.com`;
+          const password = "TestPassword123!";
+
+          await request("/auth/register", {
+            method: "POST",
+            body: JSON.stringify({
+              username: `ci_${suffix}`,
+              full_name: "CI User",
+              email,
+              password,
+            }),
+          });
+
+          const tokens = await request("/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ email, password }),
+          });
+          if (tokens.token_type !== "bearer" || !tokens.access_token || !tokens.refresh_token) {
+            throw new Error("login did not return bearer access/refresh tokens");
+          }
+
+          const auth = { Authorization: `Bearer ${tokens.access_token}` };
+          const me = await request("/auth/me", { headers: auth });
+          if (me.email !== email) {
+            throw new Error(`unexpected /auth/me email: ${me.email}`);
+          }
+
+          const profile = await request("/auth/profile", {
+            method: "PUT",
+            headers: auth,
+            body: JSON.stringify({
+              full_name: "CI User Updated",
+              bio: "CI backend smoke",
+            }),
+          });
+          if (profile.full_name !== "CI User Updated") {
+            throw new Error("profile update did not persist");
+          }
+
+          await request("/devices/register", {
+            method: "POST",
+            headers: auth,
+            body: JSON.stringify({
+              device_id: `desktop-ci-${suffix}`,
+              platform: "windows-desktop",
+              app_version: "ci",
+            }),
+          });
+
+          await request("/devices/register", {
+            method: "POST",
+            headers: auth,
+            body: JSON.stringify({
+              device_id: `mobile-ci-${suffix}`,
+              platform: "android",
+              app_version: "ci",
+            }),
+          });
+
+          await request("/auth/logout", {
+            method: "POST",
+            body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+          });
+          NODE
 
   desktop-web:
-    name: Desktop web lint, tests, and build
+    name: Desktop web
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
         working-directory: desktop
+
+    env:
+      VITE_BACKEND_API_URL: http://localhost:4000/api/v1
 
     steps:
       - name: Check out repository
@@ -181,23 +418,21 @@ jobs:
         run: npm run lint
 
       - name: Test desktop app
-        run: |
-          if find src -type f \( -name "*.test.*" -o -name "*.spec.*" \) | grep -q .; then
-            npm test -- --passWithNoTests
-          else
-            echo "No desktop test files found; skipping Vitest."
-          fi
+        run: npm test
 
       - name: Build desktop web app
         run: npm run build
 
   mobile-typescript:
-    name: Mobile app TypeScript check
+    name: Mobile TypeScript
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
         working-directory: mobile-part
+
+    env:
+      EXPO_PUBLIC_API_URL: http://10.0.2.2:4000/api/v1
 
     steps:
       - name: Check out repository
@@ -215,3 +450,37 @@ jobs:
 
       - name: Type-check mobile app
         run: npx tsc --noEmit --pretty false
+
+  android-gradle-smoke:
+    name: Optional Android Gradle smoke
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_android_gradle_smoke }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile-part/android
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: gradle
+          cache-dependency-path: |
+            mobile-part/android/*.gradle
+            mobile-part/android/**/*.gradle
+            mobile-part/android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Verify bundled model artifact is present
+        run: |
+          test -f ../../ai/models/Exports/Waveformer/waveformer_edge_100ms/android/model_fixed.ort
+
+      - name: Prepare bundled suppression model
+        run: ./gradlew :app:prepareBundledSuppressionModel --no-daemon
+
+      - name: Compile debug Kotlin
+        run: ./gradlew :app:compileDebugKotlin --no-daemon
