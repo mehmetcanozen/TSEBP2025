@@ -122,8 +122,9 @@ budget, and fail-open should remain zero.
 
 The Android model path is local-only. `ModelBundleService.ts` does not call
 `/model/latest`, and `BundleRuntimeStore.kt` does not download model bundles.
-The FastAPI backend is for auth, history, and device metadata; it is not needed
-to prepare the suppression model or run live inference.
+The shared NestJS backend is for auth, profiles, settings, history metadata,
+and device metadata; it is not needed to prepare the suppression model or run
+live inference.
 
 ## Local Development Steps
 

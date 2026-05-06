@@ -103,7 +103,7 @@ development and build flows. You do not manually copy model files into
 
 Android uses the Gradle `prepareBundledSuppressionModel` task to read the
 shared manifests and place the active Android model into generated app assets.
-The mobile backend is not involved in model selection, model delivery, or audio
+The shared backend is not involved in model selection, model delivery, or audio
 suppression.
 
 ## Rules

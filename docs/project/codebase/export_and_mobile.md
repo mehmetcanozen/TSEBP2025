@@ -206,12 +206,12 @@ frames per burst, callback underruns, input overflows, render underruns, queue
 depth, and inference p50/p95/p99. These diagnostics are the first place to
 check whether a device is actually meeting the 100 ms Waveformer hop budget.
 
-## Mobile Backend Boundary
+## Shared Backend Boundary
 
-The mobile backend is not a model-distribution service. The active FastAPI app
-registers auth, history, and device routes only. It does not register
-`/model/*` or `/separation/*`, and Android model preparation must succeed from
-the on-device bundle without a backend call.
+The shared backend is not a model-distribution service. The active NestJS app
+registers auth, profile, settings, history metadata, and device routes only. It
+does not register `/model/*` or `/separation/*`, and Android model preparation
+must succeed from the on-device bundle without a backend call.
 
 `ModelBundleService.ts` is therefore intentionally small: it calls native
 `SuppressionEngine.prepare()` and lets `BundleRuntimeStore.kt` install the

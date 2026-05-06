@@ -11,11 +11,24 @@ const Profile = () => {
   const [name, setName] = useState(user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    updateProfile({ name, bio });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSave = async () => {
+    if (isSaving) {
+      return;
+    }
+    setError("");
+    setIsSaving(true);
+    try {
+      await updateProfile({ name, bio });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Profile save failed");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const initials = name ? name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "?";
@@ -74,14 +87,21 @@ const Profile = () => {
               />
             </div>
 
+            {error && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {error}
+              </p>
+            )}
+
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleSave}
+              disabled={isSaving}
               className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm font-display glow-purple hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
             >
               <Save className="w-4 h-4" />
-              {saved ? "Saved!" : "Save Profile"}
+              {isSaving ? "Saving..." : saved ? "Saved!" : "Save Profile"}
             </motion.button>
           </div>
         </motion.div>

@@ -9,14 +9,25 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { signup } = useAuth();
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name && email && password) {
-      signup(name, email, password);
+    if (!name || !email || !password || password.length < 8 || isSubmitting) {
+      return;
+    }
+    setError("");
+    setIsSubmitting(true);
+    try {
+      await signup(name, email, password);
       navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Signup failed");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -92,14 +103,21 @@ const Signup = () => {
             )}
           </div>
 
+          {error && (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             type="submit"
+            disabled={isSubmitting}
             className="w-full h-11 rounded-xl bg-accent text-accent-foreground font-semibold text-sm font-display glow-teal hover:bg-accent/90 transition-colors flex items-center justify-center gap-2"
           >
             <UserPlus className="w-4 h-4" />
-            Sign Up
+            {isSubmitting ? "Creating..." : "Sign Up"}
           </motion.button>
         </form>
 

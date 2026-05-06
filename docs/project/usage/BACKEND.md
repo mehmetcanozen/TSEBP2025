@@ -1,74 +1,108 @@
 # Backend
 
-The mobile backend is a generic FastAPI service for application data. It is not
-part of model delivery or audio suppression.
+The current backend is the shared service in `backend/`. It is used by both
+desktop and mobile for account/profile metadata and device registration.
+
+It is not part of model delivery or audio suppression. Desktop and Android
+continue to run suppression locally.
+
+For a complete start-to-finish setup, use
+[Backend setup](BACKEND_SETUP.md).
+
+For the exact Windows/PostgreSQL 18 local cluster path that fixes `psql` PATH,
+pgAdmin-without-server, `P1001`, and Turkish locale `initdb` failures, use
+[Backend Windows PostgreSQL](BACKEND_WINDOWS_POSTGRES.md).
 
 ## Responsibilities
 
 | Area | Backend role |
 | --- | --- |
-| Auth | Register, login, and current-user APIs |
-| History | Store and fetch app history records |
-| Devices | Register and manage device metadata |
+| Auth | Register, login, refresh, logout, current user |
+| Profiles | Name, bio, local photo URI metadata |
+| Devices | Register desktop/mobile client metadata |
+| Settings | Store small user settings JSON |
+| History | Optional processing-history metadata only |
 | Models | None |
 | Suppression inference | None |
 
-The Android app should not call `/model/*` or `/separation/*` for the current
-product path.
+The mobile and desktop apps should not call `/model/*` or `/separation/*`.
 
-## Environment file
+## Local development without Docker
 
-Create `mobile-backend/.env` for local development:
-
-```env
-DATABASE_URL=sqlite:///./audioapp.db
-SECRET_KEY=dev-local-secret-change-me
-DEBUG=True
-```
-
-## Install and run
+Create `backend/.env` from `backend/.env.example`, then run:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-backend
-python -m venv venv
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cd C:\SoftwareProjects\TSEBP2025\backend
+npm install
+npm run prisma:generate
+npm run db:migrate
+npm run dev
 ```
 
-Open:
+The API listens on:
 
 ```text
-http://localhost:8000/docs
-http://localhost:8000/
+http://localhost:4000/api/v1
 ```
 
-## Android emulator URL
+## Auth mode
 
-For the mobile app running in the Android emulator:
+For local development, use:
 
 ```env
-EXPO_PUBLIC_API_URL=http://10.0.2.2:8000
+AUTH_PROVIDER=local
+```
+
+For shared environments, use Supabase Auth:
+
+```env
+AUTH_PROVIDER=supabase
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=your-publishable-or-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+## Client URLs
+
+Desktop uses:
+
+```env
+VITE_BACKEND_API_URL=http://localhost:4000/api/v1
+```
+
+Android emulator uses:
+
+```env
+EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
 ```
 
 Use `10.0.2.2` because emulator `localhost` points to the emulator itself, not
 the Windows host.
 
-## Boundary checks
+## Optional Docker
 
-Run backend tests from `mobile-backend`:
+Docker is ready but not required.
+
+To use only Docker Postgres:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-backend
-python -m pytest tests -q
+cd C:\SoftwareProjects\TSEBP2025\backend
+docker compose --profile db up -d
 ```
 
-Optional static check from the repository root:
+To run the backend and database in Docker:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025\backend
+docker compose --profile all up --build
+```
+
+## Boundary checks
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025
-rg -n "/model|/separation|model download|download model" mobile-part mobile-backend
+rg -n -e "/model" -e "/separation" backend/src mobile-part/services mobile-part/context desktop/src/lib desktop/src/contexts
 ```
 
-Expected result: backend tests may mention absent `/model` or `/separation`
-routes as negative coverage, but mobile app runtime code should not depend on
-those routes.
+Expected result: no mobile/desktop shared-backend client calls to model or
+separation routes.

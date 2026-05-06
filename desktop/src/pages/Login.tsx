@@ -8,14 +8,25 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
-      login(email, password);
+    if (!email || !password || isSubmitting) {
+      return;
+    }
+    setError("");
+    setIsSubmitting(true);
+    try {
+      await login(email, password);
       navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -92,14 +103,21 @@ const Login = () => {
             </div>
           </div>
 
+          {error && (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             type="submit"
+            disabled={isSubmitting}
             className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm font-display glow-purple hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
           >
             <Mic className="w-4 h-4" />
-            Login
+            {isSubmitting ? "Logging in..." : "Login"}
           </motion.button>
         </form>
 

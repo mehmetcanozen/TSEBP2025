@@ -18,13 +18,19 @@ Use this index instead of hunting through the root README.
 1. [Mobile app](MOBILE_APP.md)
    Run Android on-device suppression with the bundled Waveformer ORT model.
 1. [Backend](BACKEND.md)
-   Run the generic FastAPI backend for auth, history, and device records.
+   Run the shared NestJS backend for desktop/mobile auth, profiles, device records, and metadata.
+1. [Backend setup](BACKEND_SETUP.md)
+   Walk through prerequisites, database setup, env files, migrations, health checks, and client URLs.
+1. [Backend Windows PostgreSQL](BACKEND_WINDOWS_POSTGRES.md)
+   Exact Windows/PostgreSQL 18 runbook for local cluster creation, migrations, and restart commands.
 1. [Troubleshooting](TROUBLESHOOTING.md)
    Diagnose the common setup, model, audio, desktop, and Android failures.
 
 ## Reference docs
 
 - [User manual](USER_MANUAL.md)
+- [Backend setup](BACKEND_SETUP.md)
+- [Backend Windows PostgreSQL](BACKEND_WINDOWS_POSTGRES.md)
 - [Mobile deployment reference](MOBILE_DEPLOYMENT.md)
 - [Waveformer wide evaluation](WAVEFORMER_WIDE_EVAL.md)
 - [Project documentation home](../README.md)
@@ -38,7 +44,7 @@ Use this index instead of hunting through the root README.
 | Android semantic model artifact | `ai/models/Exports/Waveformer/waveformer_edge_100ms/android/model_fixed.ort` |
 | Desktop target-speaker artifact | `ai/models/Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/windows_bundle_manifest.json` |
 | Mobile inference | On-device, bundled model, no backend suppression API |
-| Backend role | Auth, history, devices |
+| Backend role | Auth, profiles, settings, history metadata, devices |
 
 Historical Native UNet, TFLite, old `WFExports`, and lowercase `exports`
 references should not be treated as the current runtime.

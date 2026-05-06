@@ -11,7 +11,7 @@ The project has several model families and product surfaces:
 - Python research/reference runtime.
 - Windows desktop Tauri app.
 - Android React Native app with native inference.
-- FastAPI backend for auth, history, and device metadata.
+- Shared NestJS backend for auth, profiles, settings, history metadata, and device metadata.
 
 Earlier documentation drifted because desktop, mobile, and backend paths each
 described different "current" models. The repo now needs one source of truth
@@ -39,7 +39,7 @@ Each model package declares:
 - optional streaming state tensor shapes.
 
 Desktop and Android runtime packaging code must read these manifests instead of
-hard-coding historical model choices. The mobile backend is intentionally
+hard-coding historical model choices. The shared backend is intentionally
 outside the model runtime and distribution path.
 
 ## Current Default

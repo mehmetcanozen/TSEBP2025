@@ -66,6 +66,13 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Backend local artifacts
+backend/node_modules/
+backend/dist/
+backend/.npm-cache/
+backend/.env
+backend/.env*.local
+
 # Expo
 dist/
 web-build/
@@ -148,10 +155,7 @@ ai/data/audio/processed/
 ai/data/audio/waveformertestdownloads/
 ai/data/audio/waveformertestsources/
 ai/data/audio/waveformertestmixed/
-mobile-backend/models_store/
 models_store/
-mobile-backend/test_shared.db*
-mobile-backend/tmp_backend.db*
 test_shared.db*
 temp_separation/
 

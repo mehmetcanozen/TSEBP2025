@@ -152,13 +152,13 @@ The `.onnx.data` sidecar is required.
 Use this app URL:
 
 ```env
-EXPO_PUBLIC_API_URL=http://10.0.2.2:8000
+EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
 ```
 
 Check the backend from Windows:
 
 ```text
-http://localhost:8000/docs
+http://localhost:4000/api/v1/health
 ```
 
 Suppression should still be on-device. Backend problems should affect

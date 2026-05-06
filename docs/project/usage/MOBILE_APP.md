@@ -61,13 +61,13 @@ ai\models\Exports\Waveformer\waveformer_edge_100ms\android\model_fixed.ort
 
 ## Backend configuration
 
-The backend is optional for suppression. Use it only for login, history, and
-device metadata.
+The backend is optional for suppression. Use it only for login, profile,
+settings, history metadata, and device metadata.
 
 For Android emulator testing, create `mobile-part/.env`:
 
 ```env
-EXPO_PUBLIC_API_URL=http://10.0.2.2:8000
+EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
 ```
 
 The emulator reaches the Windows host through `10.0.2.2`, not `localhost`.

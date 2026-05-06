@@ -23,7 +23,7 @@ Current product-facing modes:
 - Windows desktop Debug WAV demos
 - Windows target-speaker suppression
 - Android on-device live suppression
-- Generic backend account/history/device support
+- Shared backend account/profile/settings/history/device support
 
 ## Current defaults
 
@@ -34,7 +34,7 @@ Current product-facing modes:
 | Android audio engine | Oboe/AAudio first, Kotlin `AudioRecord`/`AudioTrack` fallback |
 | Desktop semantic inference | Waveformer ONNX through ONNX Runtime CPU |
 | Desktop target-speaker engine | TSExtract ONNX by default, ClearVoice as offline fallback |
-| Backend | Auth, history, and devices only |
+| Backend | Shared auth, profiles, settings, history metadata, and devices only |
 
 Native UNet, TFLite, `mobile-test`, `WFExports`, and lowercase `exports` are
 historical paths, not the active product runtime.

@@ -54,8 +54,8 @@ const Settings = () => {
   const [filterAmbient, setFilterAmbient] = useState(false);
   const [filterTyping, setFilterTyping] = useState(true);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 

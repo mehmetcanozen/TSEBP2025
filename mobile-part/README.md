@@ -46,6 +46,19 @@ npx expo run:android
 
 The app uses native modules, so it cannot run inside standard Expo Go.
 
+## App Data Backend
+
+The mobile app uses the shared backend in `backend/` for account, profile,
+settings, history metadata, and device registration only. For the Android
+emulator, set:
+
+```env
+EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
+```
+
+The app calls only the shared backend for app data. It does not call backend
+model or separation routes. Suppression remains on device.
+
 ## Live Audio Runtime
 
 Live suppression is on-device end to end:
