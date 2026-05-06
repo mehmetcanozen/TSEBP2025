@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import multiprocessing as mp
 import queue
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 from .audio_io import StreamConfig
-from .audio_process import AudioProcess
+
+if TYPE_CHECKING:
+    from .audio_process import AudioProcess
 
 
 class MixerController:
@@ -32,11 +34,13 @@ class MixerController:
         self._gain_queue: mp.Queue = mp.Queue(maxsize=8)
         self._detection_queue: mp.Queue = mp.Queue(maxsize=16)
         self._shutdown_event = mp.Event()
-        self._process: Optional[AudioProcess] = None
+        self._process: Optional["AudioProcess"] = None
 
     def start(self) -> None:
         if self._process is not None and self._process.is_alive():
             return
+        from .audio_process import AudioProcess
+
         self._process = AudioProcess(
             gain_queue=self._gain_queue,
             detection_queue=self._detection_queue,

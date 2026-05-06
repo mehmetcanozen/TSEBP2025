@@ -15,12 +15,59 @@ Check:
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025
-Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\desktop\semantic_hearing_100ms_desktop.onnx
-Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\android\model_fixed.ort
+python -m ai artifacts check --required-only
 ```
 
 Fix: restore `ai/models/Exports` from the portable artifact bundle. See
 [Model artifacts](MODEL_ARTIFACTS.md).
+
+## Python AI CLI is not available
+
+Symptoms:
+
+- `python -m ai --help` fails.
+- `tsebp-ai --help` is not recognized.
+- Local model tests still use old `ai.ai_runtime.batch.batch_processor`
+  commands.
+
+Fix:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\setup-ai-runtime.ps1 -Profile runtime -UpgradePip
+.\.venv\Scripts\Activate.ps1
+python -m ai --help
+python -m ai models list
+```
+
+If the editable script entrypoint is still unavailable, use `python -m ai ...`.
+That path does not require `tsebp-ai` to be on PATH.
+
+## AI CLI suppression command fails
+
+First verify the front door and artifacts:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+python -m ai diagnostics env
+python -m ai artifacts check --required-only
+python -m ai suppress file --help
+```
+
+Then run a small known sample:
+
+```powershell
+python -m ai suppress file `
+  --input .\ai\data\audio\raw\speech_barking.wav `
+  --output .\ai\data\audio\processed\speech_barking_waveformer_dog.wav `
+  --target dog `
+  --backend waveformer
+```
+
+If this command fails before inference starts, the issue is usually environment
+or artifact restore. If it runs but quality is poor, collect the command,
+target category, input file, and output file; that is model behavior, not CLI
+routing.
 
 ## Wrong folder casing
 
@@ -135,6 +182,23 @@ Then:
 - Use category `dog` for `speech_barking.wav` on the Waveformer path.
 
 See [Virtual mic](VIRTUAL_MIC.md).
+
+For the standalone WAV feeder, install the optional audio-device profile:
+
+```powershell
+.\shared\scripts\setup-ai-runtime.ps1 -Profile audio-device
+.\shared\scripts\stream-loopback-wav.ps1 -ListDevices
+```
+
+The script now routes through `python -m ai stream wav`, so the same behavior is
+available directly:
+
+```powershell
+python -m ai stream wav --list-devices
+python -m ai stream wav `
+  --input .\ai\data\audio\raw\speech_barking.wav `
+  --device-name "CABLE Input"
+```
 
 ## Target-speaker ONNX fails to load
 

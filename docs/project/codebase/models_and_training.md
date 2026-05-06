@@ -120,8 +120,27 @@ runtime is available. It should not be presented as the default live engine.
 
 ## Training And Export Tooling
 
+The AI workspace now has one supported CLI front door:
+
+```powershell
+python -m ai --help
+tsebp-ai --help
+python -m ai models list
+python -m ai artifacts check --required-only
+python -m ai suppress file --help
+```
+
+The CLI is implemented under `ai/cli/` and routes through shared runtime
+contracts in `ai/ai_runtime/contracts.py`, backend discovery in
+`ai/ai_runtime/registry.py`, and artifact diagnostics in
+`ai/ai_runtime/artifacts.py`. Old script entrypoints remain runnable for
+compatibility, but new docs and workflows should prefer `python -m ai` or
+`tsebp-ai`.
+
 Important script groups:
 
+- `ai/cli/commands/*`: Typer command groups for suppression, models,
+  artifacts, comparison, streaming, exports, and diagnostics.
 - `ai/export/export_onnx.py` and `ai/export/export_tflite.py`: older Waveformer
   export utilities; TFLite is historical for product mobile.
 - `ai/export/export_waveformer_edge.py`: current Waveformer edge packager. It
@@ -134,7 +153,8 @@ Important script groups:
 - `ai/scripts/prepare_waveformer_wide_eval.py`: build reproducible demo/eval
   mixtures for the Waveformer 20-label surface.
 - `ai/scripts/run_model_comparison.py`: compare available model runtimes for
-  final-pitch style evidence.
+  final-pitch style evidence. New workflows should call
+  `python -m ai compare run`.
 - `ai/export/freeze_codecsep_dnrv2_15cat.py`: freeze/export exact-15 CodecSep
   into the canonical `ai/models/Exports/CodecSepDNRv2_15Cat/codecsep_dnrv2_15cat_exact15/`
   layout.
@@ -146,6 +166,23 @@ Important script groups:
   is `ai/models/Exports/TargetSpeakerWindows/target_speaker_windows_desktop/`;
   `ai/models/SpeakerSeperator` stays the source/toy workspace.
 - `ai/scripts/setup/*`: install/download setup helpers for model dependencies.
+
+Primary CLI equivalents:
+
+```powershell
+python -m ai suppress file `
+  --input .\ai\data\audio\raw\speech_barking.wav `
+  --output .\ai\data\audio\processed\speech_barking_waveformer_dog.wav `
+  --target dog `
+  --backend waveformer
+
+python -m ai suppress target-speaker --help
+python -m ai compare run --list-models
+python -m ai stream wav --list-devices
+python -m ai export waveformer-edge --help
+python -m ai export target-speaker-windows --help
+python -m ai diagnostics env
+```
 
 Generated datasets, downloaded corpora, and heavyweight model outputs are often
 ignored by Git. `ai/models/Exports` is one of those generated roots. Check local

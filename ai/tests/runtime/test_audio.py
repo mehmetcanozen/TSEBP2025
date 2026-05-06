@@ -1,6 +1,8 @@
+import multiprocessing as mp
 import time
 
 import numpy as np
+import pytest
 
 from ai.ai_runtime.audio.audio_io import StreamConfig
 from ai.ai_runtime.audio.gain_smoother import GainSmoother
@@ -60,6 +62,13 @@ def test_gain_smoother_noise_floor():
 
 
 def test_mixer_controller_start_stop_without_audio_hardware():
+    try:
+        probe_queue = mp.Queue(maxsize=1)
+        probe_queue.close()
+        probe_queue.join_thread()
+    except PermissionError:
+        pytest.skip("multiprocessing queues are unavailable in this Windows sandbox")
+
     config = StreamConfig(sample_rate=16_000, frames_per_buffer=32, channels=1)
     controller = MixerController(
         config=config,

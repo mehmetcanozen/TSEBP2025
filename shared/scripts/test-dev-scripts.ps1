@@ -220,6 +220,12 @@ try {
         powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\test-mobile-android.ps1" -SkipAssets -SkipKotlin -SkipNative
     }
 
+    Invoke-TestStep "AI CLI smoke" {
+        Invoke-LoggedCommand -WorkingDirectory $root -FilePath "python" -ArgumentList @("-m", "ai", "--help")
+        Invoke-LoggedCommand -WorkingDirectory $root -FilePath "python" -ArgumentList @("-m", "ai", "models", "list")
+        Invoke-LoggedCommand -WorkingDirectory $root -FilePath "python" -ArgumentList @("-m", "ai", "artifacts", "check", "--required-only")
+    }
+
     Invoke-TestStep "stream-loopback-wav.ps1 list devices" {
         powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\stream-loopback-wav.ps1" -ListDevices
     }

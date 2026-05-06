@@ -222,6 +222,9 @@ already-packaged Android asset bundle.
 Export scripts are still useful, but their output must be connected to a package
 manifest before it becomes product runtime:
 
+- The preferred command surface is `python -m ai export ...`; it keeps export
+  entrypoints discoverable without requiring developers to remember individual
+  file paths.
 - Waveformer ONNX audit/export utilities live in `ai/scripts` and `ai/export`.
 - AudioSepHive15Cat is a packaged exact-15 ONNX separator.
 - CodecSepDNRv2 exact-15 export creates ONNX and ExecuTorch artifacts plus
@@ -230,6 +233,18 @@ manifest before it becomes product runtime:
   optional ClearVoice runtime.
 - TFLite export scripts are historical and should not be used to describe the
   current Android product path.
+
+Useful front-door commands:
+
+```powershell
+python -m ai artifacts check --required-only
+python -m ai models list
+python -m ai export waveformer-edge --help
+python -m ai export target-speaker-windows --help
+```
+
+The old module paths remain available for compatibility and should print a
+short legacy-path notice when invoked directly.
 
 ## Target-Speaker Desktop Export Layout
 

@@ -12,9 +12,9 @@ Use this index instead of hunting through the root README.
 1. [Getting started](GETTING_STARTED.md)
    Prepare the local environment and choose a workflow.
 1. [Developer scripts](DEV_SCRIPTS.md)
-   Use the shared PowerShell launchers for backend, desktop, mobile, Android checks, and loopback WAV routing.
+   Use the shared PowerShell launchers for backend, desktop, mobile, AI CLI setup, Android checks, and loopback WAV routing.
 1. [Python CLI](PYTHON_CLI.md)
-   Run file-based suppression, semantic demos, and comparison backends.
+   Run the Typer-based `python -m ai`/`tsebp-ai` workspace for file suppression, artifact checks, exports, streaming, and comparison runs.
 1. [Desktop app](DESKTOP_APP.md)
    Run the Windows Tauri app, live monitor, Debug WAV, and target-speaker mode.
 1. [Virtual mic](VIRTUAL_MIC.md)
@@ -83,6 +83,6 @@ For VB-CABLE WAV streaming:
 ```powershell
 .\shared\scripts\stream-loopback-wav.ps1 -ListDevices
 .\shared\scripts\stream-loopback-wav.ps1 `
-  -Input .\ai\data\audio\raw\speech_barking.wav `
+  -InputPath .\ai\data\audio\raw\speech_barking.wav `
   -DeviceName "CABLE Input"
 ```

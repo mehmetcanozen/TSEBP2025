@@ -61,6 +61,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
+def print_legacy_notice() -> None:
+    """Tell direct script users about the supported CLI path without breaking them."""
+    print(
+        "Legacy path notice: use `python -m ai stream wav ...` or "
+        "`tsebp-ai stream wav ...` for new workflows.",
+        file=sys.stderr,
+    )
+
+
 def _device_value(device: Any, key: str, default: Any = None) -> Any:
     if hasattr(device, "get"):
         return device.get(key, default)
@@ -276,4 +285,5 @@ def main(argv: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
+    print_legacy_notice()
     main()

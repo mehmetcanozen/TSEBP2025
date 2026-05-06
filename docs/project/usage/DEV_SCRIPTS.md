@@ -21,12 +21,62 @@ cd C:\SoftwareProjects\TSEBP2025
 | `start-desktop.ps1` | Check backend health, write `desktop/.env`, and launch the Tauri desktop app. |
 | `start-mobile-android.ps1` | Configure Android SDK/ADB, write `mobile-part/.env`, prepare optional assets, and run the Android app. |
 | `stream-loopback-wav.ps1` | Play a WAV into `CABLE Input` or another playback endpoint for VB-CABLE/mobile loopback testing. |
+| `setup-ai-runtime.ps1` | Create or reuse the Python AI CLI environment with runtime/audio/export/training profiles. |
 | `test-backend-api.ps1` | Exercise health, register, login, profile update, device registration, and logout. |
 | `test-desktop.ps1` | Run desktop lint, tests, and build with readable logs. |
 | `test-mobile-android.ps1` | Run mobile TypeScript plus optional Android asset/Kotlin/native/APK checks. |
 | `test-dev-scripts.ps1` | Sequentially smoke-test the developer scripts, excluding one-time setup/stop-Postgres scripts. |
 | `stop-port.ps1` | Stop the process listening on a given port, useful for stale backend or Metro sessions. |
 | `setup_env.ps1` | Older heavy Python/AI environment bootstrap. Not needed for normal app startup. |
+
+## AI CLI setup
+
+Use this for the Python model-testing workspace under `ai/`:
+
+```powershell
+.\shared\scripts\setup-ai-runtime.ps1 -Profile runtime -UpgradePip
+.\.venv\Scripts\Activate.ps1
+python -m ai --help
+python -m ai models list
+python -m ai artifacts check --required-only
+```
+
+Profiles:
+
+```powershell
+# Minimal CLI and offline WAV suppression.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile runtime
+
+# Adds sounddevice for VB-CABLE/audio endpoint streaming.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile audio-device
+
+# Adds ONNX/ONNX Runtime dependencies.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile onnx
+
+# Heavier export and training profiles.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile export
+.\shared\scripts\setup-ai-runtime.ps1 -Profile training
+
+# Install everything.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile all
+```
+
+Useful options:
+
+```powershell
+# Use a named Python executable.
+.\shared\scripts\setup-ai-runtime.ps1 -Python "C:\Path\To\python.exe"
+
+# Use a different venv path.
+.\shared\scripts\setup-ai-runtime.ps1 -VenvPath .\.venv-ai
+
+# Install into the active Python without creating .venv.
+.\shared\scripts\setup-ai-runtime.ps1 -SkipVenv -Profile runtime
+```
+
+The script installs the editable root package so `tsebp-ai` becomes available
+inside the environment. `python -m ai ...` is always the fallback when PATH is
+not refreshed.
 
 ## Backend
 
@@ -417,6 +467,16 @@ python -m pip install sounddevice
 This feeder does not clean audio. It only proves that Windows, VB-CABLE, and
 the receiving app can hear the WAV route.
 
+The script is a PowerShell wrapper around the AI CLI:
+
+```powershell
+python -m ai stream wav --list-devices
+python -m ai stream wav `
+  --input .\ai\data\audio\raw\speech_barking.wav `
+  --device-name "CABLE Input" `
+  --once
+```
+
 ## Stop a stuck port
 
 Use this when backend or Metro is already running but you want a clean start.
@@ -449,6 +509,7 @@ The test script:
 - checks `stop-port.ps1` against an unused port;
 - runs desktop wrapper checks without heavy lint/test/build;
 - runs mobile TypeScript-only checks;
+- smoke-tests `python -m ai --help`, `models list`, and required artifact checks;
 - lists loopback audio devices;
 - starts backend and probes `http://127.0.0.1:4000/api/v1/health`;
 - smoke-tests backend API auth/profile/device/logout;

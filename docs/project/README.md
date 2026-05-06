@@ -48,6 +48,18 @@ Download it and restore it to `ai/models/Exports` before running Python,
 desktop, or Android suppression paths. The detailed restore and verification
 steps are in [Model artifacts](usage/MODEL_ARTIFACTS.md).
 
+The Python AI workspace has one supported CLI front door:
+
+```powershell
+python -m ai --help
+python -m ai models list
+python -m ai artifacts check --required-only
+```
+
+Install it with `.\shared\scripts\setup-ai-runtime.ps1 -Profile runtime` on a
+fresh machine. Legacy script/module paths remain available only as compatibility
+wrappers.
+
 ## Reading Order
 
 1. [Architecture overview](architecture/overview.md): the whole system and the
@@ -76,7 +88,8 @@ steps are in [Model artifacts](usage/MODEL_ARTIFACTS.md).
 
 | Subsystem | Main role | Current responsibility |
 | --- | --- | --- |
-| `ai/ai_runtime` | Python reference/runtime layer | Batch suppression, model-specific separators, mapping logic, profiles, target-speaker integration, and tests. |
+| `ai/ai_runtime` | Python reference/runtime layer | Shared contracts, backend registry, artifact diagnostics, batch suppression, model-specific separators, mapping logic, profiles, target-speaker integration, and tests. |
+| `ai/cli` | Python command surface | Typer CLI for `python -m ai` / `tsebp-ai`: suppression, models, artifact checks, comparison, streaming, exports, and diagnostics. |
 | `ai/models` | Packaged model source of truth | Shared model selection and per-model package manifests for desktop and Android. |
 | `ai/models/Exports` | Generated model artifact root | Canonical Waveformer, TargetSpeakerWindows, AudioSepHive15Cat exact-15, CodecSepDNRv2 exact-15, and ClapSepHive15Cat prototype outputs. Ignored by Git. |
 | `ai/export`, `ai/scripts`, `ai/training` | Experiment and packaging tools | Waveformer audit/demo scripts, exact-15 exports, target-speaker Windows export, comparison scripts, and historical TFLite tooling. |
@@ -91,7 +104,7 @@ steps are in [Model artifacts](usage/MODEL_ARTIFACTS.md).
 | [Usage index](usage/README.md) | Entry point for operational docs. |
 | [Getting started](usage/GETTING_STARTED.md) | First working setup path. |
 | [Model artifacts](usage/MODEL_ARTIFACTS.md) | Restore and verify `ai/models/Exports`. |
-| [Python CLI](usage/PYTHON_CLI.md) | Batch, live demo helpers, and comparison commands. |
+| [Python CLI](usage/PYTHON_CLI.md) | Typer CLI for file suppression, artifacts, model surfaces, export entrypoints, streaming, and comparison commands. |
 | [Desktop app](usage/DESKTOP_APP.md) | Tauri desktop app and target-speaker workflow. |
 | [Virtual mic](usage/VIRTUAL_MIC.md) | VB-CABLE routing for desktop cleaned audio. |
 | [Mobile app](usage/MOBILE_APP.md) | Android on-device suppression workflow. |

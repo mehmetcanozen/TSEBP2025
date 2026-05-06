@@ -21,10 +21,23 @@ From the repository root:
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025
-python -m venv .\.venv
+.\shared\scripts\setup-ai-runtime.ps1 -Profile runtime -UpgradePip
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r ai\training\requirements.txt
+python -m ai --help
+```
+
+Use additional AI setup profiles only when needed:
+
+```powershell
+# Required for VB-CABLE/WAV streaming.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile audio-device
+
+# Required for ONNX runtime checks or export work.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile onnx
+
+# Heavy research/export environments.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile export
+.\shared\scripts\setup-ai-runtime.ps1 -Profile training
 ```
 
 The desktop and mobile apps install their JavaScript dependencies inside their
@@ -45,12 +58,10 @@ Minimum check:
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025
-Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\desktop\semantic_hearing_100ms_desktop.onnx
-Test-Path .\ai\models\Exports\Waveformer\waveformer_edge_100ms\android\model_fixed.ort
+python -m ai artifacts check --required-only
 ```
 
-Both commands should print `True` for the current desktop and Android product
-paths.
+The required entries should report `OK`.
 
 ## Choose a workflow
 
@@ -58,10 +69,11 @@ paths.
 
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025
-python -m ai.ai_runtime.batch.batch_processor `
+python -m ai suppress file `
   --input .\ai\data\audio\raw\speech_barking.wav `
   --output .\ai\data\audio\processed\speech_barking_waveformer_dog.wav `
-  --suppress dog `
+  --target dog `
+  --backend waveformer `
   --aggressiveness 1.1
 ```
 
@@ -112,7 +124,8 @@ More detail: [Backend](BACKEND.md),
 For a normal developer setup, prove these in order:
 
 1. `ai/models/Exports` is restored and verified.
-1. A Python batch command runs on `speech_barking.wav` with category `dog`.
+1. `python -m ai models list` reports `waveformer_edge_100ms` as the default.
+1. A Python CLI command runs on `speech_barking.wav` with category `dog`.
 1. The shared backend health check passes at `http://localhost:4000/api/v1/health`.
 1. The desktop app opens and lists packaged categories.
 1. Android Gradle prepares the bundled suppression model.

@@ -19,7 +19,7 @@ Write-InfoLog "This feeds audio into VB-CABLE or another playback endpoint. It d
 
 Assert-CommandAvailable -CommandName $Python
 
-$args = @("-m", "ai.scripts.demos.virtual_mic_streamer")
+$args = @("-m", "ai", "stream", "wav")
 
 if ($ListDevices) {
     $args += "--list-devices"
@@ -46,7 +46,7 @@ $args += @("--channels", [string]$Channels)
 $args += @("--volume", [string]$Volume)
 $args += @("--start-silence", [string]$StartSilence)
 if ($Once) {
-    $args += "--no-loop"
+    $args += "--once"
 }
 
 Write-InfoLog "If this fails with missing sounddevice, install it for this Python with: $Python -m pip install sounddevice"
