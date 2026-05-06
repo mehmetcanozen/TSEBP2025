@@ -38,6 +38,28 @@ GUI.
 
 ## One-Time Setup
 
+Recommended path:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\setup-backend-postgres.ps1 -PostgresPassword "<YOUR_POSTGRES_PASSWORD>"
+```
+
+Use `-StartBackend` if you want setup to immediately launch the backend after
+the database and migrations are ready:
+
+```powershell
+.\shared\scripts\setup-backend-postgres.ps1 `
+  -PostgresPassword "<YOUR_POSTGRES_PASSWORD>" `
+  -StartBackend
+```
+
+The script is the maintained version of the manual command block below. It
+uses the same known-good data directory, `initdb --locale=C`, password URL
+encoding, `.env` writing, Prisma generation, and `db:deploy` migration path.
+
+## Manual Fallback
+
 Replace only `<YOUR_POSTGRES_PASSWORD>` with the PostgreSQL password you chose
 during installation, then paste the whole block into PowerShell.
 

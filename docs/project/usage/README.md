@@ -9,6 +9,8 @@ Use this index instead of hunting through the root README.
    Restore the portable `ai/models/Exports` bundle and verify required files.
 1. [Getting started](GETTING_STARTED.md)
    Prepare the local environment and choose a workflow.
+1. [Developer scripts](DEV_SCRIPTS.md)
+   Use the shared PowerShell launchers for backend, desktop, mobile, Android checks, and loopback WAV routing.
 1. [Python CLI](PYTHON_CLI.md)
    Run file-based suppression, semantic demos, and comparison backends.
 1. [Desktop app](DESKTOP_APP.md)
@@ -29,6 +31,7 @@ Use this index instead of hunting through the root README.
 ## Reference docs
 
 - [User manual](USER_MANUAL.md)
+- [Developer scripts](DEV_SCRIPTS.md)
 - [Backend setup](BACKEND_SETUP.md)
 - [Backend Windows PostgreSQL](BACKEND_WINDOWS_POSTGRES.md)
 - [Mobile deployment reference](MOBILE_DEPLOYMENT.md)

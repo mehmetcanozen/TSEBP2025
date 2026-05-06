@@ -72,6 +72,7 @@ backend/dist/
 backend/.npm-cache/
 backend/.env
 backend/.env*.local
+shared/scripts/.script-test-logs/
 
 # Expo
 dist/

@@ -13,6 +13,14 @@ On Windows with PostgreSQL 18, use the hard-won exact runbook first:
 the Turkish locale `initdb --locale=C` fix, Prisma migrations, and health
 checks.
 
+For the shortest maintained Windows path, run:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\setup-backend-postgres.ps1 -PostgresPassword "<YOUR_POSTGRES_PASSWORD>"
+.\shared\scripts\start-backend.ps1
+```
+
 ## 1. Prerequisites
 
 Install these first:
