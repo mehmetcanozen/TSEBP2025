@@ -9,8 +9,12 @@ fn main() {
     println!("cargo:rerun-if-changed=tauri.conf.json");
     println!("cargo:rerun-if-changed=../../ai/models/model_selection.json");
     println!("cargo:rerun-if-changed=../../ai/models/Waveformer/model_package.json");
-    println!("cargo:rerun-if-changed=../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx");
-    println!("cargo:rerun-if-changed=../../ai/models/Waveformer/WFExports/windows_desktop_onnx/semantic_hearing_100ms_windows.onnx.json");
+    println!("cargo:rerun-if-changed=../../ai/models/Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx");
+    println!("cargo:rerun-if-changed=../../ai/models/Exports/Waveformer/waveformer_edge_100ms/desktop/semantic_hearing_100ms_desktop.onnx.json");
+    println!("cargo:rerun-if-changed=../../ai/models/TargetSpeakerWindows/model_package.json");
+    println!("cargo:rerun-if-changed=../../ai/models/Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/windows_bundle_manifest.json");
+    println!("cargo:rerun-if-changed=../../ai/models/Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/tsextract_onnx/tsextract_fp32.onnx");
+    println!("cargo:rerun-if-changed=../../ai/models/Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/tsextract_onnx/tsextract_fp32.onnx.data");
 
     if let Err(error) = stage_onnx_runtime_dlls() {
         println!("cargo:warning=Unable to pre-stage ONNX Runtime DLLs: {error}");

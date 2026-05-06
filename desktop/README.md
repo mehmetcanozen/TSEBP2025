@@ -7,7 +7,7 @@ This folder now contains a full desktop application built with:
 - React + Vite + TypeScript for the UI
 - Tauri v2 for the desktop host
 - Rust for the native audio runtime
-- ONNX Runtime for the bundled `AudioSepHive15Cat` inference path
+- ONNX Runtime for bundled model inference paths
 
 The desktop app is self-contained at runtime. It does not ship Python as part of the app. The Python code under `../ai/` remains the reference implementation and source of model/config assets.
 
@@ -121,8 +121,8 @@ The desktop runtime uses the project assets under `../ai/`.
 
 Primary assets:
 
-- `../ai/models/AudioSepHive15Cat/frozensep_hive_15cat.onnx`
-- `../ai/models/AudioSepHive15Cat/categories_15.txt`
+- `../ai/models/Exports/AudioSepHive15Cat/audiosep_hive15cat_exact15/shared/frozensep_hive_15cat.onnx`
+- `../ai/models/Exports/AudioSepHive15Cat/audiosep_hive15cat_exact15/shared/categories_15.txt`
 - `../ai/ai_runtime/config/audiosep_hive15cat_categories.yaml`
 - `../ai/ai_runtime/config/default_profiles.json`
 

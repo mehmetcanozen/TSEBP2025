@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "model_id": "target_speaker_windows",
-  "package_version": "target_speaker_windows_20260430",
+  "package_version": "target_speaker_windows_desktop_20260505",
   "family": "target_speaker",
   "display_name": "Target Speaker Suppression",
   "description": "Windows desktop target-speaker suppression package using the validated TSExtract ONNX export by default, with the native ClearVoice bundle available as an offline quality fallback.",
@@ -47,16 +47,16 @@
   },
   "validation_summary": {
     "status": "tsextract_onnx_validated_cpu",
-    "validation_artifact": "../exports/target_speaker_windows/tsextract/tsextract_fp32.validation.json",
+    "validation_artifact": "../Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/tsextract_onnx/tsextract_fp32.validation.json",
     "correlation": 0.9999984569312139,
-    "rmse": 0.000035682252928381786,
+    "rmse": 3.5682252928381786e-05,
     "passed": true
   },
   "edge_profile": {
     "primary_target": "windows_desktop_cpu",
     "default_engine": "tsextract_onnx",
-    "live_supported": false,
-    "package_role": "offline_target_speaker_suppressor"
+    "live_supported": true,
+    "package_role": "desktop_target_speaker_suppressor"
   },
   "categories": [
     {
@@ -70,15 +70,15 @@
   "platforms": {
     "desktop": {
       "runtime_kind": "target_speaker_windows_bundle",
-      "artifact": "../exports/target_speaker_windows/windows_bundle_slim/windows_bundle_manifest.json",
+      "artifact": "../Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/windows_bundle_manifest.json",
       "metadata_artifacts": [
-        "../exports/target_speaker_windows/windows_bundle_slim/tsextract_onnx/tsextract_fp32.manifest.json",
-        "../exports/target_speaker_windows/tsextract/tsextract_fp32.validation.json",
-        "../exports/target_speaker_windows/windows_bundle_slim/clearvoice_native/manifest.json"
+        "../Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/tsextract_onnx/tsextract_fp32.manifest.json",
+        "../Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/tsextract_onnx/tsextract_fp32.validation.json",
+        "../Exports/TargetSpeakerWindows/target_speaker_windows_desktop/desktop/clearvoice_native/manifest.json"
       ],
       "sample_rate": 8000,
       "chunk_samples": 80000,
-      "preferred_live_hop_ms": 0,
+      "preferred_live_hop_ms": 6000,
       "mix_channels": 1
     }
   }

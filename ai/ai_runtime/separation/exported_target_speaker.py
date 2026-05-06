@@ -24,14 +24,24 @@ from typing import Any, Optional
 
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-AI_ROOT = PROJECT_ROOT / "ai"
-DEFAULT_EXPORT_ROOT = AI_ROOT / "models" / "exports" / "target_speaker_windows"
-DEFAULT_BUNDLE = DEFAULT_EXPORT_ROOT / "windows_bundle_slim"
+from ai.ai_runtime.utils.paths import (
+    get_ai_root,
+    get_project_root,
+    get_target_speaker_clearvoice_bundle_path,
+    get_target_speaker_tsextract_desktop_onnx_path,
+    get_target_speaker_tsextract_source_onnx_path,
+    get_target_speaker_windows_desktop_bundle_path,
+    get_target_speaker_windows_export_root_path,
+)
+
+PROJECT_ROOT = get_project_root()
+AI_ROOT = get_ai_root()
+DEFAULT_EXPORT_ROOT = get_target_speaker_windows_export_root_path()
+DEFAULT_BUNDLE = get_target_speaker_windows_desktop_bundle_path()
 DEFAULT_TEST_OUT = AI_ROOT / "data" / "audio" / "processed" / "target_speaker_export_tests"
-DEFAULT_TSEXTRACT_ONNX = DEFAULT_EXPORT_ROOT / "tsextract" / "tsextract_fp32.onnx"
-DEFAULT_TSEXTRACT_BUNDLE_ONNX = DEFAULT_BUNDLE / "tsextract_onnx" / "tsextract_fp32.onnx"
-DEFAULT_CLEARVOICE_BUNDLE = DEFAULT_BUNDLE / "clearvoice_native"
+DEFAULT_TSEXTRACT_ONNX = get_target_speaker_tsextract_source_onnx_path()
+DEFAULT_TSEXTRACT_BUNDLE_ONNX = get_target_speaker_tsextract_desktop_onnx_path()
+DEFAULT_CLEARVOICE_BUNDLE = get_target_speaker_clearvoice_bundle_path()
 
 
 class ExportedTSExtractOnnx:
