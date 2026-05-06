@@ -29,7 +29,7 @@ and declares:
 The same package contract feeds the desktop app and the Android app. The mobile
 app runs suppression on device from bundled assets: ONNX Runtime Android CPU for
 Waveformer inference, native Oboe/AAudio audio IO first, and the Kotlin
-`AudioRecord`/`AudioTrack` path as compatibility fallback. The mobile backend
+`AudioRecord`/`AudioTrack` path as compatibility fallback. The shared backend
 is not part of model delivery or inference. Older docs and experiments mention
 AudioSepHive15Cat as a default, `mobile-test`, Native UNet, and TFLite. Those
 paths are historical unless a document explicitly says otherwise.
@@ -53,10 +53,12 @@ the actual ONNX/ORT files are absent.
    state and command contracts.
 6. [Export and mobile](codebase/export_and_mobile.md): shared model packages,
    Android asset generation, native runtimes, and the mobile/backend boundary.
-7. [Model details](knowledge/model_details.md) and
+7. [Shared backend](codebase/backend.md): NestJS/Prisma backend modules, auth
+   modes, database model, client wiring, and non-audio boundary.
+8. [Model details](knowledge/model_details.md) and
    [semantic mappings](knowledge/semantic_mappings.md): category surfaces,
    mapping behavior, and model-specific semantics.
-8. [Usage guide index](usage/README.md): model artifacts, getting started,
+9. [Usage guide index](usage/README.md): model artifacts, getting started,
    Python CLI, desktop, Virtual Mic, Android, backend, and troubleshooting
    runbooks.
 
@@ -70,7 +72,7 @@ the actual ONNX/ORT files are absent.
 | `ai/export`, `ai/scripts`, `ai/training` | Experiment and packaging tools | Waveformer audit/demo scripts, exact-15 exports, target-speaker Windows export, comparison scripts, and historical TFLite tooling. |
 | `desktop` | Windows desktop app | React UI plus Tauri/Rust runtime for offline jobs, live monitor, Debug WAV, VB-CABLE virtual mic routing, and target-speaker workflows. |
 | `mobile-part` | Android mobile app | React Native UI/services plus native Android `SuppressionEngine` using bundled on-device ONNX/ExecuTorch model packages and Oboe/AAudio-first live audio. |
-| `mobile-backend` | FastAPI backend | Auth, history, and devices only. It does not serve model files or run mobile suppression inference. |
+| `backend` | Shared NestJS backend | Auth, profiles, settings, history metadata, and devices for desktop and mobile. It does not serve model files or run suppression inference. |
 
 ## Usage Guides
 
@@ -83,7 +85,8 @@ the actual ONNX/ORT files are absent.
 | [Desktop app](usage/DESKTOP_APP.md) | Tauri desktop app and target-speaker workflow. |
 | [Virtual mic](usage/VIRTUAL_MIC.md) | VB-CABLE routing for desktop cleaned audio. |
 | [Mobile app](usage/MOBILE_APP.md) | Android on-device suppression workflow. |
-| [Backend](usage/BACKEND.md) | Generic auth/history/device backend. |
+| [Backend](usage/BACKEND.md) | Shared desktop/mobile auth/profile/device backend. |
+| [Backend setup](usage/BACKEND_SETUP.md) | Start-to-finish runbook for getting the shared backend running. |
 | [Troubleshooting](usage/TROUBLESHOOTING.md) | Common setup and runtime failures. |
 
 ## Current Model Families
@@ -114,7 +117,7 @@ preserving old prose:
 - `mobile-part/android/app/build.gradle`
 - `mobile-part/android/app/src/main/cpp/`
 - `mobile-part/android/app/src/main/java/.../suppression/`
-- `mobile-backend/main.py`
+- `backend/src/`
 
 If a historical path is mentioned, label it as historical, superseded, or
 experimental in the same paragraph.

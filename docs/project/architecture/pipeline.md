@@ -128,7 +128,7 @@ limiter hits, fail-open count, and inference p50/p95/p99. On a healthy device,
 `audioEngine` should normally be `oboe`, inference p95 should stay below the
 100 ms hop budget, and fail-open should remain zero during ordinary use.
 
-## Mobile Backend Boundary
+## Shared Backend Boundary
 
 ```text
 mobile app model preparation
@@ -136,9 +136,9 @@ mobile app model preparation
     -> bundled Android assets
     -> no backend call
 
-mobile-backend
+backend
     -> auth
-    -> history
+    -> profiles/settings/history metadata
     -> devices
 ```
 

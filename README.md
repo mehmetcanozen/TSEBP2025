@@ -15,7 +15,7 @@ where the major pieces live, and which document to open next.
 | Default semantic model | `waveformer_edge_100ms` |
 | Desktop runtime | Tauri, Rust audio, ONNX Runtime CPU, optional VB-CABLE virtual mic |
 | Android runtime | On-device Waveformer ORT, ONNX Runtime Android CPU, Oboe/AAudio first with Kotlin fallback |
-| Mobile backend | Generic FastAPI backend for auth, history, and devices only |
+| Shared backend | NestJS/Express backend for auth, profiles, history metadata, devices, and settings |
 | Model artifacts | Restored from the portable `ai/models/Exports` bundle, not committed to Git |
 | Historical paths | Native UNet, TFLite, old `WFExports`, and lowercase `exports` are not the active product path |
 
@@ -36,7 +36,7 @@ where the major pieces live, and which document to open next.
 | Run the Windows desktop app | [Desktop app](docs/project/usage/DESKTOP_APP.md) |
 | Use desktop virtual microphone routing | [Virtual mic](docs/project/usage/VIRTUAL_MIC.md) |
 | Run the Android app with on-device suppression | [Mobile app](docs/project/usage/MOBILE_APP.md) |
-| Run the generic backend for app accounts/history | [Backend](docs/project/usage/BACKEND.md) |
+| Run the shared backend for accounts/profile metadata | [Backend](docs/project/usage/BACKEND.md) |
 | Diagnose setup/runtime problems | [Troubleshooting](docs/project/usage/TROUBLESHOOTING.md) |
 
 ## Repository map
@@ -52,7 +52,7 @@ TSEBP2025/
 |   `-- tests/          # Runtime tests
 |-- desktop/            # Tauri desktop app and Rust audio runtime
 |-- mobile-part/        # React Native Android app and native suppression module
-|-- mobile-backend/     # Generic FastAPI backend: auth, history, devices
+|-- backend/            # Shared NestJS backend for desktop and mobile app data
 |-- docs/project/       # Architecture, codebase, model, knowledge, and usage docs
 |-- shared/scripts/     # Shared environment setup helpers
 `-- README.md

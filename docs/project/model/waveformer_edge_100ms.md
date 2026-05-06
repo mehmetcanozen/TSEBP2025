@@ -124,7 +124,7 @@ rather than through old hard-coded model paths.
 On Android, Waveformer inference stays on device. The default live path uses
 the ORT-format artifact with ONNX Runtime Android CPU, Oboe/AAudio for live
 audio IO when available, about 300 ms lookahead, no default post-filter, and no
-default quantization. The mobile backend is not part of model delivery or
+default quantization. The shared backend is not part of model delivery or
 inference.
 
 ## Validation Notes

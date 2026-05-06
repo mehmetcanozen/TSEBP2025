@@ -85,13 +85,14 @@ npm run android
 
 More detail: [Mobile app](MOBILE_APP.md).
 
-### Mobile backend
+### Shared backend
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-backend
-python -m venv venv
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-.\venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cd C:\SoftwareProjects\TSEBP2025\backend
+npm install
+npm run prisma:generate
+npm run db:migrate
+npm run dev
 ```
 
 More detail: [Backend](BACKEND.md).

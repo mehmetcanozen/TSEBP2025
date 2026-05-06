@@ -35,8 +35,8 @@ offline/reference          live/offline product       mobile live product
         |                         |                         |
         +-------------------------+-------------------------+
 
-mobile-backend
-auth/history/devices only; no model delivery or inference
+backend
+auth/profile/settings/history metadata/devices only; no model delivery or inference
 ```
 
 ### Python Runtime
@@ -91,12 +91,13 @@ and required-operator config. The default live settings are quality-stable:
 100 ms Waveformer hops, about 300 ms lookahead, CPU ONNX Runtime, no default
 post-filter, and no default quantization or accelerator path.
 
-### Mobile Backend
+### Shared Backend
 
-The FastAPI backend in `mobile-backend` provides auth, history, and device APIs.
-It is deliberately outside the model runtime boundary: Android does not ask it
-for model metadata, model files, or server-side separation. The backend app does
-not register `/model/*` or `/separation/*` routes.
+The shared NestJS backend in `backend` provides auth, profile, settings,
+history metadata, and device APIs for both desktop and mobile. It is
+deliberately outside the model runtime boundary: Android and desktop do not ask
+it for model metadata, model files, or server-side separation. The backend app
+does not register `/model/*` or `/separation/*` routes.
 
 ## Architectural Principles
 
