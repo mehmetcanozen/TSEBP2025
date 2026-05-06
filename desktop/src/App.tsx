@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { DesktopRuntimeProvider } from "@/contexts/DesktopRuntimeContext";
 import { DisplayModeProvider, useDisplayMode } from "@/contexts/DisplayModeContext";
+import { DesktopUiSurfaceProvider } from "@/contexts/DesktopUiSurfaceContext";
 import FlyoutShell from "@/components/FlyoutShell";
 import RealTimeMode from "@/components/RealTimeMode";
 import Login from "./pages/Login";
@@ -66,9 +67,11 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <DisplayModeProvider>
-            <DesktopRuntimeProvider>
-              <ModeAwareApp />
-            </DesktopRuntimeProvider>
+            <DesktopUiSurfaceProvider>
+              <DesktopRuntimeProvider>
+                <ModeAwareApp />
+              </DesktopRuntimeProvider>
+            </DesktopUiSurfaceProvider>
           </DisplayModeProvider>
         </AuthProvider>
       </BrowserRouter>

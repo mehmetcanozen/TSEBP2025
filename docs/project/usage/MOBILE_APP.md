@@ -37,6 +37,16 @@ native audio and model runtime code. It cannot run in the standard Expo Go app.
 
 ## Prepare Android assets and run
 
+Preferred scripted launch:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-backend.ps1
+.\shared\scripts\start-mobile-android.ps1 -StartEmulator
+```
+
+Manual Gradle path:
+
 ```powershell
 cd C:\SoftwareProjects\TSEBP2025\mobile-part\android
 .\gradlew.bat :app:prepareBundledSuppressionModel

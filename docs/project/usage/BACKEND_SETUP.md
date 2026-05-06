@@ -221,9 +221,8 @@ VITE_BACKEND_API_URL=http://localhost:4000/api/v1
 Run desktop:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\desktop
-npm install
-npm run tauri:dev
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-desktop.ps1
 ```
 
 Desktop auth/profile calls go to the shared backend. Desktop suppression,
@@ -248,9 +247,8 @@ EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
 Run mobile:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-part
-npm install
-npm run android
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-mobile-android.ps1 -StartEmulator
 ```
 
 Mobile auth/profile/device calls go to the shared backend. Mobile suppression

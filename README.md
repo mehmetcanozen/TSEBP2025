@@ -1,8 +1,8 @@
-# Semantic Noise Mixer
+# TSEBP2025 Semantic Hearing
 
-Semantic Noise Mixer is a local-first semantic audio suppression project for
-Windows desktop, Android, and Python research workflows. The active product
-path uses packaged model artifacts under `ai/models/Exports`, with
+TSEBP2025 is a local-first semantic audio suppression project for Windows
+desktop, Android, and Python research workflows. The active product path uses
+packaged model artifacts under `ai/models/Exports`, with
 `waveformer_edge_100ms` as the default semantic suppressor.
 
 The root README is intentionally short. It explains what the repository is,
@@ -17,6 +17,7 @@ where the major pieces live, and which document to open next.
 | Android runtime | On-device Waveformer ORT, ONNX Runtime Android CPU, Oboe/AAudio first with Kotlin fallback |
 | Shared backend | NestJS/Express backend for auth, profiles, history metadata, devices, and settings |
 | Model artifacts | Restored from the portable `ai/models/Exports` bundle, not committed to Git |
+| Artifact download | [Google Drive Exports zip](https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing) |
 | Historical paths | Native UNet, TFLite, old `WFExports`, and lowercase `exports` are not the active product path |
 
 ## Start here
@@ -27,6 +28,25 @@ where the major pieces live, and which document to open next.
    [Getting started](docs/project/usage/GETTING_STARTED.md)
 1. Choose the workflow you need:
    [Usage guide index](docs/project/usage/README.md)
+
+## Fresh Checkout Happy Path
+
+Use these docs in order when setting up a new machine:
+
+1. Download the ignored `ai/models/Exports` zip from
+   [Google Drive](https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing)
+   and restore it with [Model artifacts](docs/project/usage/MODEL_ARTIFACTS.md).
+1. Set up PostgreSQL and the shared backend with
+   [Backend Windows PostgreSQL](docs/project/usage/BACKEND_WINDOWS_POSTGRES.md), or use
+   `.\shared\scripts\setup-backend-postgres.ps1`.
+1. Start the shared backend:
+   `.\shared\scripts\start-backend.ps1`
+1. Start the Windows desktop app:
+   `.\shared\scripts\start-desktop.ps1`
+1. Start the dev/debug desktop UI when needed:
+   `.\shared\scripts\start-desktop.ps1 -DevUi`
+1. Start Android:
+   `.\shared\scripts\start-mobile-android.ps1 -StartEmulator`
 
 ## Common workflows
 

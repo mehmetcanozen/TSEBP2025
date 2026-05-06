@@ -29,14 +29,21 @@ The mobile and desktop apps should not call `/model/*` or `/separation/*`.
 
 ## Local development without Docker
 
-Create `backend/.env` from `backend/.env.example`, then run:
+Preferred Windows path:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\backend
-npm install
-npm run prisma:generate
-npm run db:migrate
-npm run dev
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\setup-backend-postgres.ps1 -PostgresPassword "<YOUR_POSTGRES_PASSWORD>"
+.\shared\scripts\start-backend.ps1
+```
+
+The setup script creates the local PostgreSQL cluster/database when needed,
+writes `backend/.env`, writes desktop/mobile API URLs, generates the Prisma
+client, and applies migrations. After the one-time setup, normal starts are:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-backend.ps1
 ```
 
 The API listens on:

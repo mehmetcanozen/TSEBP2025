@@ -38,6 +38,16 @@ paths are historical unless a document explicitly says otherwise.
 by Git. A fresh clone or a cleaned checkout can have correct manifests while
 the actual ONNX/ORT files are absent.
 
+The portable `Exports` zip is currently shared outside Git here:
+
+```text
+https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing
+```
+
+Download it and restore it to `ai/models/Exports` before running Python,
+desktop, or Android suppression paths. The detailed restore and verification
+steps are in [Model artifacts](usage/MODEL_ARTIFACTS.md).
+
 ## Reading Order
 
 1. [Architecture overview](architecture/overview.md): the whole system and the

@@ -258,33 +258,22 @@ try {
     }
 
     if (-not $SkipDesktopLaunch) {
-        Write-Host ""
-        Write-Host "========== TEST: start-desktop.ps1 WebOnly ==========" -ForegroundColor Cyan
-        $desktopProcess = Start-ScriptProcess `
-            -Name "desktop-web" `
-            -ScriptPath "$PSScriptRoot\start-desktop.ps1" `
-            -Arguments @("-WebOnly", "-SkipBackendCheck")
-
-        try {
-            Wait-Http `
-                -Url "http://127.0.0.1:$DesktopWebPort" `
-                -TimeoutSeconds $DesktopTimeoutSeconds `
-                -ProcessHandle $desktopProcess
-        }
-        catch {
-            Show-LogTail -Path $desktopProcess.StdoutPath
-            Show-LogTail -Path $desktopProcess.StderrPath
-            throw
+        foreach ($surfaceCase in @(
+            @{ Label = "start-desktop.ps1 user UI config"; Args = @("-SkipBackendCheck", "-WriteEnvOnly"); Expected = "user" },
+            @{ Label = "start-desktop.ps1 dev UI config"; Args = @("-SkipBackendCheck", "-WriteEnvOnly", "-DevUi"); Expected = "dev" }
+        )) {
+            Invoke-TestStep $surfaceCase.Label {
+                powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\start-desktop.ps1" @($surfaceCase.Args)
+                $desktopEnv = Join-Path $root "desktop\.env"
+                $surfaceLine = Get-Content -LiteralPath $desktopEnv |
+                    Select-String -Pattern "^VITE_DESKTOP_UI_SURFACE=$($surfaceCase.Expected)$" -Quiet
+                if (-not $surfaceLine) {
+                    throw "Desktop .env did not contain VITE_DESKTOP_UI_SURFACE=$($surfaceCase.Expected)."
+                }
+            }
         }
 
-        Write-Host "========== PASS: start-desktop.ps1 WebOnly ==========" -ForegroundColor Green
-
-        Stop-ScriptProcess -Handle $desktopProcess
-        $desktopProcess = $null
-        Stop-ListeningPort -Port $DesktopWebPort
-        if ($DesktopWebPort -ne 5173) {
-            Stop-ListeningPort -Port 5173
-        }
+        Set-DotEnvValue -Path (Join-Path $root "desktop\.env") -Key "VITE_DESKTOP_UI_SURFACE" -Value "user"
     }
     else {
         Write-WarnLog "Skipping desktop launch."

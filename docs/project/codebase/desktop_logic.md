@@ -11,9 +11,34 @@ separate model story.
 | --- | --- |
 | `desktop/src/lib/desktop-api.ts` | Typed wrapper around Tauri commands and fallback browser-only values. |
 | `desktop/src/contexts/DesktopRuntimeContext.tsx` | Central state for categories, devices, virtual mic status, profiles, live status, jobs, and speaker settings. |
-| `desktop/src/pages/Dashboard.tsx` | Main operator surface for semantic suppression and speaker suppression. |
+| `desktop/src/contexts/DesktopUiSurfaceContext.tsx` | Chooses the clean user UI or the dev/debug UI from `?ui=` or `VITE_DESKTOP_UI_SURFACE`. |
+| `desktop/src/pages/Dashboard.tsx` | Surface router that renders the user dashboard by default or the dev dashboard when requested. |
+| `desktop/src/pages/UserDashboard.tsx` | Clean task-based user UI for live, file render, speaker profiles, and status. |
+| `desktop/src/pages/DevDashboard.tsx` | Task-based diagnostics console for Semantic Debug, Speaker Debug, Transmission, and Runtime/Devices. |
 | `desktop/src/components/CategorySelector.tsx` | Category selection based on packaged model labels. |
 | `desktop/src/components/RealTimeMode.tsx` | Compact live monitor controls in the app shell. |
+
+## UI Surfaces
+
+The desktop has two launchable surfaces:
+
+- `user`: default product UI, selected by `VITE_DESKTOP_UI_SURFACE=user` or `?ui=user`.
+- `dev`: diagnostics UI, selected by `VITE_DESKTOP_UI_SURFACE=dev` or `?ui=dev`.
+
+`shared/scripts/start-desktop.ps1` writes the surface value before launching.
+Normal launches use `user`; `-DevUi` uses `dev`.
+
+The user surface keeps semantic live, speaker live, offline file processing,
+speaker profiles, basic device readiness, and signal/status summaries. It hides
+Debug WAV controls, Transmission Test, Loopback Monitor, raw provider/runtime
+details, and calibration metrics.
+
+The dev surface preserves those diagnostics for development and regression
+checks, but it is still compartmentalized around the same task-navigation
+pattern as the user UI. Debug WAV, recording output, routing, transmission, and
+runtime/device inspection live in separate panels instead of one long vertical
+debug page. It still uses the same `DesktopRuntimeContext`, so UI surface
+selection does not create a second runtime or change suppression behavior.
 
 ## Tauri Command Surface
 

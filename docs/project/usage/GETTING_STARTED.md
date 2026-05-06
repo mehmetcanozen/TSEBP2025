@@ -12,7 +12,7 @@ Install the pieces required by the workflow you plan to use:
 | Python CLI | Python 3.10 or newer, PowerShell |
 | Desktop app | Node.js, npm, Rust/Cargo, WebView2 runtime |
 | Android app | Node.js, npm, Android Studio, Android SDK, JDK, Gradle through the Android project |
-| Backend | Python 3.10 or newer |
+| Backend | Node.js, npm, PostgreSQL 18 or another PostgreSQL-compatible server |
 | Virtual mic | VB-CABLE on Windows |
 
 ## Python environment
@@ -32,8 +32,14 @@ own folders with `npm install`.
 
 ## Restore model artifacts
 
-The checkout is not complete until `ai/models/Exports` is present. Follow
-[Model artifacts](MODEL_ARTIFACTS.md), then return here.
+The checkout is not complete until `ai/models/Exports` is present. Download
+the portable artifact zip from:
+
+```text
+https://drive.google.com/file/d/1mQq1cagJf5lNTkQqo85s9qRCW1a-hN5c/view?usp=sharing
+```
+
+Then follow [Model artifacts](MODEL_ARTIFACTS.md), and return here.
 
 Minimum check:
 
@@ -64,38 +70,42 @@ More commands: [Python CLI](PYTHON_CLI.md).
 ### Desktop app
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\desktop
-npm install
-npm run tauri:dev
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-backend.ps1
+.\shared\scripts\start-desktop.ps1
 ```
 
-More detail: [Desktop app](DESKTOP_APP.md).
+The default command opens the clean user UI. For the diagnostics UI:
+
+```powershell
+.\shared\scripts\start-desktop.ps1 -DevUi
+```
+
+More detail: [Desktop app](DESKTOP_APP.md) and [Developer scripts](DEV_SCRIPTS.md).
 
 ### Android app
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-part\android
-.\gradlew.bat :app:prepareBundledSuppressionModel
-.\gradlew.bat :app:mergeDebugAssets
-
-cd ..
-npm install
-npm run android
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-backend.ps1
+.\shared\scripts\start-mobile-android.ps1 -StartEmulator
 ```
 
 More detail: [Mobile app](MOBILE_APP.md).
 
 ### Shared backend
 
+Preferred scripted setup:
+
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\backend
-npm install
-npm run prisma:generate
-npm run db:migrate
-npm run dev
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\setup-backend-postgres.ps1 -PostgresPassword "<YOUR_POSTGRES_PASSWORD>"
+.\shared\scripts\start-backend.ps1
 ```
 
-More detail: [Backend](BACKEND.md).
+More detail: [Backend](BACKEND.md),
+[Backend setup](BACKEND_SETUP.md), and
+[Backend Windows PostgreSQL](BACKEND_WINDOWS_POSTGRES.md).
 
 ## What should work first
 
@@ -103,6 +113,7 @@ For a normal developer setup, prove these in order:
 
 1. `ai/models/Exports` is restored and verified.
 1. A Python batch command runs on `speech_barking.wav` with category `dog`.
+1. The shared backend health check passes at `http://localhost:4000/api/v1/health`.
 1. The desktop app opens and lists packaged categories.
 1. Android Gradle prepares the bundled suppression model.
 1. The Android app reports `waveformer_edge_100ms` and runs suppression on

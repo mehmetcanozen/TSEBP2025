@@ -15,16 +15,28 @@ playback, optional VB-CABLE routing, and target-speaker workflows.
 ## Run the app
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\desktop
-npm install
-npm run tauri:dev
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-backend.ps1
+.\shared\scripts\start-desktop.ps1
 ```
 
-If Cargo is not on `PATH`, add it for the current terminal:
+The default launch opens the clean user UI. It is organized into four task
+areas: `Live`, `File Render`, `Speaker Profiles`, and `Status`.
+
+Launch the dev/debug UI only when you need routing diagnostics:
 
 ```powershell
-$env:Path += ";$env:USERPROFILE\.cargo\bin"
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-desktop.ps1 -DevUi
 ```
+
+The dev/debug UI keeps the full diagnostics, but splits them into task areas:
+`Semantic Debug`, `Speaker Debug`, `Transmission`, and `Runtime/Devices`. That
+is where Debug WAV source controls, Transmission Test, Loopback Monitor,
+runtime/provider details, and device inspection live. The script writes
+`VITE_DESKTOP_UI_SURFACE=user` or
+`VITE_DESKTOP_UI_SURFACE=dev` into `desktop/.env`. A URL query can override it:
+`?ui=user` or `?ui=dev`.
 
 ## Semantic suppression path
 
@@ -46,16 +58,17 @@ ai\models\Exports\Waveformer\waveformer_edge_100ms\desktop\semantic_hearing_100m
 
 Use the category id `dog` for barking demos on the Waveformer path.
 
-## Live modes
+## User UI live modes
 
 | Mode | What it does |
 | --- | --- |
-| Listen locally | Plays cleaned audio to the selected monitor output. |
-| Virtual mic | Writes cleaned audio to `CABLE Input` for other apps to record from `CABLE Output`. |
-| Debug WAV source | Feeds a WAV file through the live path as if it were microphone input. |
+| Semantic live | Removes selected sound categories from the microphone path. |
+| Speaker live | Uses a speaker reference clip or profile to suppress or extract that speaker. |
+| Virtual mic output | Writes cleaned audio to `CABLE Input` for other apps to record from `CABLE Output`. |
 
-Use Debug WAV source for repeatable demos and regression checks. It exercises
-the live machinery instead of using a separate offline shortcut.
+Debug WAV source and transmission diagnostics are intentionally hidden from the
+default user UI. Use `.\shared\scripts\start-desktop.ps1 -DevUi` for repeatable
+developer demos and regression checks.
 
 For apps that do not expose their own microphone picker, Windows must use
 `CABLE Output` as the default recording device. The full Windows routing steps
