@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  LOCAL
+  SUPABASE
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  authProvider AuthProvider @default(LOCAL) @map("auth_provider")
+  authSubject  String       @map("auth_subject")
+  email        String       @unique
+  username     String?      @unique
+  fullName     String?      @map("full_name")
+  bio          String?
+  photoUri     String?      @map("photo_uri")
+  passwordHash String?      @map("password_hash")
+  isActive     Boolean      @default(true) @map("is_active")
+  isAdmin      Boolean      @default(false) @map("is_admin")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  devices       UserDevice[]
+  history       ProcessingHistory[]
+  refreshTokens RefreshToken[]
+  settings      UserSettings?
+
+  @@unique([authProvider, authSubject])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model ProcessingHistory {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  fileName        String?  @map("file_name")
+  durationSeconds Float?   @map("duration_seconds")
+  modelVersion    String?  @map("model_version")
+  platform        String?
+  status          String   @default("success")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("processing_history")
+}
+
+model UserDevice {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  deviceId     String   @map("device_id")
+  platform     String
+  appVersion   String?  @map("app_version")
+  registeredAt DateTime @default(now()) @map("registered_at")
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@map("user_devices")
+}
+
+model UserSettings {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
