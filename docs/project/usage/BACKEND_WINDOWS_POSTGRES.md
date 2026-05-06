@@ -31,6 +31,16 @@ Desktop API:         http://localhost:4000/api/v1
 Auth mode:           local
 ```
 
+These are defaults, not source-code edits. Override them with script arguments
+when your machine, port, or Android connection mode differs:
+
+```powershell
+.\shared\scripts\setup-backend-postgres.ps1 `
+  -PostgresPassword "<YOUR_POSTGRES_PASSWORD>" `
+  -BackendPort 4010 `
+  -MobileBackendHost "192.168.1.50"
+```
+
 Do not run `postgres` manually. Start the local server through `pg_ctl`.
 
 Do not assume pgAdmin means the database server is running. pgAdmin is only the

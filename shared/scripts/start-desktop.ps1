@@ -1,5 +1,9 @@
 param(
-    [string]$BackendUrl = "http://localhost:4000/api/v1",
+    [string]$BackendUrl = "",
+    [string]$BackendScheme = "http",
+    [string]$BackendHost = "localhost",
+    [int]$BackendPort = 4000,
+    [string]$BackendApiPath = "/api/v1",
     [switch]$SkipBackendCheck,
     [switch]$Install,
     [switch]$RunChecks,
@@ -14,7 +18,13 @@ $ErrorActionPreference = "Stop"
 
 $desktopDir = Resolve-RepoPath "desktop"
 $desktopEnv = Join-Path $desktopDir ".env"
-$healthUri = "$(Convert-LocalhostToIPv4 -Url $BackendUrl)/health"
+$BackendUrl = Resolve-BackendApiUrl `
+    -Url $BackendUrl `
+    -Scheme $BackendScheme `
+    -HostName $BackendHost `
+    -Port $BackendPort `
+    -ApiPath $BackendApiPath
+$healthUri = Convert-LocalhostToIPv4 -Url (Join-UrlPath -BaseUrl $BackendUrl -Path "health")
 $desktopUiSurface = if ($DevUi) { "dev" } else { "user" }
 
 Write-Step "Starting TSEBP2025 desktop app"

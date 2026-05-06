@@ -244,6 +244,16 @@ Expected value:
 EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
 ```
 
+For a physical device, use script arguments instead of editing source:
+
+```powershell
+# USB device.
+.\shared\scripts\start-mobile-android.ps1 -UseAdbReverseBackend
+
+# Same Wi-Fi network.
+.\shared\scripts\start-mobile-android.ps1 -BackendHost "192.168.1.50"
+```
+
 Run mobile:
 
 ```powershell

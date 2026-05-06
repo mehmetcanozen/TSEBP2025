@@ -15,18 +15,23 @@ It does not process audio, run suppression, expose model routes, or store model 
 
 ## Local Development Without Docker
 
-1. Create a PostgreSQL database and set `DATABASE_URL` in `backend/.env`.
-2. Install dependencies and prepare the database:
+Preferred repo-level setup:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\backend
-npm install
-npm run prisma:generate
-npm run db:migrate
-npm run dev
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\setup-backend-postgres.ps1 -PostgresPassword "<YOUR_POSTGRES_PASSWORD>"
+.\shared\scripts\start-backend.ps1
 ```
 
 The API listens on `http://localhost:4000/api/v1` by default.
+
+Use script arguments instead of editing source when ports or client hosts differ:
+
+```powershell
+.\shared\scripts\start-backend.ps1 -BackendPort 4010
+.\shared\scripts\start-backend.ps1 -MobileBackendHost "192.168.1.50"
+.\shared\scripts\start-backend.ps1 -DesktopBackendUrl "http://localhost:4000/api/v1"
+```
 
 ## Optional Docker Path
 

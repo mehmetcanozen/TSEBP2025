@@ -158,7 +158,15 @@ EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
 ```
 
 The Android emulator needs `10.0.2.2` because emulator `localhost` points to
-the emulator itself.
+the emulator itself. This is a launch default, not a value to patch into source
+for each machine. Use the shared scripts to write environment-specific client
+URLs:
+
+```powershell
+.\shared\scripts\start-backend.ps1 -MobileBackendHost "192.168.1.50"
+.\shared\scripts\start-mobile-android.ps1 -BackendHost "192.168.1.50"
+.\shared\scripts\start-mobile-android.ps1 -UseAdbReverseBackend
+```
 
 ## Operational Notes
 

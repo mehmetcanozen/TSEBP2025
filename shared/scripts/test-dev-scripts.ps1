@@ -7,6 +7,8 @@ param(
     [string]$AndroidHome = "$env:LOCALAPPDATA\Android\Sdk",
     [string]$MobilePackage = "com.anonymous.mobiletest",
     [string]$LogDirectory = (Join-Path $PSScriptRoot ".script-test-logs"),
+    [int]$BackendPort = 4000,
+    [int]$MetroPort = 8081,
     [int]$DesktopWebPort = 8080,
     [int]$BackendTimeoutSeconds = 90,
     [int]$DesktopTimeoutSeconds = 90,
@@ -159,10 +161,10 @@ function Stop-OwnedTestPorts {
     )
 
     if ($Backend) {
-        Stop-ListeningPort -Port 4000
+        Stop-ListeningPort -Port $BackendPort
     }
     if ($Mobile) {
-        Stop-ListeningPort -Port 8081
+        Stop-ListeningPort -Port $MetroPort
     }
     if ($Desktop) {
         Stop-ListeningPort -Port $DesktopWebPort
@@ -225,7 +227,7 @@ try {
     if (-not $SkipBackendLaunch) {
         Write-Host ""
         Write-Host "========== TEST: start-backend.ps1 ==========" -ForegroundColor Cyan
-        $backendArgs = @("-SkipPrismaGenerate", "-SkipMigrations", "-ForceRestart")
+        $backendArgs = @("-SkipPrismaGenerate", "-SkipMigrations", "-ForceRestart", "-BackendPort", [string]$BackendPort)
         if ($ForceKillStalePostgres) {
             $backendArgs += "-ForceKillStalePostgres"
         }
@@ -235,9 +237,10 @@ try {
             -ScriptPath "$PSScriptRoot\start-backend.ps1" `
             -Arguments $backendArgs
 
+        $backendBaseUrl = New-BackendApiUrl -Scheme "http" -HostName "127.0.0.1" -Port $BackendPort -ApiPath "/api/v1"
         try {
             Wait-Http `
-                -Url "http://127.0.0.1:4000/api/v1/health" `
+                -Url (Join-UrlPath -BaseUrl $backendBaseUrl -Path "health") `
                 -TimeoutSeconds $BackendTimeoutSeconds `
                 -ProcessHandle $backendProcess
         }
@@ -250,7 +253,7 @@ try {
         Write-Host "========== PASS: start-backend.ps1 ==========" -ForegroundColor Green
 
         Invoke-TestStep "test-backend-api.ps1" {
-            powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\test-backend-api.ps1" -BaseUrl "http://127.0.0.1:4000/api/v1"
+            powershell -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\test-backend-api.ps1" -BaseUrl $backendBaseUrl
         }
     }
     else {
@@ -288,7 +291,7 @@ try {
         $env:Path = "$AndroidHome\platform-tools;$AndroidHome\emulator;$env:Path"
         Assert-CommandAvailable -CommandName "adb"
 
-        $mobileArgs = @("-CleanInstall")
+        $mobileArgs = @("-CleanInstall", "-BackendPort", [string]$BackendPort, "-MetroPort", [string]$MetroPort)
         if ($StartEmulator) {
             $mobileArgs += "-StartEmulator"
         }

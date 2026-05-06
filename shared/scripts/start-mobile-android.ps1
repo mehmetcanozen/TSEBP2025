@@ -1,5 +1,8 @@
 param(
-    [string]$BackendUrl = "http://10.0.2.2:4000/api/v1",
+    [string]$BackendUrl = "",
+    [string]$BackendScheme = "http",
+    [string]$BackendHost = "10.0.2.2",
+    [string]$BackendApiPath = "/api/v1",
     [string]$AndroidHome = "$env:LOCALAPPDATA\Android\Sdk",
     [string]$AvdName = "Medium_Phone_API_36.1",
     [string]$DeviceId = "",
@@ -33,8 +36,19 @@ Assert-CommandAvailable -CommandName "adb"
 Assert-CommandAvailable -CommandName "npm"
 
 if ($UseAdbReverseBackend) {
-    $BackendUrl = "http://localhost:$BackendPort/api/v1"
-    Write-InfoLog "Using adb reverse for backend. Mobile URL becomes $BackendUrl"
+    $BackendHost = "localhost"
+    $BackendUrl = ""
+}
+
+$BackendUrl = Resolve-BackendApiUrl `
+    -Url $BackendUrl `
+    -Scheme $BackendScheme `
+    -HostName $BackendHost `
+    -Port $BackendPort `
+    -ApiPath $BackendApiPath
+
+if ($UseAdbReverseBackend) {
+    Write-InfoLog "Using adb reverse for backend. Mobile URL: $BackendUrl"
 }
 
 Set-DotEnvValue -Path $mobileEnv -Key "EXPO_PUBLIC_API_URL" -Value $BackendUrl

@@ -84,6 +84,22 @@ Useful options:
   -PostgresBin "C:\Program Files\PostgreSQL\18\bin" `
   -DataDir "C:\tmp\tsebp2025-postgres-18-data"
 
+# Use a different backend port and write matching env files.
+.\shared\scripts\setup-backend-postgres.ps1 `
+  -PostgresPassword "<YOUR_POSTGRES_PASSWORD>" `
+  -BackendPort 4010
+
+# Use a physical Android device over Wi-Fi.
+.\shared\scripts\setup-backend-postgres.ps1 `
+  -PostgresPassword "<YOUR_POSTGRES_PASSWORD>" `
+  -MobileBackendHost "192.168.1.50"
+
+# Use a non-local PostgreSQL host or port.
+.\shared\scripts\setup-backend-postgres.ps1 `
+  -PostgresPassword "<YOUR_POSTGRES_PASSWORD>" `
+  -PostgresHost "127.0.0.1" `
+  -PostgresPort 5433
+
 # Recover from a stale project PostgreSQL PID during setup.
 .\shared\scripts\setup-backend-postgres.ps1 `
   -PostgresPassword "<YOUR_POSTGRES_PASSWORD>" `
@@ -143,6 +159,18 @@ Useful options:
 .\shared\scripts\start-backend.ps1 `
   -PostgresBin "C:\Program Files\PostgreSQL\18\bin" `
   -DataDir "C:\tmp\tsebp2025-postgres-18-data"
+
+# Use a different backend port and write matching desktop/mobile client URLs.
+.\shared\scripts\start-backend.ps1 -BackendPort 4010
+
+# Use a LAN IP for a physical Android device on the same Wi-Fi network.
+.\shared\scripts\start-backend.ps1 -MobileBackendHost "192.168.1.50"
+
+# Use a full custom mobile URL if host, scheme, port, or path are unusual.
+.\shared\scripts\start-backend.ps1 -MobileBackendUrl "http://192.168.1.50:4000/api/v1"
+
+# Use a non-local PostgreSQL host or port.
+.\shared\scripts\start-backend.ps1 -PostgresHost "127.0.0.1" -PostgresPort 5433
 ```
 
 If this script says the data directory is not initialized, use
@@ -300,13 +328,23 @@ Useful options:
 # For a physical USB device, reverse backend port and use localhost in the app.
 .\shared\scripts\start-mobile-android.ps1 -UseAdbReverseBackend
 
+# For a physical device on the same Wi-Fi network, use your Windows host LAN IP.
+.\shared\scripts\start-mobile-android.ps1 -BackendHost "192.168.1.50"
+
+# Use a different backend port.
+.\shared\scripts\start-mobile-android.ps1 -BackendPort 4010
+
+# Use a full custom backend URL.
+.\shared\scripts\start-mobile-android.ps1 -BackendUrl "http://192.168.1.50:4000/api/v1"
+
 # Target one connected device explicitly.
 .\shared\scripts\start-mobile-android.ps1 -DeviceId "emulator-5554"
 ```
 
 For Android emulator, the default backend URL is `10.0.2.2` because that is how
 the emulator reaches the Windows host. For physical USB devices,
-`-UseAdbReverseBackend` is usually easier.
+`-UseAdbReverseBackend` is usually easier. For physical devices over Wi-Fi, pass
+`-BackendHost` or `-BackendUrl`; do not edit the script source.
 
 Run mobile build checks without launching:
 

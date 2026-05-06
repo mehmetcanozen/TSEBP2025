@@ -4,9 +4,18 @@ param(
     [string]$LogFile = "C:\tmp\tsebp2025-postgres-18.log",
     [int]$PostgresPort = 5432,
     [int]$BackendPort = 4000,
-    [string]$DatabaseUrl = "postgresql://postgres:postgres@localhost:5432/tsebp2025?schema=public",
-    [string]$DesktopBackendUrl = "http://localhost:4000/api/v1",
-    [string]$MobileBackendUrl = "http://10.253.52.35:4000/api/v1",
+    [string]$PostgresHost = "localhost",
+    [string]$DatabaseName = "tsebp2025",
+    [string]$DatabaseUser = "postgres",
+    [string]$DatabasePassword = "postgres",
+    [string]$DatabaseUrl = "",
+    [string]$BackendScheme = "http",
+    [string]$BackendApiPath = "/api/v1",
+    [string]$DesktopBackendHost = "localhost",
+    [string]$DesktopBackendUrl = "",
+    [string]$MobileBackendHost = "10.0.2.2",
+    [string]$MobileBackendUrl = "",
+    [string]$CorsOrigins = "http://localhost:1420,http://localhost:5173,http://localhost:8080",
     [switch]$SkipPostgres,
     [switch]$SkipPrismaGenerate,
     [switch]$SkipMigrations,
@@ -22,7 +31,33 @@ $root = Get-RepoRoot
 $backendDir = Resolve-RepoPath "backend"
 $desktopEnv = Resolve-RepoPath "desktop\.env"
 $mobileEnv = Resolve-RepoPath "mobile-part\.env"
-$healthUri = "http://127.0.0.1:$BackendPort/api/v1/health"
+$backendEnv = Join-Path $backendDir ".env"
+
+if ([string]::IsNullOrWhiteSpace($DatabaseUrl)) {
+    $DatabaseUrl = New-PostgresDatabaseUrl `
+        -DatabaseUser $DatabaseUser `
+        -DatabasePassword $DatabasePassword `
+        -HostName $PostgresHost `
+        -Port $PostgresPort `
+        -DatabaseName $DatabaseName
+}
+
+$DesktopBackendUrl = Resolve-BackendApiUrl `
+    -Url $DesktopBackendUrl `
+    -Scheme $BackendScheme `
+    -HostName $DesktopBackendHost `
+    -Port $BackendPort `
+    -ApiPath $BackendApiPath
+
+$MobileBackendUrl = Resolve-BackendApiUrl `
+    -Url $MobileBackendUrl `
+    -Scheme $BackendScheme `
+    -HostName $MobileBackendHost `
+    -Port $BackendPort `
+    -ApiPath $BackendApiPath
+
+$backendProbeUrl = New-BackendApiUrl -Scheme "http" -HostName "127.0.0.1" -Port $BackendPort -ApiPath $BackendApiPath
+$healthUri = Join-UrlPath -BaseUrl $backendProbeUrl -Path "health"
 
 Write-Step "Starting TSEBP2025 shared backend"
 Write-InfoLog "Repo: $root"
@@ -63,7 +98,24 @@ if (-not $SkipClientEnv) {
     Set-DotEnvValue -Path $mobileEnv -Key "EXPO_PUBLIC_API_URL" -Value $MobileBackendUrl
 }
 
-Ensure-BackendEnv -BackendDir $backendDir -DatabaseUrl $DatabaseUrl -Port $BackendPort
+$backendEnvAlreadyExists = Test-Path -LiteralPath $backendEnv
+Ensure-BackendEnv -BackendDir $backendDir -DatabaseUrl $DatabaseUrl -Port $BackendPort -CorsOrigins $CorsOrigins
+if ($backendEnvAlreadyExists) {
+    Set-DotEnvValue -Path $backendEnv -Key "PORT" -Value ([string]$BackendPort)
+    Set-DotEnvValue -Path $backendEnv -Key "CORS_ORIGINS" -Value $CorsOrigins
+
+    $databaseOverrideProvided = (
+        $PSBoundParameters.ContainsKey("DatabaseUrl") -or
+        $PSBoundParameters.ContainsKey("PostgresHost") -or
+        $PSBoundParameters.ContainsKey("PostgresPort") -or
+        $PSBoundParameters.ContainsKey("DatabaseName") -or
+        $PSBoundParameters.ContainsKey("DatabaseUser") -or
+        $PSBoundParameters.ContainsKey("DatabasePassword")
+    )
+    if ($databaseOverrideProvided) {
+        Set-DotEnvValue -Path $backendEnv -Key "DATABASE_URL" -Value $DatabaseUrl
+    }
+}
 
 if (Test-PortListening -Port $BackendPort) {
     if (Test-HttpEndpoint -Uri $healthUri) {

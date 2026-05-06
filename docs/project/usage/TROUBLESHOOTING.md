@@ -149,7 +149,7 @@ The `.onnx.data` sidecar is required.
 
 ## Backend is unreachable from Android emulator
 
-Use this app URL:
+Use this app URL for the Android emulator:
 
 ```env
 EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
@@ -159,6 +159,18 @@ Check the backend from Windows:
 
 ```text
 http://localhost:4000/api/v1/health
+```
+
+For a physical USB device, use ADB reverse:
+
+```powershell
+.\shared\scripts\start-mobile-android.ps1 -UseAdbReverseBackend
+```
+
+For a physical device on the same Wi-Fi network, use your Windows host LAN IP:
+
+```powershell
+.\shared\scripts\start-mobile-android.ps1 -BackendHost "192.168.1.50"
 ```
 
 Suppression should still be on-device. Backend problems should affect

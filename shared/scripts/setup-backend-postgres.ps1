@@ -6,11 +6,17 @@ param(
     [string]$PasswordFile = "C:\tmp\tsebp2025-postgres-password.txt",
     [string]$DatabaseName = "tsebp2025",
     [string]$DatabaseUser = "postgres",
+    [string]$PostgresHost = "localhost",
     [int]$PostgresPort = 5432,
     [int]$BackendPort = 4000,
     [string]$Locale = "C",
-    [string]$DesktopBackendUrl = "http://localhost:4000/api/v1",
-    [string]$MobileBackendUrl = "http://10.0.2.2:4000/api/v1",
+    [string]$BackendScheme = "http",
+    [string]$BackendApiPath = "/api/v1",
+    [string]$DesktopBackendHost = "localhost",
+    [string]$DesktopBackendUrl = "",
+    [string]$MobileBackendHost = "10.0.2.2",
+    [string]$MobileBackendUrl = "",
+    [string]$CorsOrigins = "http://localhost:1420,http://localhost:5173,http://localhost:8080",
     [switch]$ForceRecreateInvalidDataDir,
     [switch]$OverwriteBackendEnv,
     [switch]$SkipNpmInstall,
@@ -60,6 +66,8 @@ function Update-BackendEnv {
         [string]$DatabaseUrl,
         [Parameter(Mandatory = $true)]
         [int]$Port,
+        [Parameter(Mandatory = $true)]
+        [string]$CorsOrigins,
         [switch]$Overwrite
     )
 
@@ -68,7 +76,7 @@ function Update-BackendEnv {
         $content = @(
             "NODE_ENV=development",
             "PORT=$Port",
-            "CORS_ORIGINS=http://localhost:1420,http://localhost:5173,http://localhost:8080",
+            "CORS_ORIGINS=$CorsOrigins",
             "",
             "DATABASE_URL=$DatabaseUrl",
             "",
@@ -85,7 +93,7 @@ function Update-BackendEnv {
     Write-InfoLog "Updating existing backend/.env without replacing unrelated keys."
     Set-DotEnvValue -Path $EnvPath -Key "NODE_ENV" -Value "development"
     Set-DotEnvValue -Path $EnvPath -Key "PORT" -Value ([string]$Port)
-    Set-DotEnvValue -Path $EnvPath -Key "CORS_ORIGINS" -Value "http://localhost:1420,http://localhost:5173,http://localhost:8080"
+    Set-DotEnvValue -Path $EnvPath -Key "CORS_ORIGINS" -Value $CorsOrigins
     Set-DotEnvValue -Path $EnvPath -Key "DATABASE_URL" -Value $DatabaseUrl
     Set-DotEnvValue -Path $EnvPath -Key "AUTH_PROVIDER" -Value "local"
     Set-DotEnvValue -Path $EnvPath -Key "LOCAL_ACCESS_TOKEN_SECONDS" -Value "900"
@@ -102,6 +110,20 @@ $backendDir = Resolve-RepoPath "backend"
 $desktopEnv = Resolve-RepoPath "desktop\.env"
 $mobileEnv = Resolve-RepoPath "mobile-part\.env"
 $backendEnv = Join-Path $backendDir ".env"
+
+$DesktopBackendUrl = Resolve-BackendApiUrl `
+    -Url $DesktopBackendUrl `
+    -Scheme $BackendScheme `
+    -HostName $DesktopBackendHost `
+    -Port $BackendPort `
+    -ApiPath $BackendApiPath
+
+$MobileBackendUrl = Resolve-BackendApiUrl `
+    -Url $MobileBackendUrl `
+    -Scheme $BackendScheme `
+    -HostName $MobileBackendHost `
+    -Port $BackendPort `
+    -ApiPath $BackendApiPath
 
 $initdb = Join-Path $PostgresBin "initdb.exe"
 $psql = Join-Path $PostgresBin "psql.exe"
@@ -176,27 +198,31 @@ else {
 }
 
 $env:PGPASSWORD = $PostgresPassword
-$encodedPassword = [uri]::EscapeDataString($PostgresPassword)
-$databaseUrl = "postgresql://${DatabaseUser}:${encodedPassword}@localhost:${PostgresPort}/${DatabaseName}" + "?schema=public"
+$databaseUrl = New-PostgresDatabaseUrl `
+    -DatabaseUser $DatabaseUser `
+    -DatabasePassword $PostgresPassword `
+    -HostName $PostgresHost `
+    -Port $PostgresPort `
+    -DatabaseName $DatabaseName
 
 Write-Step "Verifying PostgreSQL connection"
-Invoke-CheckedNative -FilePath $psql -ArgumentList @("-h", "localhost", "-p", [string]$PostgresPort, "-U", $DatabaseUser, "-c", "SELECT version();")
+Invoke-CheckedNative -FilePath $psql -ArgumentList @("-h", $PostgresHost, "-p", [string]$PostgresPort, "-U", $DatabaseUser, "-c", "SELECT version();")
 
-$exists = & $psql -h localhost -p $PostgresPort -U $DatabaseUser -tAc "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName';"
+$exists = & $psql -h $PostgresHost -p $PostgresPort -U $DatabaseUser -tAc "SELECT 1 FROM pg_database WHERE datname = '$DatabaseName';"
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to check whether database '$DatabaseName' exists."
 }
 
 if (($exists -join "").Trim() -ne "1") {
     Write-Step "Creating database $DatabaseName"
-    Invoke-CheckedNative -FilePath $psql -ArgumentList @("-h", "localhost", "-p", [string]$PostgresPort, "-U", $DatabaseUser, "-c", "CREATE DATABASE $DatabaseName;")
+    Invoke-CheckedNative -FilePath $psql -ArgumentList @("-h", $PostgresHost, "-p", [string]$PostgresPort, "-U", $DatabaseUser, "-c", "CREATE DATABASE $DatabaseName;")
 }
 else {
     Write-SuccessLog "Database already exists: $DatabaseName"
 }
 
 Write-Step "Writing backend, desktop, and mobile env files"
-Update-BackendEnv -EnvPath $backendEnv -DatabaseUrl $databaseUrl -Port $BackendPort -Overwrite:$OverwriteBackendEnv
+Update-BackendEnv -EnvPath $backendEnv -DatabaseUrl $databaseUrl -Port $BackendPort -CorsOrigins $CorsOrigins -Overwrite:$OverwriteBackendEnv
 Set-DotEnvValue -Path $desktopEnv -Key "VITE_BACKEND_API_URL" -Value $DesktopBackendUrl
 Set-DotEnvValue -Path $mobileEnv -Key "EXPO_PUBLIC_API_URL" -Value $MobileBackendUrl
 
@@ -239,6 +265,7 @@ if ($StartBackend) {
         -DatabaseUrl $databaseUrl `
         -DesktopBackendUrl $DesktopBackendUrl `
         -MobileBackendUrl $MobileBackendUrl `
+        -CorsOrigins $CorsOrigins `
         -ForceKillStalePostgres:$ForceKillStalePostgres `
         -SkipPrismaGenerate:$SkipPrismaGenerate `
         -SkipMigrations:$SkipMigrations

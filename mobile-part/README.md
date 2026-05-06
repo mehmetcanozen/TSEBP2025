@@ -39,9 +39,8 @@ The generated bundle manifest should report:
 Install Java/Android tooling, connect a device or emulator, then run:
 
 ```powershell
-cd C:\SoftwareProjects\TSEBP2025\mobile-part
-npm install
-npx expo run:android
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\start-mobile-android.ps1 -StartEmulator
 ```
 
 The app uses native modules, so it cannot run inside standard Expo Go.
@@ -54,6 +53,19 @@ emulator, set:
 
 ```env
 EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
+```
+
+Use script arguments instead of editing source when the backend host differs:
+
+```powershell
+# Android emulator default.
+.\shared\scripts\start-mobile-android.ps1
+
+# Physical USB device through adb reverse.
+.\shared\scripts\start-mobile-android.ps1 -UseAdbReverseBackend
+
+# Physical device over Wi-Fi.
+.\shared\scripts\start-mobile-android.ps1 -BackendHost "192.168.1.50"
 ```
 
 The app calls only the shared backend for app data. It does not call backend

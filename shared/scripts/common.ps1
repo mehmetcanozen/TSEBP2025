@@ -161,6 +161,59 @@ function Convert-LocalhostToIPv4 {
     return ($Url -replace "^http://localhost(?=[:/])", "http://127.0.0.1")
 }
 
+function Join-UrlPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaseUrl,
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    return ($BaseUrl.TrimEnd("/") + "/" + $Path.TrimStart("/"))
+}
+
+function New-BackendApiUrl {
+    param(
+        [string]$Scheme = "http",
+        [string]$HostName = "localhost",
+        [int]$Port = 4000,
+        [string]$ApiPath = "/api/v1"
+    )
+
+    $normalizedPath = if ($ApiPath.StartsWith("/")) { $ApiPath } else { "/$ApiPath" }
+    return ("{0}://{1}:{2}{3}" -f $Scheme, $HostName, $Port, $normalizedPath)
+}
+
+function Resolve-BackendApiUrl {
+    param(
+        [string]$Url = "",
+        [string]$Scheme = "http",
+        [string]$HostName = "localhost",
+        [int]$Port = 4000,
+        [string]$ApiPath = "/api/v1"
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Url)) {
+        return $Url
+    }
+
+    return New-BackendApiUrl -Scheme $Scheme -HostName $HostName -Port $Port -ApiPath $ApiPath
+}
+
+function New-PostgresDatabaseUrl {
+    param(
+        [string]$DatabaseUser = "postgres",
+        [string]$DatabasePassword = "postgres",
+        [string]$HostName = "localhost",
+        [int]$Port = 5432,
+        [string]$DatabaseName = "tsebp2025",
+        [string]$Schema = "public"
+    )
+
+    $encodedPassword = [uri]::EscapeDataString($DatabasePassword)
+    return ("postgresql://{0}:{1}@{2}:{3}/{4}?schema={5}" -f $DatabaseUser, $encodedPassword, $HostName, $Port, $DatabaseName, $Schema)
+}
+
 function Test-PostgresClusterRunning {
     param(
         [Parameter(Mandatory = $true)]
@@ -314,7 +367,8 @@ function Ensure-BackendEnv {
         [string]$BackendDir,
         [Parameter(Mandatory = $true)]
         [string]$DatabaseUrl,
-        [int]$Port = 4000
+        [int]$Port = 4000,
+        [string]$CorsOrigins = "http://localhost:1420,http://localhost:5173,http://localhost:8080"
     )
 
     $envPath = Join-Path $BackendDir ".env"
@@ -324,7 +378,7 @@ function Ensure-BackendEnv {
         $content = @(
             "NODE_ENV=development",
             "PORT=$Port",
-            "CORS_ORIGINS=http://localhost:1420,http://localhost:5173,http://localhost:8080",
+            "CORS_ORIGINS=$CorsOrigins",
             "",
             "DATABASE_URL=$DatabaseUrl",
             "",

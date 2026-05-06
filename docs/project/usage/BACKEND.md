@@ -84,7 +84,22 @@ EXPO_PUBLIC_API_URL=http://10.0.2.2:4000/api/v1
 ```
 
 Use `10.0.2.2` because emulator `localhost` points to the emulator itself, not
-the Windows host.
+the Windows host. For a physical device on the same Wi-Fi network, do not edit
+scripts or source files; pass the host explicitly:
+
+```powershell
+.\shared\scripts\start-backend.ps1 -MobileBackendHost "192.168.1.50"
+.\shared\scripts\start-mobile-android.ps1 -BackendHost "192.168.1.50"
+```
+
+For a physical USB device, prefer ADB reverse:
+
+```powershell
+.\shared\scripts\start-mobile-android.ps1 -UseAdbReverseBackend
+```
+
+If the backend port or API path changes, pass `-BackendPort`, `-BackendApiPath`,
+or a full `-MobileBackendUrl` / `-DesktopBackendUrl`.
 
 ## Optional Docker
 
