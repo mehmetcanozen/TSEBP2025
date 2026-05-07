@@ -38,6 +38,9 @@ Use additional AI setup profiles only when needed:
 # Heavy research/export environments.
 .\shared\scripts\setup-ai-runtime.ps1 -Profile export
 .\shared\scripts\setup-ai-runtime.ps1 -Profile training
+
+# Evaluation reports and figures.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile evaluation
 ```
 
 The desktop and mobile apps install their JavaScript dependencies inside their
@@ -78,6 +81,13 @@ python -m ai suppress file `
 ```
 
 More commands: [Python CLI](PYTHON_CLI.md).
+
+For the final model evaluation/report workflow:
+
+```powershell
+python -m ai evaluate plan --models all --suite full
+python -m ai evaluate run --models waveformer_onnx_export --max-cases 1 --report md-html
+```
 
 ### Desktop app
 

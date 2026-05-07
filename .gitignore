@@ -23,7 +23,13 @@ ai/models/Exports/
 ai/models/exports/
 ai/models/SpeakerSeperator/
 ai/models/AudioSep/
+ai/models/AudioSep-Hive/*
+!ai/models/AudioSep-Hive/
+!ai/models/AudioSep-Hive/model_package.json
 ai/models/AudioSepHive15Cat/
+ai/models/CLAPSep/*
+!ai/models/CLAPSep/
+!ai/models/CLAPSep/model_package.json
 ai/models/ClapSepHive15Cat/
 ai/models/CodecSep/
 ai/models/CodecSepDNRv2_15Cat/
@@ -129,6 +135,9 @@ mobile/ios/build/
 
 # Generated profiling output
 ai/scripts/diagnostics/profile_results.json
+
+# Generated evaluation reports
+docs/evaluation/
 
 # Build files
 *.tgz
