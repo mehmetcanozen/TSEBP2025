@@ -1,7 +1,7 @@
 """
 Install AudioSep
 Utility script to clone the AudioSep repository and download the required weights.
-This simplifies the Phase 3 Universal Extraction setup.
+This simplifies the vanilla AudioSep open-vocabulary setup.
 """
 
 import logging
@@ -121,7 +121,10 @@ def install_audiosep():
         logger.error("Failed to download CLAP weights.")
         return
 
-    logger.info("\nAudioSep installation complete. You can now use the --universal flag.")
+    logger.info(
+        "\nAudioSep installation complete. You can now use --audiosep-prompt "
+        "(legacy alias: --universal)."
+    )
 
 
 if __name__ == "__main__":

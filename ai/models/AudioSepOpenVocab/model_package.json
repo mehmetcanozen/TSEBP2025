@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "model_id": "audiosep_open_vocab",
+  "package_version": "audiosep_open_vocab_20260507",
+  "family": "audiosep",
+  "display_name": "Vanilla AudioSep Open-Vocabulary",
+  "description": "Original vanilla AudioSep text-query source separation checkpoint used as a heavyweight quality/reference path. This is the runtime historically called universal in older scripts; use the public --audiosep-prompt naming in new commands.",
+  "runtime_status": "registered_research_runtime",
+  "suppression_strategy": {
+    "kind": "text_query_source_separation",
+    "target": "free-form text prompt describing the desired source"
+  },
+  "research_profile": {
+    "runtime_kind": "pytorch_audiosep_open_vocabulary",
+    "sample_rate": 32000,
+    "source_tree": "../AudioSep",
+    "entrypoint": "../AudioSep/predict.py",
+    "checkpoint": "../AudioSep/checkpoint/audiosep_base_4M_steps.ckpt",
+    "clap_checkpoint": "../AudioSep/checkpoint/music_speech_audioset_epoch_15_esc_89.98.pt",
+    "adapter_status": "available_through_semantic_suppressor_audiosep_prompt"
+  },
+  "categories": [
+    {
+      "id": "text_query",
+      "label": "text query",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    }
+  ],
+  "platforms": {
+    "research": {
+      "runtime_kind": "pytorch_research_runtime",
+      "artifact": "../AudioSep/checkpoint/audiosep_base_4M_steps.ckpt",
+      "metadata_artifacts": [
+        "../AudioSep/README.md",
+        "../AudioSep/predict.py",
+        "../AudioSep/checkpoint/music_speech_audioset_epoch_15_esc_89.98.pt"
+      ],
+      "sample_rate": 32000,
+      "notes": "Use this as the vanilla AudioSep open-vocabulary reference path. It is not the desktop/mobile default and requires heavyweight PyTorch dependencies."
+    }
+  }
+}

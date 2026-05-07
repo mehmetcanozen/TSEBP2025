@@ -13,7 +13,19 @@ from typing import Iterable
 
 from ai.ai_runtime.contracts import ArtifactRole, ArtifactStatus
 from ai.ai_runtime.utils.paths import (
+    get_audiosep_hive_raw_checkpoint_path,
+    get_audiosep_hive_raw_clap_checkpoint_path,
+    get_audiosep_hive_raw_config_path,
+    get_audiosep_hive_raw_model_package_path,
     get_audiosep_hive15cat_onnx_path,
+    get_audiosep_open_vocab_checkpoint_path,
+    get_audiosep_open_vocab_clap_checkpoint_path,
+    get_audiosep_open_vocab_model_package_path,
+    get_clapsep_research_alternate_checkpoint_path,
+    get_clapsep_research_checkpoint_path,
+    get_clapsep_research_clap_checkpoint_path,
+    get_clapsep_research_model_package_path,
+    get_clapsep_research_requirements_path,
     get_codecsep_dnrv2_15cat_executorch_path,
     get_codecsep_dnrv2_15cat_onnx_path,
     get_model_exports_path,
@@ -128,6 +140,66 @@ def iter_artifact_checks(*, include_optional: bool = True) -> Iterable[ArtifactS
             "audiosep_hive15cat_onnx",
             get_audiosep_hive15cat_onnx_path(),
             "Optional exact-15 AudioSepHive comparison artifact.",
+        ),
+        (
+            "audiosep_open_vocab_package",
+            get_audiosep_open_vocab_model_package_path(),
+            "Tracked package manifest for the vanilla AudioSep open-vocabulary path.",
+        ),
+        (
+            "audiosep_open_vocab_checkpoint",
+            get_audiosep_open_vocab_checkpoint_path(),
+            "Optional vanilla AudioSep PyTorch checkpoint.",
+        ),
+        (
+            "audiosep_open_vocab_clap_checkpoint",
+            get_audiosep_open_vocab_clap_checkpoint_path(),
+            "Optional CLAP checkpoint used by the vanilla AudioSep package.",
+        ),
+        (
+            "audiosep_hive_raw_package",
+            get_audiosep_hive_raw_model_package_path(),
+            "Tracked package manifest for the raw AudioSep-Hive research checkpoint.",
+        ),
+        (
+            "audiosep_hive_raw_checkpoint",
+            get_audiosep_hive_raw_checkpoint_path(),
+            "Optional raw AudioSep-Hive PyTorch checkpoint.",
+        ),
+        (
+            "audiosep_hive_raw_config",
+            get_audiosep_hive_raw_config_path(),
+            "Optional raw AudioSep-Hive configuration file.",
+        ),
+        (
+            "audiosep_hive_raw_clap_checkpoint",
+            get_audiosep_hive_raw_clap_checkpoint_path(),
+            "Optional CLAP checkpoint used by the raw AudioSep-Hive package.",
+        ),
+        (
+            "clapsep_research_package",
+            get_clapsep_research_model_package_path(),
+            "Tracked package manifest for the raw CLAPSep research checkpoint.",
+        ),
+        (
+            "clapsep_research_checkpoint",
+            get_clapsep_research_checkpoint_path(),
+            "Optional CLAPSep research checkpoint.",
+        ),
+        (
+            "clapsep_research_alternate_checkpoint",
+            get_clapsep_research_alternate_checkpoint_path(),
+            "Optional alternate CLAPSep checkpoint from the downloaded package.",
+        ),
+        (
+            "clapsep_research_clap_checkpoint",
+            get_clapsep_research_clap_checkpoint_path(),
+            "Optional CLAP audio encoder checkpoint used by CLAPSep.",
+        ),
+        (
+            "clapsep_research_requirements",
+            get_clapsep_research_requirements_path(),
+            "Optional dependency list for the vendored CLAPSep research app.",
         ),
         (
             "codecsep_dnrv2_15cat_onnx",

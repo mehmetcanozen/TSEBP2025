@@ -1,8 +1,8 @@
 """
 CodecSep inference wrapper for the Semantic Noise Suppressor.
 
-Provides the same lazy-loading, resample, and numpy-in / numpy-out
-contract as ``WaveformerSeparator`` and ``UniversalSeparator``.
+Provides the same lazy-loading, resample, and numpy-in / numpy-out contract as
+the Waveformer and legacy-named AudioSep open-vocabulary separators.
 """
 
 from __future__ import annotations

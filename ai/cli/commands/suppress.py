@@ -8,13 +8,11 @@ from typing import Annotated
 import soundfile as sf
 import typer
 
-from ai.ai_runtime.batch.batch_processor import BatchProcessor
-from ai.ai_runtime.batch.waveformer_onnx_processor import WaveformerOnnxBatchProcessor
 from ai.ai_runtime.contracts import BackendId
-from ai.ai_runtime.suppression import SemanticSuppressor
-from ai.ai_runtime.utils.target_speaker import DEFAULT_TARGET_SPEAKER_ENGINE
 
 app = typer.Typer(no_args_is_help=True)
+
+DEFAULT_TARGET_SPEAKER_ENGINE = "tsextract_onnx"
 
 
 def _split_values(values: list[str] | None) -> list[str]:
@@ -29,6 +27,44 @@ def _split_values(values: list[str] | None) -> list[str]:
 
 def _noise_path(output: Path) -> Path:
     return output.with_name(f"{output.stem}_noise{output.suffix or '.wav'}")
+
+
+def _build_waveformer_processor():
+    from ai.ai_runtime.batch.waveformer_onnx_processor import WaveformerOnnxBatchProcessor
+
+    return WaveformerOnnxBatchProcessor()
+
+
+def _build_semantic_processor(
+    *,
+    backend: BackendId,
+    masking_method: str,
+    device: str | None,
+    codecsep15_runtime: str,
+):
+    from ai.ai_runtime.batch.batch_processor import BatchProcessor
+    from ai.ai_runtime.suppression import SemanticSuppressor
+
+    suppressor = SemanticSuppressor(
+        separator_backend=backend.value,
+        masking_method=masking_method,
+        audiosep_hive15cat_device=device,
+        codecsep_dnrv2_15cat_runtime=codecsep15_runtime,
+        codecsep_dnrv2_15cat_device=device,
+    )
+    return BatchProcessor(suppressor=suppressor)
+
+
+def _build_target_speaker_processor(*, engine: str, device: str | None):
+    from ai.ai_runtime.batch.batch_processor import BatchProcessor
+    from ai.ai_runtime.suppression import SemanticSuppressor
+
+    suppressor = SemanticSuppressor(
+        separator_backend=BackendId.TARGET_SPEAKER.value,
+        target_speaker_device=device,
+        target_speaker_engine=engine,
+    )
+    return BatchProcessor(suppressor=suppressor)
 
 
 @app.command("file")
@@ -63,9 +99,18 @@ def suppress_file(
         bool,
         typer.Option("--suppress-all", help="Use suppress-all speech enhancement path."),
     ] = False,
-    universal: Annotated[
+    audiosep_prompts: Annotated[
         list[str] | None,
-        typer.Option("--universal", "-u", help="Open-vocabulary prompts. Repeat or comma-separate."),
+        typer.Option(
+            "--audiosep-prompt",
+            "--audiosep-query",
+            "--universal",
+            "-u",
+            help=(
+                "Vanilla AudioSep/open-vocabulary prompts. "
+                "Repeat or comma-separate. --universal is a legacy alias."
+            ),
+        ),
     ] = None,
     masking_method: Annotated[
         str,
@@ -83,29 +128,27 @@ def suppress_file(
     """Suppress one or more semantic targets from an audio file."""
 
     targets = _split_values(target)
-    universal_prompts = _split_values(universal)
+    audiosep_prompt_values = _split_values(audiosep_prompts)
     if backend == BackendId.TARGET_SPEAKER:
         raise typer.BadParameter(
             "Use `tsebp-ai suppress target-speaker` when backend is target_speaker.",
             param_hint="--backend",
         )
-    if not targets and not universal_prompts and not suppress_all:
+    if not targets and not audiosep_prompt_values and not suppress_all:
         raise typer.BadParameter(
-            "Provide --target, --universal, or --suppress-all.",
+            "Provide --target, --audiosep-prompt, or --suppress-all.",
             param_hint="--target",
         )
 
-    if backend == BackendId.WAVEFORMER and targets and not universal_prompts and not suppress_all:
-        processor = WaveformerOnnxBatchProcessor()
+    if backend == BackendId.WAVEFORMER and targets and not audiosep_prompt_values and not suppress_all:
+        processor = _build_waveformer_processor()
     else:
-        suppressor = SemanticSuppressor(
-            separator_backend=backend.value,
+        processor = _build_semantic_processor(
+            backend=backend,
             masking_method=masking_method,
-            audiosep_hive15cat_device=device,
+            device=device,
             codecsep_dnrv2_15cat_runtime=codecsep15_runtime,
-            codecsep_dnrv2_15cat_device=device,
         )
-        processor = BatchProcessor(suppressor=suppressor)
     stats = processor.process_file(
         input_path=input_path,
         output_path=output_path,
@@ -114,7 +157,7 @@ def suppress_file(
         detection_threshold=threshold,
         aggressiveness=aggressiveness,
         suppress_all=suppress_all,
-        universal_prompts=universal_prompts,
+        universal_prompts=audiosep_prompt_values,
         output_noise=output_noise,
         audiosep_hive15cat_device=device,
         codecsep_dnrv2_15cat_runtime=codecsep15_runtime,
@@ -162,12 +205,7 @@ def suppress_target_speaker(
 ) -> None:
     """Suppress the speaker matching a reference clip."""
 
-    suppressor = SemanticSuppressor(
-        separator_backend=BackendId.TARGET_SPEAKER.value,
-        target_speaker_device=device,
-        target_speaker_engine=engine,
-    )
-    processor = BatchProcessor(suppressor=suppressor)
+    processor = _build_target_speaker_processor(engine=engine, device=device)
     stats = processor.process_file(
         input_path=input_path,
         output_path=output_path,

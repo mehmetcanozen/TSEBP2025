@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "model_id": "audiosep_hive_raw",
+  "package_version": "audiosep_hive_raw_20260507",
+  "family": "audiosep",
+  "display_name": "AudioSep-Hive Raw Checkpoint",
+  "description": "Raw AudioSep-Hive query-based universal sound separation checkpoint trained on the Hive dataset. This package is registered for research, comparison planning, and future export work; it is not the desktop/mobile default runtime.",
+  "runtime_status": "registered_research_checkpoint",
+  "suppression_strategy": {
+    "kind": "query_based_source_separation",
+    "target": "text or audio query describing the desired source"
+  },
+  "research_profile": {
+    "runtime_kind": "pytorch_audiosep_hive_checkpoint",
+    "sample_rate": 32000,
+    "segment_seconds": 5,
+    "config": "config.yaml",
+    "checkpoint": "audiosep_hive.ckpt",
+    "clap_checkpoint": "music_speech_audioset_epoch_15_esc_89.98.pt",
+    "adapter_status": "not_yet_wrapped_by_ai_runtime"
+  },
+  "categories": [
+    {
+      "id": "text_query",
+      "label": "text query",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "audio_query",
+      "label": "audio query",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    }
+  ],
+  "platforms": {
+    "research": {
+      "runtime_kind": "pytorch_research_checkpoint",
+      "artifact": "audiosep_hive.ckpt",
+      "metadata_artifacts": [
+        "config.yaml",
+        "README.md",
+        "music_speech_audioset_epoch_15_esc_89.98.pt"
+      ],
+      "sample_rate": 32000,
+      "notes": "Use this as a quality/reference checkpoint or export source. It is intentionally not exposed as a normal suppression backend until an adapter is implemented."
+    }
+  }
+}

@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ai.ai_runtime.contracts import BackendId, BackendInfo
+from ai.ai_runtime.artifacts import load_model_selection
+from ai.ai_runtime.contracts import BackendId, BackendInfo, ModelPackageInfo
 from ai.ai_runtime.utils.paths import (
     get_audiosep_hive15cat_onnx_path,
     get_codecsep_dnrv2_15cat_executorch_path,
     get_codecsep_dnrv2_15cat_onnx_path,
     get_codecsep_runtime_fixed_category_mapping_path,
+    get_models_path,
     get_target_speaker_tsextract_desktop_onnx_path,
     get_target_speaker_windows_bundle_manifest_path,
     get_waveformer_desktop_metadata_path,
@@ -38,6 +40,65 @@ def _codecsep_product_categories() -> tuple[str, ...]:
         if name:
             categories.append(name)
     return tuple(categories)
+
+
+def _package_categories(package: dict) -> tuple[str, ...]:
+    categories = []
+    for item in package.get("categories", []) or []:
+        if isinstance(item, dict):
+            value = item.get("id") or item.get("label")
+        else:
+            value = item
+        if value:
+            categories.append(str(value))
+    return tuple(categories)
+
+
+def _package_artifact_paths(package_path: Path, package: dict) -> tuple[Path, ...]:
+    root = package_path.parent
+    paths: list[Path] = []
+    for platform in (package.get("platforms") or {}).values():
+        artifact = platform.get("artifact")
+        if artifact:
+            paths.append((root / str(artifact)).resolve())
+        for item in platform.get("metadata_artifacts", []) or []:
+            paths.append((root / str(item)).resolve())
+    return tuple(dict.fromkeys(paths))
+
+
+def list_model_packages() -> tuple[ModelPackageInfo, ...]:
+    """Return package metadata from ai/models/model_selection.json."""
+
+    selection = load_model_selection()
+    packages: list[ModelPackageInfo] = []
+    for model_id, relative_manifest in selection.get("models", {}).items():
+        package_path = (get_models_path() / str(relative_manifest)).resolve()
+        if not package_path.is_file():
+            packages.append(
+                ModelPackageInfo(
+                    model_id=str(model_id),
+                    display_name=str(model_id),
+                    family="unknown",
+                    runtime_status="missing_manifest",
+                    package_path=package_path,
+                    notes="Model package manifest is missing; restore optional model artifacts for details.",
+                )
+            )
+            continue
+        package = _load_json(package_path)
+        packages.append(
+            ModelPackageInfo(
+                model_id=str(model_id),
+                display_name=str(package.get("display_name") or model_id),
+                family=str(package.get("family") or "unknown"),
+                runtime_status=str(package.get("runtime_status") or package.get("package_version") or "packaged"),
+                package_path=package_path,
+                artifact_paths=_package_artifact_paths(package_path, package),
+                categories=_package_categories(package),
+                notes=str(package.get("description") or ""),
+            )
+        )
+    return tuple(packages)
 
 
 def list_backends() -> tuple[BackendInfo, ...]:
