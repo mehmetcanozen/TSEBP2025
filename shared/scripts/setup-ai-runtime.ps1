@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("runtime", "audio-device", "onnx", "training", "export", "all")]
+    [ValidateSet("runtime", "audio-device", "onnx", "training", "export", "evaluation", "all")]
     [string[]]$Profile = @("runtime"),
     [string]$Python = "python",
     [string]$VenvPath = ".\.venv",
@@ -41,7 +41,7 @@ if ($UpgradePip) {
 $selectedProfiles = [System.Collections.Generic.HashSet[string]]::new()
 foreach ($item in $Profile) {
     if ($item -eq "all") {
-        foreach ($expanded in @("runtime", "audio-device", "onnx", "training", "export")) {
+        foreach ($expanded in @("runtime", "audio-device", "onnx", "training", "export", "evaluation")) {
             [void]$selectedProfiles.Add($expanded)
         }
     }
@@ -52,7 +52,7 @@ foreach ($item in $Profile) {
 
 if ($selectedProfiles.Count -gt 0) {
     Invoke-LoggedCommand -WorkingDirectory $root -FilePath $pythonExe -ArgumentList @("-m", "pip", "install", "-r", "ai\requirements-runtime.txt")
-    Invoke-LoggedCommand -WorkingDirectory $root -FilePath $pythonExe -ArgumentList @("-m", "pip", "install", "-e", ".")
+    Invoke-LoggedCommand -WorkingDirectory $root -FilePath $pythonExe -ArgumentList @("-m", "pip", "install", "--no-build-isolation", "-e", ".")
 }
 
 if ($selectedProfiles.Contains("audio-device")) {
@@ -69,6 +69,10 @@ if ($selectedProfiles.Contains("training")) {
 
 if ($selectedProfiles.Contains("export")) {
     Invoke-LoggedCommand -WorkingDirectory $root -FilePath $pythonExe -ArgumentList @("-m", "pip", "install", "-r", "ai\export\requirements.txt")
+}
+
+if ($selectedProfiles.Contains("evaluation")) {
+    Invoke-LoggedCommand -WorkingDirectory $root -FilePath $pythonExe -ArgumentList @("-m", "pip", "install", "-r", "ai\requirements-evaluation.txt")
 }
 
 Invoke-LoggedCommand -WorkingDirectory $root -FilePath $pythonExe -ArgumentList @("-m", "ai", "diagnostics", "env")

@@ -1,0 +1,71 @@
+schema_version: 1
+description: >
+  TSEBP2025 semantic suppression evaluation cases. Reference cases have clean
+  and unwanted stems for stronger quality metrics. Coverage cases are generated
+  from every file in ai/data/audio/raw at runtime.
+
+reference:
+  - id: speech_barking
+    input: speech_barking.wav
+    clean_reference: speech.wav
+    unwanted_reference: barking.wav
+    targets:
+      waveformer20: dog
+      exact15: dog barking
+      legacy: pets
+      audiosep_prompt: dog barking
+    tags: [speech, dog, primary]
+    speech_reference: true
+
+  - id: speech_keyboard
+    input: speech_keyboard.wav
+    clean_reference: speech.wav
+    unwanted_reference: keyboard.wav
+    targets:
+      waveformer20: computer_typing
+      exact15: keyboard typing
+      legacy: typing
+      audiosep_prompt: keyboard typing
+    tags: [speech, keyboard, primary]
+    speech_reference: true
+
+  - id: speech_siren
+    input: speech_siren.wav
+    clean_reference: speech.wav
+    unwanted_reference: siren.wav
+    targets:
+      waveformer20: siren
+      exact15: alarm
+      legacy: alarm
+      audiosep_prompt: siren alarm
+    tags: [speech, siren, primary]
+    speech_reference: true
+
+  - id: speech_boat
+    input: speech_boat.wav
+    clean_reference: speech.wav
+    unwanted_reference: boat.wav
+    targets:
+      waveformer20: car_horn
+      exact15: car engine
+      legacy: traffic
+      audiosep_prompt: boat engine, water noise
+    tags: [speech, engine, boat, primary]
+    speech_reference: true
+
+  - id: speech_barking_keyboard
+    input: speech_barking_keyboard.wav
+    clean_reference: speech.wav
+    unwanted_reference: barking.wav
+    targets:
+      waveformer20: dog
+      exact15: dog barking
+      legacy: pets
+      audiosep_prompt: dog barking and keyboard typing
+    tags: [speech, dog, keyboard, stress]
+    speech_reference: true
+    primary_ranking: false
+    notes: >
+      Multi-target stress case. It is useful for qualitative inspection but is
+      excluded from the primary ranking because the unwanted reference only
+      covers one of the nuisance sources.

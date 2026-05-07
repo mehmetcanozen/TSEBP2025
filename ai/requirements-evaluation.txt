@@ -1,0 +1,14 @@
+# Evaluation/report generation profile for the AI CLI.
+#
+# This profile intentionally avoids torch. Install training/export profiles
+# separately when evaluating raw PyTorch research checkpoints.
+pandas>=2.2
+matplotlib>=3.8
+seaborn>=0.13
+jinja2>=3.1
+psutil>=5.9
+scipy>=1.11
+librosa>=0.10
+
+# Optional speech metrics can be installed manually if local wheels are
+# available: pesq>=0.0.4 pystoi>=0.4
