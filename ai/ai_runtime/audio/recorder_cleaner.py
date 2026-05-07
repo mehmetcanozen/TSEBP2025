@@ -255,13 +255,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--suppress-all",
         action="store_true",
-        help="Use DeepFilterNet to universally suppress all background noise",
+        help="Use DeepFilterNet to suppress all background noise",
     )
     parser.add_argument(
+        "--audiosep-prompt",
+        "--audiosep-query",
         "--universal",
+        dest="audiosep_prompt",
         type=str,
         default=None,
-        help="Phase 3: Open-vocabulary text prompts for exact sound extraction (e.g., 'typing, dog barking')",
+        help=(
+            "Vanilla AudioSep/open-vocabulary text prompts for exact sound extraction "
+            "(e.g., 'typing, dog barking'). --universal is a legacy alias."
+        ),
     )
     parser.add_argument(
         "--device", type=int, default=None, help="Input device ID (use 'python -m sounddevice' to list)"
@@ -448,14 +454,18 @@ def main(argv: list[str] | None = None) -> None:
                     rolling_buffer[-chunk_len:] = mono_chunk
 
                     targets = list(engine.current_profile.suppressions.keys()) if engine.current_profile else []
-                    universal_targets = [p.strip() for p in args.universal.split(",")] if args.universal else []
+                    audiosep_targets = (
+                        [p.strip() for p in args.audiosep_prompt.split(",")]
+                        if args.audiosep_prompt
+                        else []
+                    )
                     target_speaker_target = (
                         args.separator_backend == "target_speaker"
                         and bool(args.target_speaker_reference)
                     )
 
                     if use_buffered_exact15 and (
-                        targets or args.suppress_all or universal_targets or target_speaker_target
+                        targets or args.suppress_all or audiosep_targets or target_speaker_target
                     ):
                         buffered_live.poll_results()
                         buffered_live.submit_if_due(
@@ -465,7 +475,7 @@ def main(argv: list[str] | None = None) -> None:
                                 "detection_threshold": args.threshold,
                                 "aggressiveness": args.aggressiveness,
                                 "suppress_all": args.suppress_all,
-                                "universal_prompts": universal_targets,
+                                "universal_prompts": audiosep_targets,
                                 **codecsep_call_kwargs,
                             },
                         )
@@ -474,7 +484,7 @@ def main(argv: list[str] | None = None) -> None:
                             chunk_len=chunk_len,
                             lookahead_seconds=args.lookahead,
                         )
-                    elif targets or args.suppress_all or universal_targets or target_speaker_target:
+                    elif targets or args.suppress_all or audiosep_targets or target_speaker_target:
                         clean_full_buffer = engine.suppressor.suppress(
                             audio=rolling_buffer,
                             sample_rate=sample_rate,
@@ -482,7 +492,7 @@ def main(argv: list[str] | None = None) -> None:
                             detection_threshold=args.threshold,
                             aggressiveness=args.aggressiveness,
                             suppress_all=args.suppress_all,
-                            universal_prompts=universal_targets,
+                            universal_prompts=audiosep_targets,
                             **codecsep_call_kwargs,
                         )
                         lookahead_delay = args.lookahead

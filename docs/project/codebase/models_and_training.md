@@ -9,7 +9,10 @@ training and export scripts describe possible or historical paths.
 | Model id | Role | Runtime contract | Current status |
 | --- | --- | --- | --- |
 | `waveformer_edge_100ms` | Default semantic suppressor | Desktop and Android `onnx_streaming_target_extractor` | Current default product path. |
+| `audiosep_open_vocab` | Vanilla AudioSep text-query research path | PyTorch open-vocabulary AudioSep adapter | Optional heavyweight comparison/experiment path; use `--audiosep-prompt`. |
+| `audiosep_hive_raw` | Raw AudioSep-Hive research checkpoint | PyTorch evaluation adapter through AudioSep source loader | Registered for diagnostics, evaluation, and future export work. |
 | `audiosep_hive15cat` | Exact-15 category separator | Desktop and Android `onnx_category_separator` | Packaged alternative/comparison path. |
+| `clapsep_research` | Raw CLAPSep research checkpoint/source package | PyTorch evaluation adapter through the CLAPSep source snapshot | Registered for diagnostics, evaluation, and future export work. |
 | `codecsep_dnrv2_15cat` | Frozen exact-15 CodecSep separator | Desktop `onnx_category_separator`, Android `executorch_category_separator` | Packaged export/runtime experiment and alternative. |
 | `target_speaker_windows` | Reference-speaker suppression | Desktop `target_speaker_windows_bundle` | Windows target-speaker package; offline-first. |
 | Native UNet/TFLite | Early mobile experiment | Historical `.tflite` asset idea | Superseded. |
@@ -46,6 +49,42 @@ speech, thunderstorm, toilet_flush
 
 Do not confuse these with the older Python/YAMNet category aliases or with the
 exact-15 AudioSep/CodecSep labels.
+
+## Raw AudioSep-Hive
+
+`audiosep_hive_raw` registers the newly restored
+`ai/models/AudioSep-Hive` checkpoint folder. It contains the raw
+`audiosep_hive.ckpt`, its `config.yaml`, and the CLAP checkpoint used by the
+model. This is useful as a quality/reference checkpoint and future export
+source. It is not exposed as a normal `suppress file --backend` choice, but the
+evaluator can load it through the vanilla AudioSep source adapter.
+
+Use it through registry, artifact, and evaluation commands:
+
+```powershell
+python -m ai models list --packages --categories
+python -m ai artifacts check
+python -m ai compare run --model audiosep_hive_raw --dry-run
+python -m ai evaluate run --model audiosep_hive_raw --max-cases 1
+```
+
+## Vanilla AudioSep Open-Vocabulary
+
+`audiosep_open_vocab` is the older vanilla AudioSep text-query path. It is
+different from `audiosep_hive_raw` and from the fixed exact-15
+`audiosep_hive15cat` export. Use the public `--audiosep-prompt` option for this
+path:
+
+```powershell
+python -m ai suppress file `
+  --input .\ai\data\audio\raw\speech_boat.wav `
+  --output .\ai\data\audio\processed\speech_boat_audiosep.wav `
+  --audiosep-prompt "boat engine, water noise"
+```
+
+Some internal runtime arguments and legacy scripts still say `universal` for
+backward compatibility. Treat that as historical naming for vanilla AudioSep
+open-vocabulary prompts, not as a separate Hive model.
 
 ## AudioSepHive15Cat
 
@@ -91,6 +130,24 @@ manifest, not the deployable ONNX/PTE/PT payloads.
 Desktop currently describes the ONNX path. Android describes the ExecuTorch
 path. This model is useful for export/runtime demonstrations and comparison,
 not as the selected product default unless `model_selection.json` is changed.
+
+## Raw CLAPSep
+
+`clapsep_research` registers the restored `ai/models/CLAPSep` research package.
+The useful pieces are the AisakaMikoto Space snapshot under
+`models/CLAPSep (AisakaMikoto)`, `best_model.ckpt`, the CLAP encoder checkpoint,
+and the source app/model files. The evaluator has a research adapter for this
+package; product desktop/mobile integration still needs a dedicated export or
+runtime package.
+
+Use it through registry, artifact, and evaluation commands:
+
+```powershell
+python -m ai models list --packages --categories
+python -m ai artifacts check
+python -m ai compare run --model clapsep_research --dry-run
+python -m ai evaluate run --model clapsep_research --max-cases 1
+```
 
 ## Generic CodecSep Runtime
 
@@ -183,6 +240,34 @@ python -m ai export waveformer-edge --help
 python -m ai export target-speaker-windows --help
 python -m ai diagnostics env
 ```
+
+Evaluation-specific CLI equivalents:
+
+```powershell
+python -m ai evaluate list-models
+python -m ai evaluate plan --models all --suite full
+python -m ai evaluate run --models waveformer_onnx_export --max-cases 1
+python -m ai evaluate report --run-dir .\ai\data\audio\processed\evaluation_final
+```
+
+The evaluator lives under `ai/evaluation/`:
+
+- `contracts.py`: serializable case/model/adapter settings.
+- `cases.py` and `eval_cases.yaml`: curated reference cases plus raw-folder
+  coverage inference.
+- `models.py`: semantic evaluation model registry and aliases.
+- `adapters.py`: packaged ONNX, legacy batch, raw AudioSep, and raw CLAPSep
+  adapters.
+- `worker.py`: isolated per-model subprocess entrypoint.
+- `resources.py`: process-tree CPU/RSS sampling via `psutil`.
+- `metrics.py`: SI-SDR/SNR, residual correlation, RMS/loudness, clipping, and
+  optional speech metrics.
+- `runner.py`: planning, worker orchestration, CSV/JSON writing, and ranking.
+- `report.py`: figures plus `report.md` and `report.html`.
+
+Primary quality ranking uses only reference-tier cases with clean/unwanted
+references. Coverage rows are robustness/proxy evidence. `target_speaker_windows`
+is reported as available but out of scope for semantic ranking.
 
 Generated datasets, downloaded corpora, and heavyweight model outputs are often
 ignored by Git. `ai/models/Exports` is one of those generated roots. Check local

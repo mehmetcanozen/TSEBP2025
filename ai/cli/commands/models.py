@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from ai.ai_runtime.artifacts import load_model_selection
-from ai.ai_runtime.registry import list_backends
+from ai.ai_runtime.registry import list_backends, list_model_packages
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -20,25 +20,45 @@ def list_models(
         bool,
         typer.Option("--categories", help="Include category names in text output."),
     ] = False,
+    include_packages: Annotated[
+        bool,
+        typer.Option("--packages/--no-packages", help="Include registered model packages."),
+    ] = True,
 ) -> None:
     """List model backends exposed by the Python runtime."""
 
     backends = list_backends()
+    packages = list_model_packages() if include_packages else ()
     if as_json:
         typer.echo(
             json.dumps(
-                [
-                    {
-                        "backend_id": item.backend_id.value,
-                        "display_name": item.display_name,
-                        "category_surface": item.category_surface,
-                        "runtime_kind": item.runtime_kind,
-                        "categories": list(item.categories),
-                        "artifact_paths": [str(path) for path in item.artifact_paths],
-                        "notes": item.notes,
-                    }
-                    for item in backends
-                ],
+                {
+                    "backends": [
+                        {
+                            "backend_id": item.backend_id.value,
+                            "display_name": item.display_name,
+                            "category_surface": item.category_surface,
+                            "runtime_kind": item.runtime_kind,
+                            "categories": list(item.categories),
+                            "artifact_paths": [str(path) for path in item.artifact_paths],
+                            "notes": item.notes,
+                        }
+                        for item in backends
+                    ],
+                    "packages": [
+                        {
+                            "model_id": item.model_id,
+                            "display_name": item.display_name,
+                            "family": item.family,
+                            "runtime_status": item.runtime_status,
+                            "package_path": str(item.package_path),
+                            "categories": list(item.categories),
+                            "artifact_paths": [str(path) for path in item.artifact_paths],
+                            "notes": item.notes,
+                        }
+                        for item in packages
+                    ],
+                },
                 indent=2,
             ),
         )
@@ -54,6 +74,18 @@ def list_models(
         typer.echo(f"  {item.display_name}: {item.notes}")
         if include_categories and item.categories:
             typer.echo(f"  categories: {', '.join(item.categories)}")
+
+    if packages:
+        typer.echo("")
+        typer.echo("Registered model packages")
+        typer.echo(f"{'Model ID':<28} {'Family':<16} {'Status'}")
+        typer.echo("-" * 88)
+        for item in packages:
+            typer.echo(f"{item.model_id:<28} {item.family:<16} {item.runtime_status}")
+            typer.echo(f"  {item.display_name}: {item.notes}")
+            typer.echo(f"  manifest: {item.package_path}")
+            if include_categories and item.categories:
+                typer.echo(f"  categories: {', '.join(item.categories)}")
 
 
 @app.command("selection")

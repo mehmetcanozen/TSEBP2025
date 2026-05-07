@@ -136,7 +136,7 @@ ai/ai_runtime/enhancement/speech_enhancer.py
 
 Role:
 
-- Optional universal speech enhancement path.
+- Optional full-band speech enhancement path.
 - Invoked by Python `--suppress-all`.
 - Useful when the user wants generic voice cleanup rather than semantic category
   removal.

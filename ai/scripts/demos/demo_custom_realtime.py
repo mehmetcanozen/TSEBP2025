@@ -50,7 +50,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--duration", "-d", type=int, default=10)
     parser.add_argument("--threshold", "-t", type=float, default=0.3)
     parser.add_argument("--suppress-all", action="store_true")
-    parser.add_argument("--universal", "-u", type=str, default=None)
+    parser.add_argument(
+        "--audiosep-prompt",
+        "--audiosep-query",
+        "--universal",
+        "-u",
+        dest="audiosep_prompt",
+        type=str,
+        default=None,
+        help="Vanilla AudioSep/open-vocabulary prompts. --universal is a legacy alias.",
+    )
     parser.add_argument("--list-categories", action="store_true")
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--device", type=int, default=None)
@@ -81,7 +90,9 @@ def main(argv: list[str] | None = None):
         )
 
     categories = [c.strip() for c in args.suppress.split(",")] if args.suppress else []
-    universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
+    universal_prompts = (
+        [p.strip() for p in args.audiosep_prompt.split(",")] if args.audiosep_prompt else []
+    )
     codecsep_call_kwargs = build_codecsep_call_kwargs_from_args(args)
     suppression_params = {
         "separator_backend": args.separator_backend,

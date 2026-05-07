@@ -29,6 +29,11 @@ Or use the scripted setup:
 .\shared\scripts\setup-ai-runtime.ps1 -Profile runtime -UpgradePip
 ```
 
+The `runtime` profile is deliberately torch-free. It supports diagnostics,
+artifact checks, ONNX-backed Waveformer runs, and audio-device streaming without
+pulling in the heavy training/export stack. Use a heavier profile or an existing
+research environment for legacy PyTorch/CodecSep workflows.
+
 ## Main CLI
 
 The supported front door is:
@@ -74,10 +79,13 @@ Restore the portable artifact bundle described in
 python -m ai artifacts check --strict
 ```
 
-## Backend Surfaces
+## Model And Runtime Surfaces
 
 - `waveformer`: default product semantic suppressor.
 - `target_speaker`: selected-speaker suppression from a reference clip.
+- `audiosep_open_vocab`: vanilla AudioSep text-query path used for research
+  comparisons and open-vocabulary CLI experiments through `--audiosep-prompt`
+  rather than `--backend`.
 - `audiosep_hive15cat`: optional exact-15 ONNX comparison backend.
 - `codecsep_dnrv2_15cat`: optional exact-15 CodecSep ONNX/ExecuTorch backend.
 - `codecsep`: research backend for fixed-category and prompt-compatible tests.
@@ -86,7 +94,80 @@ List the current local registry:
 
 ```powershell
 python -m ai models list --categories
+python -m ai models list --packages --categories
+python -m ai artifacts check
 ```
+
+`AudioSep`, `AudioSep-Hive`, and `CLAPSep` are registered as opt-in research
+packages:
+
+- `audiosep_open_vocab`: vanilla AudioSep open-vocabulary text-query path
+  tracked by `ai/models/AudioSepOpenVocab/model_package.json`, with heavyweight
+  source/checkpoints in ignored `ai/models/AudioSep`.
+- `audiosep_hive_raw`: raw AudioSep-Hive checkpoint plus config/CLAP weights.
+- `clapsep_research`: raw CLAPSep source snapshot plus checkpoints.
+
+They are visible in model/package and artifact diagnostics. `audiosep_open_vocab`
+is used through `--audiosep-prompt`; the raw Hive and CLAPSep packages are not
+normal `suppress file --backend ...` product choices. They can be exercised
+through the evaluation workflow while product/runtime export work remains
+separate.
+
+## Evaluation And Reports
+
+Use the evaluation CLI when you need a fair model-vs-model judgement over the
+raw audio folder. It runs one isolated worker subprocess per model, loads each
+model once, applies the same ordered case list, samples CPU/memory with `psutil`,
+and writes CSV/JSON data plus Markdown/HTML reports.
+
+Setup:
+
+```powershell
+.\shared\scripts\setup-ai-runtime.ps1 -Profile evaluation
+```
+
+Plan first:
+
+```powershell
+python -m ai evaluate plan `
+  --input-dir .\ai\data\audio\raw `
+  --suite full `
+  --models all `
+  --output-root .\ai\data\audio\processed\evaluation_final
+```
+
+Smoke one model without doing the final judgement:
+
+```powershell
+python -m ai evaluate run `
+  --input-dir .\ai\data\audio\raw `
+  --models waveformer_onnx_export `
+  --max-cases 1 `
+  --repeats 1 `
+  --warmup-runs 0 `
+  --output-root .\ai\data\audio\processed\evaluation_smoke `
+  --report md-html
+```
+
+Final/full evaluation is intentionally user-run:
+
+```powershell
+python -m ai evaluate run `
+  --input-dir .\ai\data\audio\raw `
+  --suite full `
+  --models all `
+  --output-root .\ai\data\audio\processed\evaluation_final `
+  --repeats 3 `
+  --warmup-runs 1 `
+  --include-unsupported `
+  --save-audio `
+  --report md-html
+```
+
+The primary ranking uses only curated reference cases. Full raw-folder coverage
+is reported as robustness/proxy evidence and is not mixed into the main quality
+score. `target_speaker_windows` is listed as available but out of scope for this
+semantic suppression evaluation.
 
 ## Virtual Cable WAV Streaming
 

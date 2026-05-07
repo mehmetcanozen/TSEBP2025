@@ -367,7 +367,7 @@ class SemanticSuppressor:
         if self._universal is None:
             from ai.ai_runtime.separation import UniversalSeparator
 
-            logger.info("Initializing UniversalSeparator (AudioSep)...")
+            logger.info("Initializing vanilla AudioSep open-vocabulary separator...")
             self._universal = UniversalSeparator()
         return self._universal
 
@@ -707,7 +707,7 @@ class SemanticSuppressor:
             )
         if resolved_codecsep_mode == "fixed_category" and universal_prompts:
             raise ValueError(
-                "universal_prompts are not supported in codecsep fixed_category mode. "
+                "AudioSep/open-vocabulary prompts are not supported in codecsep fixed_category mode. "
                 "Use compat or experimental_search with a prompt-conditioned checkpoint instead."
             )
         has_target_speaker_request = effective_backend == "target_speaker"
@@ -1286,8 +1286,8 @@ class SemanticSuppressor:
                     aggressiveness=aggressiveness,
                     mode=mode,  # type: ignore[arg-type]
                     use_multistep=False,
-                    target_label="universal",
-                    debug_context={"categories": [], "universal": list(universal_prompts)},
+                    target_label="audiosep_open_vocab",
+                    debug_context={"categories": [], "audiosep_prompts": list(universal_prompts)},
                 ).normalized()
             ]
 
@@ -1388,8 +1388,8 @@ class SemanticSuppressor:
                 aggressiveness=aggressiveness,
                 mode=mode,
                 use_multistep=multistep_steps > 1,
-                target_label="universal",
-                debug_context={"categories": [], "universal": list(universal_prompts)},
+                target_label="audiosep_open_vocab",
+                debug_context={"categories": [], "audiosep_prompts": list(universal_prompts)},
             )
             return [plan.normalized()]
 

@@ -1,5 +1,5 @@
 """
-Universal Audio Separator (Phase 3).
+Vanilla AudioSep open-vocabulary separator.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class UniversalSeparator:
-    """Wrapper for an open-vocabulary target sound extractor like AudioSep."""
+    """Legacy-named wrapper for the vanilla AudioSep open-vocabulary extractor."""
 
     def __init__(
         self,
@@ -101,7 +101,7 @@ class UniversalSeparator:
 
         self._lazy_load_model()
         text_query = ", ".join(prompts)
-        logger.info("Universal Extraction Query: '%s'", text_query)
+        logger.info("AudioSep open-vocabulary query: '%s'", text_query)
 
         tensor = torch.as_tensor(audio, dtype=torch.float32)
         if tensor.ndim == 1:

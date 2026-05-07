@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "model_id": "clapsep_research",
+  "package_version": "clapsep_research_20260507",
+  "family": "clapsep",
+  "display_name": "CLAPSep Research Checkpoint",
+  "description": "Raw CLAPSep research package with the AisakaMikoto Gradio-space source snapshot, CLAPSep checkpoint, and CLAP audio encoder checkpoint. This package is registered for research, comparison planning, and future adapter/export work.",
+  "runtime_status": "registered_research_checkpoint",
+  "suppression_strategy": {
+    "kind": "positive_negative_query_source_separation",
+    "target": "positive text/audio query minus optional negative text/audio query"
+  },
+  "research_profile": {
+    "runtime_kind": "pytorch_clapsep_checkpoint",
+    "sample_rate": 32000,
+    "entrypoint": "models/CLAPSep (AisakaMikoto)/app.py",
+    "checkpoint": "models/CLAPSep (AisakaMikoto)/model/best_model.ckpt",
+    "alternate_checkpoint": "models/epoch100-step868000-val_loss10.33.ckpt",
+    "clap_checkpoint": "models/CLAPSep (AisakaMikoto)/model/music_audioset_epoch_15_esc_90.14.pt",
+    "requirements": "models/CLAPSep (AisakaMikoto)/requirements.txt",
+    "adapter_status": "not_yet_wrapped_by_ai_runtime"
+  },
+  "categories": [
+    {
+      "id": "positive_text_query",
+      "label": "positive text query",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "negative_text_query",
+      "label": "negative text query",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    },
+    {
+      "id": "audio_query",
+      "label": "audio query",
+      "default_aggressiveness": 1.0,
+      "transient": false
+    }
+  ],
+  "platforms": {
+    "research": {
+      "runtime_kind": "pytorch_research_checkpoint",
+      "artifact": "models/CLAPSep (AisakaMikoto)/model/best_model.ckpt",
+      "metadata_artifacts": [
+        "models/CLAPSep (AisakaMikoto)/app.py",
+        "models/CLAPSep (AisakaMikoto)/model/CLAPSep.py",
+        "models/CLAPSep (AisakaMikoto)/model/CLAPSep_decoder.py",
+        "models/CLAPSep (AisakaMikoto)/requirements.txt",
+        "models/CLAPSep (AisakaMikoto)/source.txt"
+      ],
+      "sample_rate": 32000,
+      "notes": "Use this as a research baseline or future export source. It is intentionally not exposed as a normal suppression backend until an adapter is implemented."
+    }
+  }
+}

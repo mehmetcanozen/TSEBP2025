@@ -52,7 +52,7 @@ behavior where appropriate. For the packaged exact-15 derivative, use
 The Python CLI/runtime can accept:
 
 - `--separator-backend codecsep`
-- `--universal` prompts
+- `--audiosep-prompt` prompts (`--universal` remains a legacy alias)
 - prompt overrides
 - negative prompts
 - preserve prompts

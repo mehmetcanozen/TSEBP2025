@@ -21,7 +21,7 @@ cd C:\SoftwareProjects\TSEBP2025
 | `start-desktop.ps1` | Check backend health, write `desktop/.env`, and launch the Tauri desktop app. |
 | `start-mobile-android.ps1` | Configure Android SDK/ADB, write `mobile-part/.env`, prepare optional assets, and run the Android app. |
 | `stream-loopback-wav.ps1` | Play a WAV into `CABLE Input` or another playback endpoint for VB-CABLE/mobile loopback testing. |
-| `setup-ai-runtime.ps1` | Create or reuse the Python AI CLI environment with runtime/audio/export/training profiles. |
+| `setup-ai-runtime.ps1` | Create or reuse the Python AI CLI environment with runtime/audio/evaluation/export/training profiles. |
 | `test-backend-api.ps1` | Exercise health, register, login, profile update, device registration, and logout. |
 | `test-desktop.ps1` | Run desktop lint, tests, and build with readable logs. |
 | `test-mobile-android.ps1` | Run mobile TypeScript plus optional Android asset/Kotlin/native/APK checks. |
@@ -56,6 +56,9 @@ Profiles:
 # Heavier export and training profiles.
 .\shared\scripts\setup-ai-runtime.ps1 -Profile export
 .\shared\scripts\setup-ai-runtime.ps1 -Profile training
+
+# Evaluation reports, figures, and process resource monitoring.
+.\shared\scripts\setup-ai-runtime.ps1 -Profile evaluation
 
 # Install everything.
 .\shared\scripts\setup-ai-runtime.ps1 -Profile all

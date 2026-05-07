@@ -31,8 +31,14 @@ from ai.ai_runtime.batch.batch_processor import BatchProcessor
 from ai.ai_runtime.suppression import SemanticSuppressor
 from ai.ai_runtime.separation.waveformer_onnx_stream import WaveformerOnnxStream
 from ai.ai_runtime.utils.paths import (
+    get_audiosep_hive_raw_checkpoint_path,
+    get_audiosep_hive_raw_clap_checkpoint_path,
+    get_audiosep_hive_raw_config_path,
     get_audiosep_hive15cat_onnx_path,
     get_audiosep_hive15cat_export_root_path,
+    get_clapsep_research_checkpoint_path,
+    get_clapsep_research_clap_checkpoint_path,
+    get_clapsep_research_requirements_path,
     get_clapsep_hive15cat_onnx_path,
     get_codecsep_dnrv2_15cat_executorch_path,
     get_codecsep_dnrv2_15cat_onnx_path,
@@ -68,6 +74,11 @@ EXACT15_TARGETS = (
     "alarm",
     "background noise",
 )
+
+AUDIOSEP_OPEN_VOCAB_SURFACE = "audiosep_open_vocab"
+LEGACY_MODEL_ALIASES = {
+    "pure_audiosep": "audiosep_open_vocab",
+}
 
 
 def print_legacy_notice() -> None:
@@ -163,15 +174,32 @@ def _model_specs() -> dict[str, ModelSpec]:
             notes="Default desktop separator; YAMNet-category to Waveformer-target routing.",
         ),
         ModelSpec(
-            model_id="pure_audiosep",
-            display_name="Pure AudioSep text-query runtime",
+            model_id="audiosep_open_vocab",
+            display_name="Vanilla AudioSep open-vocabulary runtime",
             backend="waveformer",
-            target_surface="universal",
+            target_surface=AUDIOSEP_OPEN_VOCAB_SURFACE,
             suppressor_kwargs={"separator_backend": "waveformer"},
             artifact_paths=(
                 PROJECT_ROOT / "ai" / "models" / "AudioSep" / "checkpoint" / "audiosep_base_4M_steps.ckpt",
             ),
-            notes="Open-vocabulary AudioSep path through SemanticSuppressor universal prompts.",
+            notes=(
+                "Vanilla AudioSep text-query path through SemanticSuppressor "
+                "AudioSep/open-vocabulary prompts."
+            ),
+        ),
+        ModelSpec(
+            model_id="audiosep_hive_raw",
+            display_name="AudioSep-Hive raw research checkpoint",
+            backend="audiosep_hive_raw",
+            target_surface="open_query",
+            runtime="pytorch",
+            artifact_paths=(
+                get_audiosep_hive_raw_checkpoint_path(),
+                get_audiosep_hive_raw_config_path(),
+                get_audiosep_hive_raw_clap_checkpoint_path(),
+            ),
+            notes="Registered raw checkpoint. No ai_runtime batch adapter/export wrapper exists yet.",
+            runnable=False,
         ),
         ModelSpec(
             model_id="audiosep_hive15cat_onnx",
@@ -259,6 +287,20 @@ def _model_specs() -> dict[str, ModelSpec]:
             runtime="onnx",
             artifact_paths=(clapsep_onnx,),
             notes="Artifact exists from FrozenSep, but ai_runtime has no CLAPSep batch adapter yet.",
+            runnable=False,
+        ),
+        ModelSpec(
+            model_id="clapsep_research",
+            display_name="CLAPSep raw research checkpoint",
+            backend="clapsep_research",
+            target_surface="positive_negative_query",
+            runtime="pytorch",
+            artifact_paths=(
+                get_clapsep_research_checkpoint_path(),
+                get_clapsep_research_clap_checkpoint_path(),
+                get_clapsep_research_requirements_path(),
+            ),
+            notes="Registered raw checkpoint/source package. No ai_runtime batch adapter/export wrapper exists yet.",
             runnable=False,
         ),
     ]
@@ -424,8 +466,8 @@ def _target_for_file(spec: ModelSpec, path: Path, args: argparse.Namespace) -> s
         return args.legacy_target
     if spec.target_surface == "exact15" and args.exact15_target:
         return args.exact15_target
-    if spec.target_surface == "universal":
-        return args.universal_prompt or _infer_exact15_target(path)
+    if spec.target_surface == AUDIOSEP_OPEN_VOCAB_SURFACE:
+        return args.audiosep_prompt or _infer_exact15_target(path)
     if spec.target_surface == "legacy":
         return _infer_legacy_target(path)
     if spec.target_surface == "waveformer20":
@@ -450,8 +492,8 @@ def _run_one(
     target: str,
     args: argparse.Namespace,
 ) -> dict[str, Any]:
-    suppress_categories = [] if spec.target_surface == "universal" else [target]
-    universal_prompts = [target] if spec.target_surface == "universal" else []
+    suppress_categories = [] if spec.target_surface == AUDIOSEP_OPEN_VOCAB_SURFACE else [target]
+    universal_prompts = [target] if spec.target_surface == AUDIOSEP_OPEN_VOCAB_SURFACE else []
     process_kwargs = dict(spec.process_kwargs)
     start = time.perf_counter()
     stats = processor.process_file(
@@ -571,7 +613,7 @@ def _selected_specs(args: argparse.Namespace, specs: dict[str, ModelSpec]) -> li
     elif args.models == ["all"]:
         names = list(specs)
     else:
-        names = args.models
+        names = [LEGACY_MODEL_ALIASES.get(name, name) for name in args.models]
 
     selected: list[ModelSpec] = []
     for name in names:
@@ -614,7 +656,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", default=None, help="Override target for every model.")
     parser.add_argument("--legacy-target", default=None, help="Override Waveformer/legacy CodecSep target.")
     parser.add_argument("--exact15-target", choices=EXACT15_TARGETS, default=None, help="Override exact-15 target.")
-    parser.add_argument("--universal-prompt", default=None, help="Override pure AudioSep text prompt.")
+    parser.add_argument(
+        "--audiosep-prompt",
+        "--audiosep-query",
+        "--universal-prompt",
+        dest="audiosep_prompt",
+        default=None,
+        help="Override the vanilla AudioSep open-vocabulary text prompt. --universal-prompt is a legacy alias.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Plan runs without loading models.")
     parser.add_argument("--list-models", action="store_true", help="Print model registry JSON and exit.")
     parser.add_argument(

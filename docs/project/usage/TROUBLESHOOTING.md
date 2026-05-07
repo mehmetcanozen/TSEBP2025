@@ -69,6 +69,34 @@ or artifact restore. If it runs but quality is poor, collect the command,
 target category, input file, and output file; that is model behavior, not CLI
 routing.
 
+## AI evaluation report fails
+
+First confirm the evaluation profile and lightweight planning path:
+
+```powershell
+cd C:\SoftwareProjects\TSEBP2025
+.\shared\scripts\setup-ai-runtime.ps1 -Profile evaluation
+python -m ai evaluate list-models
+python -m ai evaluate plan --models all --suite full --dry-run
+```
+
+If `evaluate run` marks a model as `missing_artifact`, run:
+
+```powershell
+python -m ai artifacts check
+```
+
+If only raw PyTorch research models fail, check whether the active environment
+has the heavier model dependencies:
+
+```powershell
+python -m ai diagnostics env
+```
+
+The evaluator should still write `runs.csv`, `resources.csv`, and `report.md`
+for supported/unsupported models. Inspect `workers\<model>.stderr.log` inside
+the evaluation output directory for the exact model-side load failure.
+
 ## Wrong folder casing
 
 Use:

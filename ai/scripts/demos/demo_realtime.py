@@ -129,7 +129,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--device", type=int, default=None)
     parser.add_argument("--suppress-all", action="store_true")
-    parser.add_argument("--universal", "-u", type=str, default=None)
+    parser.add_argument(
+        "--audiosep-prompt",
+        "--audiosep-query",
+        "--universal",
+        "-u",
+        dest="audiosep_prompt",
+        type=str,
+        default=None,
+        help="Vanilla AudioSep/open-vocabulary prompts. --universal is a legacy alias.",
+    )
     add_codecsep_runtime_arguments(
         parser,
         default_mode="fixed_category",
@@ -155,7 +164,9 @@ def main(argv: list[str] | None = None):
 
     suppressor = RealtimeSuppressor(profile_id=args.profile, sample_rate=44100)
     suppressor.suppress_all = args.suppress_all
-    suppressor.universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
+    suppressor.universal_prompts = (
+        [p.strip() for p in args.audiosep_prompt.split(",")] if args.audiosep_prompt else []
+    )
     suppressor.separator_backend = args.separator_backend
     suppressor.masking_method = args.masking_method
     suppressor.codecsep_checkpoint_path = args.codecsep_checkpoint

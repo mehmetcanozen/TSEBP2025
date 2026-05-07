@@ -2,6 +2,7 @@
 # This is for local file suppression, artifact checks, model listing, and docs smoke tests.
 # Heavy training/export stacks stay in ai/training/requirements.txt and ai/export/requirements*.txt.
 
+setuptools>=68
 typer>=0.12
 numpy>=1.24
 soundfile>=0.12

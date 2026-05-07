@@ -659,7 +659,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=False,
         help=(
             "Comma-separated list of categories to suppress (e.g., typing,wind,traffic). "
-            "Optional if using --suppress-all, --universal, --codecsep-product-category, "
+            "Optional if using --suppress-all, --audiosep-prompt, --codecsep-product-category, "
             "or --codecsep-hive-class-id instead."
         ),
     )
@@ -668,14 +668,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--suppress-all",
         action="store_true",
-        help="Use universal speech enhancement (DeepFilterNet) instead of semantic extraction",
+        help="Use full-band speech enhancement (DeepFilterNet) instead of semantic extraction",
     )
     parser.add_argument(
+        "--audiosep-prompt",
+        "--audiosep-query",
         "--universal",
         "-u",
+        dest="audiosep_prompt",
         type=str,
         default=None,
-        help="Phase 3: Open-vocabulary text prompts for exact sound extraction (e.g., 'typing, dog barking, wind')",
+        help=(
+            "Vanilla AudioSep/open-vocabulary text prompts for exact sound extraction "
+            "(e.g., 'typing, dog barking, wind'). --universal is a legacy alias."
+        ),
     )
     parser.add_argument("--chunk-size", type=float, default=10.0, help="Process audio in chunks of N seconds")
     parser.add_argument("--output-noise", action="store_true", help="Save extracted noise to a separate file")
@@ -701,7 +707,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         [
             args.suppress,
             args.suppress_all,
-            args.universal,
+            args.audiosep_prompt,
             has_fixed_codecsep_targets,
             has_target_speaker_target,
         ],
@@ -709,7 +715,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         parser.print_help()
         print(
             "\nERROR: You must specify at least one suppression mode: "
-            "--suppress, --suppress-all, --universal, --codecsep-product-category, "
+            "--suppress, --suppress-all, --audiosep-prompt, --codecsep-product-category, "
             "--codecsep-hive-class-id, or --target-speaker-reference"
         )
         sys.exit(1)
@@ -717,7 +723,9 @@ def main(argv: Optional[list[str]] = None) -> None:
         logging.getLogger().setLevel(logging.DEBUG)
 
     suppress_categories = [cat.strip() for cat in args.suppress.split(",")] if args.suppress else []
-    universal_prompts = [p.strip() for p in args.universal.split(",")] if args.universal else []
+    audiosep_prompts = (
+        [p.strip() for p in args.audiosep_prompt.split(",")] if args.audiosep_prompt else []
+    )
     runtime_call_kwargs = {
         **build_codecsep_call_kwargs_from_args(args),
         **build_target_speaker_call_kwargs_from_args(args),
@@ -740,7 +748,7 @@ def main(argv: Optional[list[str]] = None) -> None:
         detection_threshold=args.threshold,
         aggressiveness=args.aggressiveness,
         suppress_all=args.suppress_all,
-        universal_prompts=universal_prompts,
+        universal_prompts=audiosep_prompts,
         output_noise=args.output_noise,
         **runtime_call_kwargs,
     )

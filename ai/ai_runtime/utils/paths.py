@@ -185,6 +185,55 @@ def get_audiosep_hive15cat_model_path() -> Path:
     return get_models_path() / "AudioSepHive15Cat"
 
 
+def get_audiosep_open_vocab_model_path() -> Path:
+    """Return the vanilla AudioSep open-vocabulary model directory."""
+    return get_models_path() / "AudioSep"
+
+
+def get_audiosep_open_vocab_model_package_path() -> Path:
+    """Return the vanilla AudioSep open-vocabulary package manifest path."""
+    return get_models_path() / "AudioSepOpenVocab" / "model_package.json"
+
+
+def get_audiosep_open_vocab_checkpoint_path() -> Path:
+    """Return the vanilla AudioSep separation checkpoint path."""
+    return get_audiosep_open_vocab_model_path() / "checkpoint" / "audiosep_base_4M_steps.ckpt"
+
+
+def get_audiosep_open_vocab_clap_checkpoint_path() -> Path:
+    """Return the vanilla AudioSep CLAP checkpoint path."""
+    return (
+        get_audiosep_open_vocab_model_path()
+        / "checkpoint"
+        / "music_speech_audioset_epoch_15_esc_89.98.pt"
+    )
+
+
+def get_audiosep_hive_raw_model_path() -> Path:
+    """Return the raw AudioSep-Hive research model directory."""
+    return get_models_path() / "AudioSep-Hive"
+
+
+def get_audiosep_hive_raw_model_package_path() -> Path:
+    """Return the raw AudioSep-Hive research package manifest path."""
+    return get_audiosep_hive_raw_model_path() / "model_package.json"
+
+
+def get_audiosep_hive_raw_checkpoint_path() -> Path:
+    """Return the raw AudioSep-Hive separation checkpoint path."""
+    return get_audiosep_hive_raw_model_path() / "audiosep_hive.ckpt"
+
+
+def get_audiosep_hive_raw_config_path() -> Path:
+    """Return the raw AudioSep-Hive config path."""
+    return get_audiosep_hive_raw_model_path() / "config.yaml"
+
+
+def get_audiosep_hive_raw_clap_checkpoint_path() -> Path:
+    """Return the raw AudioSep-Hive CLAP checkpoint path."""
+    return get_audiosep_hive_raw_model_path() / "music_speech_audioset_epoch_15_esc_89.98.pt"
+
+
 def get_audiosep_hive15cat_export_root_path() -> Path:
     """Return the canonical generated AudioSepHive15Cat exact-15 export root."""
     return get_model_exports_path() / "AudioSepHive15Cat" / "audiosep_hive15cat_exact15"
@@ -335,6 +384,41 @@ def get_codecsep_dnrv2_15cat_freeze_spec_path() -> Path:
 def get_clapsep_hive15cat_model_path() -> Path:
     """Return the ClapSepHive15Cat model directory."""
     return get_models_path() / "ClapSepHive15Cat"
+
+
+def get_clapsep_research_model_path() -> Path:
+    """Return the raw CLAPSep research model directory."""
+    return get_models_path() / "CLAPSep"
+
+
+def get_clapsep_research_model_package_path() -> Path:
+    """Return the raw CLAPSep research package manifest path."""
+    return get_clapsep_research_model_path() / "model_package.json"
+
+
+def get_clapsep_research_space_path() -> Path:
+    """Return the vendored CLAPSep HuggingFace Space snapshot path."""
+    return get_clapsep_research_model_path() / "models" / "CLAPSep (AisakaMikoto)"
+
+
+def get_clapsep_research_checkpoint_path() -> Path:
+    """Return the default CLAPSep research checkpoint path."""
+    return get_clapsep_research_space_path() / "model" / "best_model.ckpt"
+
+
+def get_clapsep_research_alternate_checkpoint_path() -> Path:
+    """Return the alternate raw CLAPSep checkpoint path."""
+    return get_clapsep_research_model_path() / "models" / "epoch100-step868000-val_loss10.33.ckpt"
+
+
+def get_clapsep_research_clap_checkpoint_path() -> Path:
+    """Return the CLAP audio encoder checkpoint shipped with CLAPSep."""
+    return get_clapsep_research_space_path() / "model" / "music_audioset_epoch_15_esc_90.14.pt"
+
+
+def get_clapsep_research_requirements_path() -> Path:
+    """Return the CLAPSep research requirements file path."""
+    return get_clapsep_research_space_path() / "requirements.txt"
 
 
 def get_clapsep_hive15cat_export_root_path() -> Path:

@@ -4,7 +4,16 @@ from __future__ import annotations
 
 import typer
 
-from ai.cli.commands import artifacts, compare, diagnostics, export, models, stream, suppress
+from ai.cli.commands import (
+    artifacts,
+    compare,
+    diagnostics,
+    evaluate,
+    export,
+    models,
+    stream,
+    suppress,
+)
 
 app = typer.Typer(
     name="tsebp-ai",
@@ -16,6 +25,7 @@ app.add_typer(suppress.app, name="suppress", help="Run file-based semantic or sp
 app.add_typer(models.app, name="models", help="Inspect available model backends and category surfaces.")
 app.add_typer(artifacts.app, name="artifacts", help="Check restored model artifacts.")
 app.add_typer(compare.app, name="compare", help="Run or inspect model comparison jobs.")
+app.add_typer(evaluate.app, name="evaluate", help="Run fair model evaluation and report generation.")
 app.add_typer(stream.app, name="stream", help="Stream WAV files into a Windows playback endpoint.")
 app.add_typer(export.app, name="export", help="Run export and packaging entrypoints.")
 app.add_typer(diagnostics.app, name="diagnostics", help="Inspect Python/runtime environment state.")

@@ -44,6 +44,20 @@ class BackendInfo:
 
 
 @dataclass(frozen=True)
+class ModelPackageInfo:
+    """Tracked model package metadata, including research-only packages."""
+
+    model_id: str
+    display_name: str
+    family: str
+    runtime_status: str
+    package_path: Path
+    notes: str
+    categories: tuple[str, ...] = ()
+    artifact_paths: tuple[Path, ...] = ()
+
+
+@dataclass(frozen=True)
 class ArtifactStatus:
     """File-level artifact diagnostic status."""
 

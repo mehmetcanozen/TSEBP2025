@@ -24,8 +24,11 @@ manifests are:
 ai\models\model_selection.json
 ai\models\Waveformer\model_package.json
 ai\models\TargetSpeakerWindows\model_package.json
+ai\models\AudioSepOpenVocab\model_package.json
 ai\models\AudioSepHive15Cat\model_package.json
 ai\models\CodecSepDNRv2_15Cat\model_package.json
+ai\models\AudioSep-Hive\model_package.json
+ai\models\CLAPSep\model_package.json
 ```
 
 ## Restore the artifact bundle
@@ -77,6 +80,43 @@ ai\models\Exports\
 `-- ClapSepHive15Cat\
     `-- clapsep_hive15cat_prototype\
 ```
+
+The raw/open-vocabulary research packages are not part of the portable
+`Exports` bundle:
+
+```text
+ai\models\AudioSepOpenVocab\
+`-- model_package.json
+
+ai\models\AudioSep\
+`-- checkpoint\
+    |-- audiosep_base_4M_steps.ckpt
+    `-- music_speech_audioset_epoch_15_esc_89.98.pt
+
+ai\models\AudioSep-Hive\
+|-- model_package.json
+|-- audiosep_hive.ckpt
+|-- config.yaml
+`-- music_speech_audioset_epoch_15_esc_89.98.pt
+
+ai\models\CLAPSep\
+|-- model_package.json
+`-- models\
+    |-- epoch100-step868000-val_loss10.33.ckpt
+    `-- CLAPSep (AisakaMikoto)\
+        |-- app.py
+        |-- requirements.txt
+        `-- model\
+            |-- best_model.ckpt
+            |-- CLAPSep.py
+            |-- CLAPSep_decoder.py
+            `-- music_audioset_epoch_15_esc_90.14.pt
+```
+
+The manifest-only folders stay tracked; the heavyweight checkpoint/source
+folders stay ignored. Do not commit the downloaded checkpoints. Use
+`python -m ai artifacts check` to verify whether they exist on the current
+machine.
 
 ## Verify required product artifacts
 
@@ -141,6 +181,16 @@ python -m ai suppress file `
   --output .\ai\data\audio\processed\speech_barking_waveformer_dog.wav `
   --target dog `
   --backend waveformer
+```
+
+The evaluation workflow also uses these central artifact helpers. It will mark
+models with missing files as `missing_artifact` rows instead of silently dropping
+them from the report:
+
+```powershell
+python -m ai evaluate list-models
+python -m ai evaluate plan --models all --suite full
+python -m ai evaluate run --models waveformer_onnx_export --max-cases 1
 ```
 
 ## Rules
